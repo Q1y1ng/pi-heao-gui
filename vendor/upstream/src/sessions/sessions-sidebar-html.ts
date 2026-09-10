@@ -1,0 +1,398 @@
+import { getWebviewI18n, t } from "../i18n.ts";
+
+export function getSessionsHtml(): string {
+  const i18n = getWebviewI18n();
+  return /* html */ `<!DOCTYPE html>
+<html style="height:100%;margin:0;padding:0">
+<head><style>
+* { box-sizing: border-box; }
+body { height:100%; margin:0; padding:0; font-family: var(--vscode-font-family); font-size: 13px; color: var(--vscode-foreground); display:flex; flex-direction:column; overflow-x:hidden; }
+.header { padding:8px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid var(--vscode-widget-border,var(--vscode-panel-border,transparent)); gap:6px; }
+.header strong { font-size:12px; white-space:nowrap; }
+.header .muted { font-size:12px; white-space:nowrap; opacity:0.5; }
+.header select { flex:1; min-width:0; background:var(--vscode-dropdown-background); color:var(--vscode-dropdown-foreground); border:1px solid var(--vscode-dropdown-border); border-radius:3px; font-size:12px; padding:2px 4px; font-family:inherit; outline:none; text-overflow:ellipsis; }
+.header button { padding:2px 4px; cursor:pointer; background:transparent; color:var(--vscode-foreground); border:1px solid var(--vscode-widget-border,transparent); border-radius:3px; font-size:12px; opacity:0.7; white-space:nowrap; }
+.header button:hover { opacity:1; }
+.header .header-actions { display:flex; gap:4px; flex-shrink:0; }
+.header button.search-active { opacity:1; background:var(--vscode-toolbar-hoverBackground); }
+.search-bar { padding:6px 8px; border-bottom:1px solid var(--vscode-widget-border,var(--vscode-panel-border,transparent)); flex-shrink:0; }
+.search-input { width:100%; padding:4px 6px; background:var(--vscode-input-background); color:var(--vscode-input-foreground); border:1px solid var(--vscode-input-border,var(--vscode-widget-border,transparent)); border-radius:3px; font-size:12px; font-family:inherit; outline:none; }
+.search-input:focus { border-color:var(--vscode-focusBorder); }
+.search-input.error { border-color:var(--vscode-inputValidation-errorBorder,#d32f2f); }
+.search-error { font-size:11px; color:var(--vscode-inputValidation-errorForeground,var(--vscode-errorForeground,#d32f2f)); margin-top:4px; word-break:break-all; }
+.list { flex:1; overflow-y:auto; padding:4px 0; }
+.session-item { padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--vscode-widget-border,var(--vscode-panel-border,transparent)); position:relative; }
+.session-item:hover { background:var(--vscode-list-hoverBackground); }
+.session-item.editing { background:var(--vscode-list-activeSelectionBackground); }
+.session-name { font-weight:500; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:60px; }
+.session-meta { font-size:11px; opacity:0.6; display:flex; gap:8px; }
+.session-preview { font-size:11px; opacity:0.5; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.session-status { display:inline-block; width:12px; height:12px; margin-right:6px; vertical-align:middle; flex-shrink:0; }
+.session-status svg.spin { animation: pi-spin 0.8s linear infinite; transform-origin:center; color:var(--vscode-charts-blue); }
+.session-status .dot { display:block; width:8px; height:8px; border-radius:50%; background:var(--vscode-charts-green); margin:2px; }
+@keyframes pi-spin { to { transform: rotate(360deg); } }
+.session-actions { position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; gap:2px; opacity:0; transition:opacity 0.1s; }
+.session-item:hover .session-actions { opacity:1; }
+.session-actions button { padding:2px 6px; cursor:pointer; background:transparent; border:1px solid var(--vscode-widget-border,transparent); border-radius:3px; font-size:11px; color:var(--vscode-foreground); }
+.session-actions button:hover { background:var(--vscode-toolbar-hoverBackground); }
+.session-actions button.danger:hover { background:var(--vscode-inputValidation-errorBackground,#d32f2f); color:var(--pi-error-text); border-color:transparent; }
+.session-actions button[disabled] { opacity:0.4; cursor:not-allowed; }
+.rename-input { width:100%; padding:2px 4px; background:var(--vscode-input-background); color:var(--vscode-input-foreground); border:1px solid var(--vscode-focusBorder); border-radius:3px; font-size:13px; font-family:inherit; outline:none; }
+.delete-confirm { padding:6px 10px; background:var(--vscode-inputValidation-errorBackground,#d32f2f); color:var(--pi-error-text); font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.delete-confirm .delete-text { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.delete-confirm .delete-actions { flex-shrink:0; display:flex; gap:4px; }
+.delete-confirm button { padding:2px 8px; cursor:pointer; border:none; border-radius:3px; font-size:11px; }
+.delete-confirm .btn-confirm { background:rgba(0,0,0,0.15); color:var(--pi-error-text); }
+.delete-confirm .btn-cancel { background:transparent; color:var(--pi-error-text); text-decoration:underline; }
+.empty { padding:20px; text-align:center; opacity:0.5; font-size:12px; }
+</style></head>
+<body>
+<div class="header" id="header">
+  <strong>${t("Sessions")}</strong>
+  <span class="header-actions">
+    <button data-action="toggle-search" title="${t("Search Sessions")}">🔍</button>
+    <button data-action="new" title="${t("New Session")}">+</button>
+    <button data-action="refresh" title="${t("Refresh")}">↻</button>
+  </span>
+</div>
+<div id="search-bar" class="search-bar" style="display:none">
+  <input id="search-input" class="search-input" type="text" placeholder="${t('Search... (use "phrase" or re:pattern)')}" />
+  <div id="search-error" class="search-error" style="display:none"></div>
+</div>
+<div id="list" class="list"><div class="empty">${t("Loading...")}</div></div>
+<script>
+window.__I18N__ = ${JSON.stringify(i18n)};
+function t(key, args) {
+  var b = window.__I18N__.bundle || {};
+  var s = b[key] || key;
+  if (args) {
+    for (var i = 0; i < args.length; i++) {
+      s = s.split('{' + i + '}').join(String(args[i]));
+    }
+  }
+  return s;
+}
+const vscode = acquireVsCodeApi();
+let deleteTarget = null;
+let sessionsData = [];
+let dirs = [];
+let selectedDirPath = null;
+let searchVisible = false;
+let searchQuery = '';
+let searchDebounceTimer = null;
+
+function refresh() { vscode.postMessage({ type: 'refresh' }); }
+function newSession() { vscode.postMessage({ type: 'new' }); }
+function openSession(file) { vscode.postMessage({ type: 'open', sessionFile: file }); }
+
+function sendSearch(query) {
+  vscode.postMessage({ type: 'search', query: query });
+}
+
+function scheduleSearch(query) {
+  clearTimeout(searchDebounceTimer);
+  searchQuery = query;
+  searchDebounceTimer = setTimeout(function() { sendSearch(query); }, 200);
+}
+
+function bindSearchInput() {
+  var input = document.getElementById('search-input');
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+  input.value = searchQuery;
+  input.addEventListener('input', function(ev) {
+    scheduleSearch(ev.target.value);
+  });
+  input.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      clearTimeout(searchDebounceTimer);
+      input.value = '';
+      searchQuery = '';
+      searchVisible = false;
+      updateSearchBarVisibility();
+      sendSearch('');
+    }
+  });
+}
+
+function updateSearchBarVisibility() {
+  var bar = document.getElementById('search-bar');
+  if (bar) bar.style.display = searchVisible ? 'block' : 'none';
+  var btn = document.querySelector('[data-action="toggle-search"]');
+  if (btn) {
+    if (searchVisible) btn.classList.add('search-active');
+    else btn.classList.remove('search-active');
+  }
+  if (searchVisible) {
+    bindSearchInput();
+    var input = document.getElementById('search-input');
+    if (input) { input.focus(); input.select(); }
+  }
+}
+
+function toggleSearch() {
+  searchVisible = !searchVisible;
+  if (!searchVisible) {
+    clearTimeout(searchDebounceTimer);
+    var hadQuery = searchQuery.length > 0;
+    searchQuery = '';
+    var input = document.getElementById('search-input');
+    if (input) input.value = '';
+    if (hadQuery) sendSearch('');
+  }
+  updateSearchBarVisibility();
+}
+
+function onDirChange() {
+  selectedDirPath = this.value;
+  vscode.postMessage({ type: 'selectDir', path: selectedDirPath });
+}
+
+function updateHeader() {
+  const header = document.getElementById('header');
+  var actions = '<span class="header-actions">' +
+    '<button data-action="toggle-search" title="' + t('Search Sessions') + '"' + (searchVisible ? ' class="search-active"' : '') + '>🔍</button> ' +
+    '<button data-action="new" title="' + t('New Session') + '">+</button> ' +
+    '<button data-action="refresh" title="' + t('Refresh') + '">↻</button>' +
+    '</span>';
+  if (!dirs || dirs.length === 0) {
+    header.innerHTML = '<span class="muted">' + t('No workspace') + '</span> ' + actions;
+    return;
+  }
+  if (dirs.length === 1) {
+    header.innerHTML = '<strong>' + escHtml(dirs[0].label) + '</strong> ' + actions;
+    return;
+  }
+  var opts = dirs.map(function(d) {
+    var countSuffix = d.sessionCount > 0 ? ' (' + d.sessionCount + ')' : '';
+    var sel = d.path === selectedDirPath ? ' selected' : '';
+    return '<option value="' + escAttr(d.path) + '"' + sel + '>' + escHtml(d.label) + countSuffix + '</option>';
+  }).join('');
+  header.innerHTML = '<select id="dir-select" title="' + t('Select directory') + '">' + opts + '</select> ' + actions;
+  var sel = document.getElementById('dir-select');
+  if (sel) sel.addEventListener('change', onDirChange);
+}
+
+function startRename(file) {
+  var el = document.getElementById('item-' + safeId(file));
+  if (!el) return;
+  el.classList.add('editing');
+  var nameEl = el.querySelector('.session-name');
+  var currentName = nameEl.textContent;
+  nameEl.innerHTML = '<input class="rename-input" value="' + escAttr(currentName) + '" />';
+  var input = nameEl.querySelector('input');
+  // Prevent the parent .session-item click handler from opening the session when
+  // interacting with the rename input.
+  input.addEventListener('click', function(e) { e.stopPropagation(); });
+  input.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+  input.focus();
+  input.select();
+  var done = false;
+  var finish = function() {
+    if (done) return;
+    done = true;
+    var newName = input.value.trim();
+    el.classList.remove('editing');
+    if (newName && newName !== currentName) {
+      vscode.postMessage({ type: 'rename', sessionFile: file, name: newName });
+    } else {
+      nameEl.textContent = currentName;
+    }
+  };
+  var cancel = function() {
+    if (done) return;
+    done = true;
+    nameEl.textContent = currentName;
+    el.classList.remove('editing');
+  };
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); finish(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+}
+
+function confirmDelete(file) { deleteTarget = file; renderAll(); }
+function cancelDelete() { deleteTarget = null; renderAll(); }
+function doDelete() {
+  if (deleteTarget) {
+    vscode.postMessage({ type: 'delete', sessionFile: deleteTarget });
+    deleteTarget = null;
+  }
+}
+
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+function safeId(s) { return btoa(unescape(encodeURIComponent(s))).replace(/=/g, ''); }
+function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n) + '\u2026' : s; }
+
+function statusIconHtml(status) {
+  if (status === 'running') {
+    return '<svg class="spin" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="14 14" stroke-linecap="round"/></svg>';
+  }
+  return '<span class="dot"></span>';
+}
+
+function applyStatusUpdate(entries) {
+  var map = {};
+  for (var i = 0; i < entries.length; i++) map[entries[i].path] = entries[i].status;
+  var els = document.querySelectorAll('.session-status');
+  for (var j = 0; j < els.length; j++) {
+    var p = els[j].getAttribute('data-status-path');
+    if (map[p]) {
+      els[j].innerHTML = statusIconHtml(map[p]);
+    } else {
+      els[j].innerHTML = '';
+    }
+  }
+  // Sync isOpen + delete-button enabled state when a session tab closes/opens,
+  // without a full re-render (which would interrupt an in-progress rename).
+  for (var k = 0; k < sessionsData.length; k++) {
+    var s = sessionsData[k];
+    var isOpen = !!map[s.path];
+    if (isOpen === s.isOpen) continue;
+    s.isOpen = isOpen;
+    var item = document.getElementById('item-' + safeId(s.path));
+    if (!item) continue;
+    var delBtn = item.querySelector('.session-actions button.danger');
+    if (!delBtn) continue;
+    if (isOpen) {
+      delBtn.disabled = true;
+      delBtn.title = t('Session is open, close it first');
+      delBtn.removeAttribute('data-action');
+    } else {
+      delBtn.disabled = false;
+      delBtn.title = t('Delete');
+      delBtn.setAttribute('data-action', 'delete');
+    }
+  }
+}
+
+function formatTime(iso) {
+  try {
+    var d = new Date(iso);
+    var now = new Date();
+    var diff = now - d;
+    if (diff < 60000) return t('just now');
+    if (diff < 3600000) return Math.floor(diff / 60000) + t('m ago');
+    if (diff < 86400000) return Math.floor(diff / 3600000) + t('h ago');
+    if (diff < 604800000) return Math.floor(diff / 86400000) + t('d ago');
+    return d.toLocaleDateString();
+  } catch (e) { return ''; }
+}
+
+function renderAll() {
+  var list = document.getElementById('list');
+  if (!sessionsData.length) {
+    var emptyMsg;
+    if (searchQuery && searchQuery.trim().length > 0) {
+      emptyMsg = t('No sessions match "{0}"', [escHtml(searchQuery)]);
+    } else {
+      emptyMsg = t('No sessions found');
+    }
+    list.innerHTML = '<div class="empty">' + emptyMsg + '</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < sessionsData.length; i++) {
+    var s = sessionsData[i];
+    var id = safeId(s.path);
+    var pathAttr = escAttr(s.path);
+    if (deleteTarget === s.path) {
+      var confirmLabel = s.name ? s.name : truncate(s.firstMessage || t('Untitled'), 40);
+      html += '<div class="delete-confirm"><span class="delete-text" title="' + escAttr(s.name || s.firstMessage || t('Untitled')) + '">' + t('Delete "{0}"?', [escHtml(confirmLabel)]) + '</span><span class="delete-actions"><button class="btn-confirm" data-action="delete-confirm">' + t('Delete') + '</button> <button class="btn-cancel" data-action="delete-cancel">' + t('Cancel') + '</button></span></div>';
+      continue;
+    }
+    html += '<div class="session-item" id="item-' + id + '" data-action="open" data-path="' + pathAttr + '">';
+    var statusIcon = (s.isOpen && s.status) ? statusIconHtml(s.status) : '';
+    html += '<div class="session-name"><span class="session-status" data-status-path="' + pathAttr + '">' + statusIcon + '</span>' + escHtml(s.name || s.firstMessage || t('Untitled')) + '</div>';
+    html += '<div class="session-meta"><span>' + formatTime(s.modified) + '</span><span>' + t('{0} msgs', [s.messageCount]) + '</span></div>';
+    html += '<div class="session-preview">' + escHtml(s.firstMessage || '') + '</div>';
+    html += '<div class="session-actions">';
+    html += '<button title="' + t('Rename') + '" data-action="rename" data-path="' + pathAttr + '">✏️</button>';
+    if (s.isOpen) {
+      html += '<button class="danger" title="' + t('Session is open, close it first') + '" disabled>🗑️</button>';
+    } else {
+      html += '<button class="danger" title="' + t('Delete') + '" data-action="delete" data-path="' + pathAttr + '">🗑️</button>';
+    }
+    html += '</div></div>';
+  }
+  list.innerHTML = html;
+}
+
+// Event delegation: avoids embedding file paths (with backslashes/quotes) into inline onclick handlers.
+document.addEventListener('click', function(ev) {
+  var target = ev.target;
+  if (!target || !target.closest) return;
+  var btn = target.closest('[data-action]');
+  if (!btn) return;
+  var action = btn.getAttribute('data-action');
+  var path = btn.getAttribute('data-path') || '';
+  switch (action) {
+    case 'refresh':
+      ev.stopPropagation();
+      refresh();
+      break;
+    case 'new':
+      ev.stopPropagation();
+      newSession();
+      break;
+    case 'toggle-search':
+      ev.stopPropagation();
+      toggleSearch();
+      break;
+    case 'open':
+      if (target.closest('button')) return;
+      // Don't open when clicking the rename input or while item is in edit mode.
+      if (target.closest('.rename-input')) return;
+      if (target.closest('.session-item.editing')) return;
+      openSession(path);
+      break;
+    case 'rename':
+      ev.stopPropagation();
+      startRename(path);
+      break;
+    case 'delete':
+      ev.stopPropagation();
+      confirmDelete(path);
+      break;
+    case 'delete-confirm':
+      ev.stopPropagation();
+      doDelete();
+      break;
+    case 'delete-cancel':
+      ev.stopPropagation();
+      cancelDelete();
+      break;
+  }
+});
+
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'dirs') {
+    dirs = e.data.dirs || [];
+    selectedDirPath = e.data.selected;
+    updateHeader();
+    updateSearchBarVisibility();
+  }
+  if (e.data.type === 'sessions') {
+    sessionsData = e.data.sessions || [];
+    if (typeof e.data.query === 'string') searchQuery = e.data.query;
+    var input = document.getElementById('search-input');
+    var errBox = document.getElementById('search-error');
+    if (e.data.searchError) {
+      if (input) input.classList.add('error');
+      if (errBox) { errBox.textContent = e.data.searchError; errBox.style.display = 'block'; }
+    } else {
+      if (input) input.classList.remove('error');
+      if (errBox) { errBox.style.display = 'none'; errBox.textContent = ''; }
+    }
+    renderAll();
+  }
+  if (e.data.type === 'statusUpdate') {
+    applyStatusUpdate(e.data.entries || []);
+  }
+});
+</script>
+</body></html>`;
+}

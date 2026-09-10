@@ -1,0 +1,109 @@
+import { access } from "node:fs/promises";
+import * as vscode from "vscode";
+import type { BridgeConfig } from "./bridge/types.ts";
+import { TERMINAL_TITLE } from "./constants.ts";
+import { createNewTerminal } from "./terminal.ts";
+import { sessionStatusRegistry } from "./session-status-registry.ts";
+
+const SESSIONS_KEY = "pi-agent-studio.terminalSessions";
+
+type TerminalSessionMap = Record<string, string>;
+
+export interface SessionTracker {
+  update(terminalId: string, sessionFile: string): void;
+  track(terminal: vscode.Terminal, terminalId: string): void;
+  onClose(terminal: vscode.Terminal): void;
+  findTerminalBySessionFile(sessionFile: string): vscode.Terminal | undefined;
+  findSessionFileByTerminalId(terminalId: string): string | undefined;
+  restore(extensionUri: vscode.Uri, bridgeConfig: BridgeConfig): Promise<void>;
+  restartAll(extensionUri: vscode.Uri, bridgeConfig: BridgeConfig): Promise<void>;
+}
+
+export function createSessionTracker(context: vscode.ExtensionContext): SessionTracker {
+  const terminalIds = new WeakMap<vscode.Terminal, string>();
+  const terminalsById = new Map<string, vscode.Terminal>();
+
+  const read = () => context.workspaceState.get<TerminalSessionMap>(SESSIONS_KEY) ?? {};
+  const write = (map: TerminalSessionMap) => context.workspaceState.update(SESSIONS_KEY, map);
+
+  return {
+    update(terminalId, sessionFile) {
+      const map = read();
+      if (map[terminalId] === sessionFile) return;
+      map[terminalId] = sessionFile;
+      void write(map);
+    },
+    track(terminal, terminalId) {
+      terminalIds.set(terminal, terminalId);
+      terminalsById.set(terminalId, terminal);
+    },
+    onClose(terminal) {
+      if (terminal.name !== TERMINAL_TITLE) return;
+      const id = terminalIds.get(terminal);
+      if (id) terminalsById.delete(id);
+      if (terminal.exitStatus?.reason === vscode.TerminalExitReason.Shutdown) return;
+      if (!id) return;
+      const map = read();
+      if (!(id in map)) return;
+      const sessionFile = map[id];
+      delete map[id];
+      void write(map);
+      if (sessionFile) sessionStatusRegistry.remove(sessionFile);
+    },
+    findTerminalBySessionFile(sessionFile) {
+      const map = read();
+      for (const [terminalId, file] of Object.entries(map)) {
+        if (file !== sessionFile) continue;
+        const terminal = terminalsById.get(terminalId);
+        if (terminal && terminal.exitStatus === undefined) return terminal;
+      }
+      return undefined;
+    },
+    findSessionFileByTerminalId(terminalId) {
+      return read()[terminalId];
+    },
+    async restore(extensionUri, bridgeConfig) {
+      const map = read();
+      const entries = Object.entries(map);
+      const checks = await Promise.all(
+        entries.map(async ([terminalId, sessionFile]) => {
+          try {
+            await access(sessionFile);
+            return [terminalId, sessionFile] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const valid = Object.fromEntries(
+        checks.filter((e): e is readonly [string, string] => e !== null),
+      );
+      if (Object.keys(valid).length !== Object.keys(map).length) {
+        await write(valid);
+      }
+      await Promise.all(
+        Object.entries(valid).map(async ([terminalId, sessionFile]) => {
+          const terminal = await createNewTerminal({
+            extensionUri,
+            bridgeConfig,
+            terminalId,
+            sessionFile,
+          });
+          if (terminal) {
+            terminalIds.set(terminal, terminalId);
+            terminalsById.set(terminalId, terminal);
+            terminal.show();
+          }
+        }),
+      );
+    },
+    async restartAll(extensionUri: vscode.Uri, bridgeConfig: BridgeConfig): Promise<void> {
+      // Shutdown exit reason → onClose keeps the session map entries, so
+      // restore() can recreate every terminal with the new endpoint.
+      for (const terminal of terminalsById.values()) {
+        terminal.dispose();
+      }
+      await this.restore(extensionUri, bridgeConfig);
+    },
+  };
+}

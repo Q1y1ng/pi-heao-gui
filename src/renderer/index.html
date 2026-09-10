@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:;">
+  <title>Pi Standalone</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: #1e1e1e;
+      color: #cccccc;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .logo { font-size: 48px; opacity: 0.6; }
+    h1 { font-size: 20px; font-weight: 500; }
+    p { font-size: 13px; opacity: 0.6; max-width: 400px; text-align: center; line-height: 1.6; }
+    .status {
+      margin-top: 24px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: #2d2d2d;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .status.ok { border-left: 3px solid #4ec9b0; }
+    .status.warn { border-left: 3px solid #dcdcaa; }
+  </style>
+</head>
+<body>
+  <div class="logo">π</div>
+  <h1>Pi Standalone</h1>
+  <p>骨架已启动。等待接入 pi-chat UI 与 RPC 会话层。</p>
+  <div class="status" id="status">检查中…</div>
+  <script>
+    const status = document.getElementById('status');
+    if (window.pi) {
+      status.textContent = 'Preload bridge: OK — window.pi 可用';
+      status.className = 'status ok';
+      // Test config round-trip
+      window.pi.invoke('pi:get-config').then(cfg => {
+        status.textContent = `Preload OK | piPath: ${cfg.piPath || '(auto)'} | workspace: ${cfg.workspaceRoot || '(unset)'}`;
+      }).catch(e => {
+        status.textContent = 'Preload OK | config error: ' + e.message;
+        status.className = 'status warn';
+      });
+    } else {
+      status.textContent = 'Preload bridge: MISSING — window.pi 未注入';
+      status.className = 'status warn';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+node_modules
+*.log
+.env*
+.claude
+dist
+*.vsix
+pi-chat/src/model-icons-data.ts
+src/chat/chat-dist.html
+src/settings/settings-dist.html
+bridge/mcp/index.js
+package-lock.json
+.DS_Store
+docs
+.pi/mcp.json
+.playwright-mcp

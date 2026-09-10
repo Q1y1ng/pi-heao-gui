@@ -1,0 +1,43 @@
+{
+  "name": "pi-standalone-gui",
+  "version": "0.1.0",
+  "description": "Standalone Pi coding agent desktop GUI — Electron shell for pi --mode rpc, extracted from Pi Agent Studio",
+  "main": "dist/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "watch": "tsc -w",
+    "dev": "npm run build && electron .",
+    "start": "electron .",
+    "build:renderer": "cd vendor/upstream/pi-chat && npm install && npm run build",
+    "dist": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.8.0"
+  },
+  "build": {
+    "appId": "dev.pi.standalone-gui",
+    "productName": "Pi Standalone GUI",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "vendor/upstream/pi-chat/dist/**/*",
+      "vendor/upstream/bridge/**/*",
+      "!vendor/upstream/bridge/pi-vscode-bridge.js",
+      "!**/*.ts",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.png"
+    }
+  }
+}

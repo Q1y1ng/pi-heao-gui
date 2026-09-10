@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-electron/
+*.log
+.worktrees/
+vendor/upstream/.git/
+vendor/upstream/node_modules/
+vendor/upstream/pi-chat/node_modules/
+vendor/upstream/pi-chat/dist/
+vendor/upstream/pi-chat/src/chat-dist.html
+vendor/upstream/pi-chat/src/model-icons-data.ts
+vendor/upstream/pi-settings/node_modules/
+vendor/upstream/pi-settings/dist/
+src/shared/*.js
+src/shared/*.js.map

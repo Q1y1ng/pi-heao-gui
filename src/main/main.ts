@@ -160,7 +160,41 @@ ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: 
   return { ok: true };
 });
 
-// ─── IPC: Clipboard / File (handled here, not in chat-session) ────────
+ipcMain.handle("pi:get-env-info", () => {
+  const { readdirSync, statSync, readFileSync: rf } = require("fs");
+  // Local extensions
+  let extensions: string[] = [];
+  try {
+    const extDir = join(PI_AGENT_DIR, "extensions");
+    if (existsSync(extDir)) {
+      extensions = readdirSync(extDir).filter((f: string) => f.endsWith(".ts") || f.endsWith(".js") || f.includes(".disabled"));
+    }
+  } catch {}
+  // Skills
+  let skills: Array<{ name: string; description: string }> = [];
+  try {
+    const skillsDir = join(PI_AGENT_DIR, "skills");
+    if (existsSync(skillsDir)) {
+      for (const entry of readdirSync(skillsDir)) {
+        const skillMd = join(skillsDir, entry, "SKILL.md");
+        if (existsSync(skillMd)) {
+          try {
+            const content = rf(skillMd, "utf8");
+            const descMatch = content.match(/^description:\s*(.+)$/m);
+            const nameMatch = content.match(/^name:\s*(.+)$/m);
+            skills.push({
+              name: nameMatch?.[1]?.trim() || entry,
+              description: descMatch?.[1]?.trim() || "",
+            });
+          } catch {
+            skills.push({ name: entry, description: "" });
+          }
+        }
+      }
+    }
+  } catch {}
+  return { extensions, skills };
+});
 
 ipcMain.handle(IPC.COPY, (_e, text: string) => {
   clipboard.writeText(String(text ?? ""));

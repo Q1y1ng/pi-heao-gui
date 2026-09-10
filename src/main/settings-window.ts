@@ -1,6 +1,6 @@
 /**
  * Settings window for Pi Standalone GUI.
- * Self-contained HTML that edits local config + pi agent files via IPC.
+ * Tabs: 模型配置 | 扩展插件 | 技能 | 系统提示词 | 常规
  */
 export function buildSettingsHtml(): string {
   return `<!DOCTYPE html>
@@ -12,57 +12,113 @@ export function buildSettingsHtml(): string {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-  background:#1e1e1e;color:#ccc;font-size:13px;height:100vh;display:flex;flex-direction:column}
-.toolbar{padding:14px 20px;border-bottom:1px solid #333;display:flex;align-items:center;gap:12px}
-.toolbar h1{font-size:16px;font-weight:500;flex:1}
-.toolbar button{padding:6px 14px;border-radius:6px;border:1px solid #444;background:#2a2a2a;color:#ccc;cursor:pointer;font-size:12px}
+  background:#1e1e1e;color:#d4d4d4;font-size:13px;height:100vh;display:flex;flex-direction:column}
+.toolbar{padding:12px 16px;border-bottom:1px solid #3c3c3c;display:flex;align-items:center;gap:10px;background:#252526}
+.toolbar h1{font-size:15px;font-weight:600;flex:1;color:#e8e8e8}
+.toolbar button{padding:5px 12px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:12px}
 .toolbar button.primary{background:#0e639c;border-color:#0e639c;color:#fff}
-.toolbar button:hover{background:#333}
+.toolbar button:hover{background:#3a3a3a}
 .toolbar button.primary:hover{background:#1177bb}
-.tabs{display:flex;border-bottom:1px solid #333;padding:0 12px}
-.tab{padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;color:#888;font-size:12px}
-.tab:hover{color:#ccc}
+.tabs{display:flex;border-bottom:1px solid #3c3c3c;padding:0 8px;background:#252526;overflow-x:auto}
+.tab{padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;color:#999;font-size:12px;white-space:nowrap;user-select:none}
+.tab:hover{color:#d4d4d4}
 .tab.active{color:#4ec9b0;border-bottom-color:#4ec9b0}
-.content{flex:1;overflow-y:auto;padding:20px}
+.content{flex:1;overflow-y:auto;padding:16px}
 .panel{display:none}
 .panel.active{display:block}
-.field{margin-bottom:16px}
-.field label{display:block;margin-bottom:6px;color:#999;font-size:12px}
+.field{margin-bottom:14px}
+.field label{display:block;margin-bottom:5px;color:#aaa;font-size:12px}
 .field input,.field select,.field textarea{
-  width:100%;padding:8px 10px;border-radius:6px;border:1px solid #444;
-  background:#2a2a2a;color:#ccc;font-size:13px;font-family:inherit;
+  width:100%;padding:7px 10px;border-radius:5px;border:1px solid #454545;
+  background:#2d2d2d;color:#d4d4d4;font-size:13px;font-family:inherit;
 }
-.field textarea{min-height:100px;resize:vertical;font-family:'Cascadia Code','Consolas',monospace}
+.field textarea{min-height:80px;resize:vertical;font-family:'Cascadia Code','Consolas',monospace;font-size:12px}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#0e639c}
-.field .hint{margin-top:4px;font-size:11px;color:#666}
-.row{display:flex;gap:12px}
+.field .hint{margin-top:3px;font-size:11px;color:#777}
+.row{display:flex;gap:10px}
 .row .field{flex:1}
-.json-editor{width:100%;min-height:300px;padding:12px;border-radius:6px;border:1px solid #444;
-  background:#1a1a1a;color:#ccc;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical}
-.status{padding:8px 20px;border-top:1px solid #333;font-size:11px;color:#666}
+.card{background:#252526;border:1px solid #3c3c3c;border-radius:6px;padding:12px;margin-bottom:10px}
+.card-title{font-weight:600;color:#e0e0e0;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.card-desc{color:#999;font-size:12px;line-height:1.5}
+.card-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#0e639c;color:#fff}
+.card-badge.warn{background:#8b5a00}
+.card-badge.muted{background:#555}
+.list-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:5px;margin:3px 0;background:#2a2a2a}
+.list-item:hover{background:#303030}
+.list-item .name{flex:1;font-size:12px;color:#d4d4d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list-item .meta{font-size:11px;color:#888;flex-shrink:0}
+.json-editor{width:100%;min-height:250px;padding:10px;border-radius:5px;border:1px solid #454545;
+  background:#1a1a1a;color:#d4d4d4;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical}
+.status{padding:6px 16px;border-top:1px solid #3c3c3c;font-size:11px;color:#888;background:#252526}
 .status.ok{color:#4ec9b0}
 .status.err{color:#f44747}
-.checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.checkbox-row input{width:auto}
-.checkbox-row label{margin:0}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.checkbox-row input[type=checkbox]{width:auto;accent-color:#0e639c}
+.checkbox-row label{margin:0;color:#d4d4d4}
+.empty-hint{text-align:center;padding:30px;color:#666;font-size:12px}
+.section-title{font-size:13px;font-weight:600;color:#e0e0e0;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #333}
+.section-title:first-child{margin-top:0}
+.masked{font-family:monospace;letter-spacing:1px}
 </style>
 </head>
 <body>
 <div class="toolbar">
   <h1>⚙ Pi Standalone 设置</h1>
   <button id="btn-reload">重新加载</button>
-  <button id="btn-save" class="primary">保存</button>
+  <button id="btn-save" class="primary">保存更改</button>
 </div>
 <div class="tabs">
-  <div class="tab active" data-tab="general">常规</div>
-  <div class="tab" data-tab="chat">聊天</div>
-  <div class="tab" data-tab="permission">权限</div>
-  <div class="tab" data-tab="agent">pi agent</div>
-  <div class="tab" data-tab="raw">原始 JSON</div>
+  <div class="tab active" data-tab="models">模型配置</div>
+  <div class="tab" data-tab="extensions">扩展插件</div>
+  <div class="tab" data-tab="skills">技能</div>
+  <div class="tab" data-tab="sysprompt">系统提示词</div>
+  <div class="tab" data-tab="general">常规</div>
 </div>
 <div class="content">
+  <!-- Models -->
+  <div class="panel active" id="panel-models">
+    <div class="section-title">已配置的模型提供商</div>
+    <div id="models-list"></div>
+    <div class="section-title">API 密钥</div>
+    <div id="auth-list"></div>
+    <div class="section-title">默认模型</div>
+    <div class="field">
+      <label>默认提供商</label>
+      <select id="default-provider"><option value="">（无）</option></select>
+    </div>
+    <div class="field">
+      <label>默认模型 ID</label>
+      <input type="text" id="default-model" placeholder="例如 deepseek-v4-flash">
+    </div>
+  </div>
+  <!-- Extensions -->
+  <div class="panel" id="panel-extensions">
+    <div class="section-title">npm 扩展包（settings.json → packages）</div>
+    <div id="npm-packages"></div>
+    <div class="section-title">本地扩展（~/.pi/agent/extensions/）</div>
+    <div id="local-extensions"></div>
+  </div>
+  <!-- Skills -->
+  <div class="panel" id="panel-skills">
+    <div class="section-title">已安装技能</div>
+    <div id="skills-list"></div>
+    <div class="hint" style="color:#666;font-size:12px;margin-top:12px">
+      技能目录：~/.pi/agent/skills/（每个子目录含 SKILL.md）
+    </div>
+  </div>
+  <!-- System Prompt -->
+  <div class="panel" id="panel-sysprompt">
+    <div class="field">
+      <label>追加系统提示词（APPEND_SYSTEM.md）— 追加到 pi 默认提示词之后</label>
+      <textarea id="agent-append" rows="5" placeholder="在此输入要追加的内容…"></textarea>
+    </div>
+    <div class="field">
+      <label>覆盖系统提示词（SYSTEM.md）— 完全替换 pi 默认提示词（慎用）</label>
+      <textarea id="agent-override" rows="5" placeholder="留空则不覆盖"></textarea>
+    </div>
+  </div>
   <!-- General -->
-  <div class="panel active" id="panel-general">
+  <div class="panel" id="panel-general">
     <div class="field">
       <label>pi 可执行文件路径（留空自动检测）</label>
       <input type="text" id="cfg-piPath" placeholder="例如 C:\\Users\\...\\npm\\pi.cmd">
@@ -75,9 +131,9 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
     <div class="field">
       <label>界面语言</label>
       <select id="cfg-language">
-        <option value="auto">自动</option>
-        <option value="en">English</option>
         <option value="zh-cn">简体中文</option>
+        <option value="en">English</option>
+        <option value="auto">自动检测</option>
       </select>
     </div>
     <div class="field">
@@ -88,9 +144,6 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
       <label>环境变量（JSON 对象）</label>
       <textarea id="cfg-env" placeholder='{"KEY":"value"}'></textarea>
     </div>
-  </div>
-  <!-- Chat -->
-  <div class="panel" id="panel-chat">
     <div class="row">
       <div class="field">
         <label>字体大小</label>
@@ -114,14 +167,6 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
         <option value="base">base</option>
       </select>
     </div>
-    <div class="field">
-      <label>背景图片路径（可选）</label>
-      <input type="text" id="cfg-chatBackgroundImage" placeholder="留空则无背景">
-    </div>
-    <div class="field">
-      <label>背景不透明度 (0-1)</label>
-      <input type="number" id="cfg-chatBackgroundOpacity" min="0" max="1" step="0.1">
-    </div>
     <div class="checkbox-row">
       <input type="checkbox" id="cfg-mcpEnabled">
       <label for="cfg-mcpEnabled">启用 MCP</label>
@@ -130,13 +175,6 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
       <label>MCP 空闲断开（分钟，0=不断开）</label>
       <input type="number" id="cfg-mcpIdleTimeout" min="0">
     </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="cfg-rpcTrace">
-      <label for="cfg-rpcTrace">RPC 调试日志</label>
-    </div>
-  </div>
-  <!-- Permission -->
-  <div class="panel" id="panel-permission">
     <div class="field">
       <label>权限模式</label>
       <select id="cfg-permissionMode">
@@ -149,34 +187,8 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
       <input type="text" id="cfg-disabledTools" placeholder="todo, subagent, questionnaire">
     </div>
     <div class="field">
-      <label>危险命令模式（每行一个正则，留空用默认）</label>
-      <textarea id="cfg-dangerousPatterns" placeholder="\\\\brm\\\\s+-rf\\\\b"></textarea>
-    </div>
-  </div>
-  <!-- pi agent -->
-  <div class="panel" id="panel-agent">
-    <div class="field">
-      <label>系统提示词追加（~/.pi/agent/APPEND_SYSTEM.md）</label>
-      <textarea id="agent-append" placeholder="追加到 pi 默认系统提示词之后"></textarea>
-    </div>
-    <div class="field">
-      <label>系统提示词覆盖（~/.pi/agent/SYSTEM.md）</label>
-      <textarea id="agent-override" placeholder="完全替换 pi 默认系统提示词（慎用）"></textarea>
-    </div>
-    <div class="field">
-      <label>models.json（只读预览）</label>
-      <textarea id="agent-models" readonly></textarea>
-    </div>
-    <div class="field">
       <label>settings.json（~/.pi/agent/settings.json）</label>
-      <textarea id="agent-settings"></textarea>
-    </div>
-  </div>
-  <!-- Raw -->
-  <div class="panel" id="panel-raw">
-    <div class="field">
-      <label>config.json（~/.pi/standalone/config.json）</label>
-      <textarea class="json-editor" id="raw-config"></textarea>
+      <textarea class="json-editor" id="agent-settings" rows="6"></textarea>
     </div>
   </div>
 </div>
@@ -188,6 +200,7 @@ function setStatus(msg, ok) {
   status.textContent = msg;
   status.className = 'status' + (ok === true ? ' ok' : ok === false ? ' err' : '');
 }
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
 // Tabs
 document.querySelectorAll('.tab').forEach(t => {
@@ -199,6 +212,99 @@ document.querySelectorAll('.tab').forEach(t => {
   };
 });
 
+function maskKey(k) {
+  if (!k) return '（未设置）';
+  if (k.length <= 8) return '••••••••';
+  return k.slice(0, 4) + '••••••••' + k.slice(-4);
+}
+
+function renderModels(providers) {
+  const el = $('models-list');
+  const sel = $('default-provider');
+  el.innerHTML = '';
+  sel.innerHTML = '<option value="">（无）</option>';
+  if (!providers || !Object.keys(providers).length) {
+    el.innerHTML = '<div class="empty-hint">未配置模型提供商。请编辑 ~/.pi/agent/models.json</div>';
+    return;
+  }
+  for (const [id, p] of Object.entries(providers)) {
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = p.name || id;
+    sel.appendChild(opt);
+    const models = p.models || {};
+    const modelIds = Object.keys(models);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-title">' + esc(p.name || id) + ' <span class="card-badge">' + esc(id) + '</span></div>' +
+      '<div class="card-desc">Base URL: ' + esc(p.baseUrl || '（默认）') + '<br>' +
+      '模型 (' + modelIds.length + '): ' + esc(modelIds.slice(0, 5).join(', ') || '无') + (modelIds.length > 5 ? '…' : '') + '</div>';
+    el.appendChild(card);
+  }
+}
+
+function renderAuth(auth) {
+  const el = $('auth-list');
+  el.innerHTML = '';
+  if (!auth || !Object.keys(auth).length) {
+    el.innerHTML = '<div class="empty-hint">未配置 API 密钥。请编辑 ~/.pi/agent/auth.json</div>';
+    return;
+  }
+  for (const [provider, key] of Object.entries(auth)) {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = '<span class="name">' + esc(provider) + '</span><span class="meta masked">' + esc(maskKey(typeof key === 'string' ? key : key.apiKey)) + '</span>';
+    el.appendChild(item);
+  }
+}
+
+function renderNpmPackages(packages) {
+  const el = $('npm-packages');
+  el.innerHTML = '';
+  if (!packages || !packages.length) {
+    el.innerHTML = '<div class="empty-hint">未安装 npm 扩展包</div>';
+    return;
+  }
+  for (const pkg of packages) {
+    const name = String(pkg).replace(/^npm:/, '');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = '<span class="name">' + esc(name) + '</span><span class="meta">npm</span>';
+    el.appendChild(item);
+  }
+}
+
+function renderLocalExtensions(exts) {
+  const el = $('local-extensions');
+  el.innerHTML = '';
+  if (!exts || !exts.length) {
+    el.innerHTML = '<div class="empty-hint">无本地扩展</div>';
+    return;
+  }
+  for (const e of exts) {
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    const badge = e.endsWith('.disabled') || e.endsWith('.disabled-vscode') ? '<span class="card-badge muted">已禁用</span>' : '';
+    item.innerHTML = '<span class="name">' + esc(e) + '</span>' + badge;
+    el.appendChild(item);
+  }
+}
+
+function renderSkills(skills) {
+  const el = $('skills-list');
+  el.innerHTML = '';
+  if (!skills || !skills.length) {
+    el.innerHTML = '<div class="empty-hint">未安装技能。在 ~/.pi/agent/skills/ 下创建包含 SKILL.md 的目录即可。</div>';
+    return;
+  }
+  for (const s of skills) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<div class="card-title">' + esc(s.name) + '</div><div class="card-desc">' + esc(s.description || '（无描述）') + '</div>';
+    el.appendChild(card);
+  }
+}
+
 let currentConfig = {};
 
 async function loadAll() {
@@ -206,27 +312,36 @@ async function loadAll() {
     currentConfig = await window.pi.invoke('pi:get-config');
     $('cfg-piPath').value = currentConfig.piPath || '';
     $('cfg-workspaceRoot').value = currentConfig.workspaceRoot || '';
-    $('cfg-language').value = currentConfig.language || 'auto';
+    $('cfg-language').value = currentConfig.language || 'zh-cn';
     $('cfg-args').value = (currentConfig.args || []).join('\\n');
     $('cfg-env').value = JSON.stringify(currentConfig.env || {}, null, 2);
     $('cfg-chatFontSize').value = currentConfig.chatFontSize || 13;
     $('cfg-chatSendShortcut').value = currentConfig.chatSendShortcut || 'enter';
     $('cfg-chatMermaidTheme').value = currentConfig.chatMermaidTheme || 'default';
-    $('cfg-chatBackgroundImage').value = currentConfig.chatBackgroundImage || '';
-    $('cfg-chatBackgroundOpacity').value = currentConfig.chatBackgroundOpacity ?? 1;
     $('cfg-mcpEnabled').checked = !!currentConfig.mcpEnabled;
     $('cfg-mcpIdleTimeout').value = currentConfig.mcpIdleTimeout ?? 10;
-    $('cfg-rpcTrace').checked = !!currentConfig.rpcTrace;
     $('cfg-permissionMode').value = currentConfig.permissionMode || 'AskForApproval';
     $('cfg-disabledTools').value = (currentConfig.disabledTools || []).join(', ');
-    $('cfg-dangerousPatterns').value = (currentConfig.dangerousPatterns || []).join('\\n');
-    $('raw-config').value = JSON.stringify(currentConfig, null, 2);
 
     const agent = await window.pi.invoke('pi:read-agent-files');
     $('agent-append').value = agent.append || '';
     $('agent-override').value = agent.override || '';
-    $('agent-models').value = agent.models || '{}';
     $('agent-settings').value = agent.settings || '{}';
+
+    // Parse models/auth/settings
+    let modelsJson = {}, authJson = {}, settingsJson = {};
+    try { modelsJson = JSON.parse(agent.models || '{}'); } catch {}
+    try { authJson = JSON.parse(agent.auth || '{}'); } catch {}
+    try { settingsJson = JSON.parse(agent.settings || '{}'); } catch {}
+
+    renderModels(modelsJson.providers || {});
+    renderAuth(authJson);
+    renderNpmPackages(settingsJson.packages || []);
+
+    const data = await window.pi.invoke('pi:get-env-info');
+    renderLocalExtensions(data.extensions || []);
+    renderSkills(data.skills || []);
+
     setStatus('已加载配置');
   } catch (e) {
     setStatus('加载失败: ' + e.message, false);
@@ -239,7 +354,6 @@ async function saveAll() {
     try { env = JSON.parse($('cfg-env').value || '{}'); } catch { throw new Error('环境变量 JSON 无效'); }
     const args = $('cfg-args').value.split('\\n').map(s => s.trim()).filter(Boolean);
     const disabledTools = $('cfg-disabledTools').value.split(',').map(s => s.trim()).filter(Boolean);
-    const dangerousPatterns = $('cfg-dangerousPatterns').value.split('\\n').map(s => s.trim()).filter(Boolean);
     const partial = {
       piPath: $('cfg-piPath').value.trim(),
       workspaceRoot: $('cfg-workspaceRoot').value.trim(),
@@ -248,22 +362,19 @@ async function saveAll() {
       chatFontSize: Number($('cfg-chatFontSize').value) || 13,
       chatSendShortcut: $('cfg-chatSendShortcut').value,
       chatMermaidTheme: $('cfg-chatMermaidTheme').value,
-      chatBackgroundImage: $('cfg-chatBackgroundImage').value.trim(),
-      chatBackgroundOpacity: Number($('cfg-chatBackgroundOpacity').value) || 1,
       mcpEnabled: $('cfg-mcpEnabled').checked,
       mcpIdleTimeout: Number($('cfg-mcpIdleTimeout').value) || 0,
-      rpcTrace: $('cfg-rpcTrace').checked,
       permissionMode: $('cfg-permissionMode').value,
-      disabledTools, dangerousPatterns,
+      disabledTools,
     };
     await window.pi.invoke('pi:set-config', partial);
-    await window.pi.invoke('pi:write-agent-files', {
+    const result = await window.pi.invoke('pi:write-agent-files', {
       append: $('agent-append').value,
       override: $('agent-override').value,
       settings: $('agent-settings').value,
     });
+    if (result && result.ok === false) throw new Error(result.error || '保存失败');
     currentConfig = await window.pi.invoke('pi:get-config');
-    $('raw-config').value = JSON.stringify(currentConfig, null, 2);
     setStatus('已保存', true);
   } catch (e) {
     setStatus('保存失败: ' + e.message, false);

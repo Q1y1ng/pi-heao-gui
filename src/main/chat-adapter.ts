@@ -7,6 +7,7 @@ import { join, extname, isAbsolute } from "path";
 import { homedir } from "os";
 import type { StandaloneConfig } from "../shared/types";
 import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
+import { THEME_CSS } from "./theme";
 
 const BG_MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -97,7 +98,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   html = html.split("PI_SEP_PLACEHOLDER").join(escJs(sep));
   html = html.split("PI_WORKSPACE_PLACEHOLDER").join(escJs(config.workspaceRoot || ""));
   html = html.split("PI_FONTSIZE_PLACEHOLDER").join(String(config.chatFontSize || 13));
-  html = html.split("PI_LANG_PLACEHOLDER").join(escJs(config.language === "auto" ? "en" : config.language));
+  html = html.split("PI_LANG_PLACEHOLDER").join(escJs(config.language === "auto" ? "zh-cn" : config.language));
   html = html.split("PI_MERMAID_THEME_PLACEHOLDER").join(escJs(config.chatMermaidTheme || "default"));
   html = html.split("PI_BG_IMAGE_PLACEHOLDER").join(escJs(bgDataUrl));
   html = html.split("PI_BG_OPACITY_PLACEHOLDER").join(String(config.chatBackgroundOpacity ?? 1));
@@ -116,12 +117,12 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
   if (headLineIdx !== -1) {
-    lines.splice(headLineIdx, 0, SHIM_SCRIPT);
+    lines.splice(headLineIdx, 0, THEME_CSS, SHIM_SCRIPT);
     html = lines.join("\n");
   } else {
     const bodyIdx = html.lastIndexOf("</body>");
     if (bodyIdx !== -1) {
-      html = html.slice(0, bodyIdx) + SHIM_SCRIPT + html.slice(bodyIdx);
+      html = html.slice(0, bodyIdx) + THEME_CSS + SHIM_SCRIPT + html.slice(bodyIdx);
     }
   }
 

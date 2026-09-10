@@ -32,8 +32,12 @@
       "vendor/upstream/pi-chat/dist/**/*",
       "vendor/upstream/bridge/**/*",
       "!vendor/upstream/bridge/pi-vscode-bridge.js",
-      "!**/*.ts",
-      "!**/*.map"
+      "!src/**/*",
+      "!docs/**/*",
+      "!**/*.map",
+      "!**/tsconfig*.json",
+      "!**/*.md",
+      "vendor/upstream/bridge/agents/**/*"
     ],
     "win": {
       "target": "portable",

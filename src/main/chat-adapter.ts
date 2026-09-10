@@ -129,24 +129,21 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   // Use line-level detection to avoid JS string false positives
   const allLines = html.split("\n");
   let bodyOpenIdx = -1;
-  let bodyCloseIdx = -1;
   for (let i = 0; i < allLines.length; i++) {
     const t = allLines[i].trim();
-    if (t === "<body>" || t === "<body>") bodyOpenIdx = i;
-    if (t === "</body>") bodyCloseIdx = i;
+    if (t === "<body>" || t === "<body>" || /^<body\s[^>]*>$/.test(t)) {
+      bodyOpenIdx = i;
+      break;
+    }
   }
   if (bodyOpenIdx !== -1) {
     allLines.splice(bodyOpenIdx + 1, 0, SIDEBAR_HTML);
   }
-  if (bodyCloseIdx !== -1) {
-    // Adjust for inserted lines
-    const adj = bodyOpenIdx !== -1 && bodyCloseIdx > bodyOpenIdx ? bodyCloseIdx + 1 : bodyCloseIdx;
-    // Find </body> again after splice
-    for (let i = allLines.length - 1; i >= 0; i--) {
-      if (allLines[i].trim() === "</body>") {
-        allLines.splice(i, 0, SIDEBAR_SCRIPT);
-        break;
-      }
+  // Find structural </body> (search from end)
+  for (let i = allLines.length - 1; i >= 0; i--) {
+    if (allLines[i].trim() === "</body>") {
+      allLines.splice(i, 0, SIDEBAR_SCRIPT);
+      break;
     }
   }
   html = allLines.join("\n");

@@ -102,9 +102,14 @@ async function createWindow(): Promise<void> {
     writeFileSync(tmpHtml, chatHtml, "utf8");
     await mainWindow.loadFile(tmpHtml);
   } else {
-    // Fallback placeholder
-    const placeholder = join(app.getAppPath(), "src", "renderer", "index.html");
-    await mainWindow.loadFile(placeholder);
+    // Fallback placeholder — try dist first (packaged), then src (dev)
+    const candidates = [
+      join(app.getAppPath(), "dist", "renderer", "index.html"),
+      join(app.getAppPath(), "src", "renderer", "index.html"),
+    ];
+    for (const p of candidates) {
+      if (existsSync(p)) { await mainWindow.loadFile(p); break; }
+    }
   }
 
   mainWindow.on("closed", () => {
@@ -143,7 +148,15 @@ ipcMain.handle("pi:read-agent-files", () => {
 ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: string; settings?: string }) => {
   if (data.append !== undefined) writePiFile("APPEND_SYSTEM.md", data.append);
   if (data.override !== undefined) writePiFile("SYSTEM.md", data.override);
-  if (data.settings !== undefined) writePiFile("settings.json", data.settings);
+  if (data.settings !== undefined) {
+    const s = data.settings.trim();
+    if (s) {
+      try { JSON.parse(s); } catch (e) {
+        return { ok: false, error: "settings.json 不是有效 JSON: " + (e instanceof Error ? e.message : String(e)) };
+      }
+    }
+    writePiFile("settings.json", data.settings);
+  }
   return { ok: true };
 });
 
@@ -228,19 +241,50 @@ ipcMain.handle(IPC.LIST_SESSIONS, async () => {
         const lines = content.split("\n").filter(Boolean);
         let name = "";
         let sessionId = "";
-        for (let i = lines.length - 1; i >= Math.max(0, lines.length - 20); i--) {
+        // 1) Look for session_info (usually last line)
+        for (let i = lines.length - 1; i >= Math.max(0, lines.length - 30); i--) {
           try {
             const obj = JSON.parse(lines[i]);
-            if (obj.type === "session_info" || obj.session_info) {
-              const info = obj.session_info ?? obj;
-              name = info.name ?? info.sessionName ?? name;
-              sessionId = info.sessionId ?? info.id ?? sessionId;
-              if (name) break;
+            if (obj.type === "session_info" && obj.name) {
+              name = String(obj.name);
+              sessionId = obj.id ? String(obj.id) : sessionId;
+              break;
             }
-            if (obj.sessionId && !sessionId) sessionId = obj.sessionId;
+            if (obj.type === "session" && obj.id && !sessionId) sessionId = String(obj.id);
           } catch {}
         }
-        sessions.push({ file: full, name: name || entry.replace(/\.jsonl$/, "").slice(0, 24), mtime: st.mtimeMs, sessionId });
+        // 2) Fallback: first user message as preview
+        if (!name) {
+          for (let i = 0; i < Math.min(lines.length, 40); i++) {
+            try {
+              const obj = JSON.parse(lines[i]);
+              if (obj.type === "message" && obj.message?.role === "user") {
+                const c = obj.message.content;
+                let text = "";
+                if (typeof c === "string") text = c;
+                else if (Array.isArray(c)) {
+                  for (const b of c) {
+                    if (b && typeof b === "object" && b.type === "text" && typeof b.text === "string") {
+                      text = b.text;
+                      break;
+                    }
+                  }
+                }
+                text = text.replace(/\s+/g, " ").trim();
+                if (text) {
+                  name = text.length > 36 ? text.slice(0, 36) + "…" : text;
+                  break;
+                }
+              }
+            } catch {}
+          }
+        }
+        // 3) Last resort: friendly timestamp
+        if (!name) {
+          const ts = entry.replace(/\.jsonl$/, "").split("_")[0];
+          name = ts.replace(/T/, " ").replace(/-\d+Z$/, "").slice(0, 16) || "未命名会话";
+        }
+        sessions.push({ file: full, name, mtime: st.mtimeMs, sessionId });
       } catch {}
     }
   }
@@ -291,6 +335,11 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
     }
   });
 }
+
+// rewindDiff: open file in system (no VS Code diff available)
+ipcMain.handle(IPC.REWIND_DIFF, async (_e, msg: { absPath?: string }) => {
+  if (msg?.absPath) shell.openPath(String(msg.absPath));
+});
 
 // ─── Boot ─────────────────────────────────────────────────────────────
 

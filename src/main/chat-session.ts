@@ -143,6 +143,7 @@ export async function createChatSession(opts: {
   let sessionName: string | undefined;
   let streaming = false;
   let sessionDisposed = false;
+  let rpcAlive = false;
   let rpc: RpcClient;
 
   const post = (msg: unknown) => { if (!sessionDisposed) opts.host.postToRenderer(msg); };
@@ -276,14 +277,16 @@ export async function createChatSession(opts: {
   }
 
   async function reloadSession() {
-    if (streaming || sessionDisposed) return;
-    if (!sessionFile) {
+    if (streaming) return;
+    if (!sessionFile && rpcAlive) {
       post({ type: "toast", text: "This session has not been saved yet.", kind: "error" });
       return;
     }
     try {
-      await rpc.dispose();
+      if (rpcAlive) await rpc.dispose();
+      rpcAlive = false;
       rpc = await bootRpc(sessionFile);
+      rpcAlive = true;
       await hydrate();
       post({ type: "toast", text: "Session reloaded", kind: "success" });
     } catch (e) {
@@ -421,6 +424,13 @@ export async function createChatSession(opts: {
       case "btwAbort":
         rpc.respondExtensionUi(String(msg.id ?? ""), { confirmed: true });
         break;
+      case "toggleFavorite":
+        // Re-fetch models so UI updates; actual persistence is in settings
+        try {
+          const models = await rpc.getAvailableModels();
+          post({ type: "models", models });
+        } catch {}
+        break;
       case "rewindAccept":
         if (!streaming) void rpc.prompt("/rewind-accept").catch(() => {});
         break;
@@ -506,10 +516,11 @@ export async function createChatSession(opts: {
           handleExtUiRequest(req);
         },
         onExit: (code) => {
-          if (gen !== rpcGeneration || sessionDisposed) return;
+          if (gen !== rpcGeneration) return;
           updateStreaming(false);
-          sessionDisposed = true;
-          post({ type: "error", message: "Pi process exited" + (code != null ? ` (code ${code})` : "") });
+          rpcAlive = false;
+          // Do NOT set sessionDisposed — allow reload/recovery
+          post({ type: "error", message: "Pi process exited" + (code != null ? ` (code ${code})` : "") + ". Click reload or send a message to restart." });
         },
         onError: (err) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
@@ -520,12 +531,19 @@ export async function createChatSession(opts: {
   }
 
   rpc = await bootRpc(sessionFile);
+  rpcAlive = true;
 
   return {
     get rpc() { return rpc; },
     get sessionFile() { return sessionFile; },
     get streaming() { return streaming; },
-    handleMessage,
+    handleMessage: async (msg) => {
+      // Auto-reload if process died and user tries to interact
+      if (!rpcAlive && !sessionDisposed && msg.type !== "webviewReady") {
+        await reloadSession();
+      }
+      await handleMessage(msg);
+    },
     switchTo,
     newSession,
     dispose() {

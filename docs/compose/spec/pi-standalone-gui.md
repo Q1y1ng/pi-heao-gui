@@ -3,23 +3,25 @@ feature: pi-standalone-gui
 status: delivered
 updated: 2026-06-10
 branch: main
-commits: a9bd048..HEAD
+commits: fce6ac1..HEAD
 ---
 
 # Pi Standalone GUI
 
 ## Report
 
-**What was built** — 一个独立的 Electron 桌面应用，从 Pi Agent Studio VS Code 插件中剥离出完整的聊天体验。Main 进程 spawn `pi --mode rpc` 并通过 JSONL stdio 编排会话；Renderer 托管 vendored 的 `pi-chat` 单文件 HTML（通过 `acquireVsCodeApi` shim 桥接到 preload IPC）；左侧注入会话列表侧栏；独立设置窗口编辑本地配置与 pi agent 文件。bundled 扩展（todo/subagent/questionnaire/permission-gate/rewind/btw/mcp）全部挂载。最终产出 Windows portable exe（约 100MB），双击即用，无需 VS Code。
+**What was built** — 一个独立的 Electron 桌面应用，从 Pi Agent Studio VS Code 插件中剥离出完整的聊天体验。Main 进程 spawn `pi --mode rpc` 并通过 JSONL stdio 编排会话；Renderer 托管 vendored 的 `pi-chat` 单文件 HTML（通过 `acquireVsCodeApi` shim 桥接到 preload IPC）；左侧注入会话列表侧栏（高对比度暗色主题、会话名从 session_info 或首条用户消息提取）；独立设置窗口编辑本地配置与 pi agent 文件。bundled 扩展（todo/subagent/questionnaire/permission-gate/rewind/btw/mcp）全部挂载并正确打包进 asar。最终产出 Windows portable exe（约 100MB），双击即用，无需 VS Code。
 
-**Verification** — `npx tsc` 编译通过；Electron 开发模式启动成功（chat session created）；portable exe 构建成功并启动验证通过。
+Review 修复：打包 `!**/*.ts` 误删 bridge 扩展（改为精确排除 src/docs）；pi 进程退出后会话锁死（改为可 reload 恢复）；侧栏 XSS（改用 textContent）；settings.json 写入加 JSON 校验；rewindDiff/toggleFavorite 补 handler；agents/*.md 被全局 md 排除误删（重新 include）。
+
+**Verification** — `npx tsc` PASS；Electron dev 启动 PASS（chat session created）；portable exe 启动 PASS；asar 包含全部 bridge/*.ts + agents/*.md + mcp/index.js。
 
 **Journey log** —
 1. vite singlefile 的 HTML 内 JS 字符串里也有 `</head>`，注入必须按行匹配结构性标签，不能用 `String.replace` 第一次出现。
 2. Electron 下载走 `npmmirror.com/mirrors/electron/` 可大幅加速；本机已有 v43 缓存可复用。
 3. `acquireVsCodeApi` shim 用 `window.dispatchEvent(new MessageEvent('message',{data}))` 即可对接 pi-chat 的 `window.addEventListener('message')`，无需改上游源码。
-4. 上游 `bridge/mcp/index.js` 需从已安装 VS Code 扩展复制预构建产物（monorepo 构建链较重）。
-5. IPC channel 不能重复 `ipcMain.handle`，switchSession/newSession 合并进统一路由。
+4. electron-builder `files` 的 `!**/*.ts` 是全局排除，会误删 vendored 的 TS 扩展资产；需精确排除或在后面 re-include。
+5. 子进程 `exit` 时若设 `disposed=true` 会永久锁死恢复路径；应只标记 `rpcAlive=false` 并允许 reload。
 
 ## [S1] Problem
 

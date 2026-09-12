@@ -676,7 +676,10 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   html = html.split("PI_BG_OPACITY_PLACEHOLDER").join(String(config.chatBackgroundOpacity ?? 1));
   html = html.split("PI_SENDSHORTCUT_PLACEHOLDER").join(escJs(config.chatSendShortcut || "enter"));
 
-  const configScript = `<script>window.__PI_HEAO_CONFIG__ = ${safeJson(config)}; window.__PI_STANDALONE_CONFIG__ = window.__PI_HEAO_CONFIG__; window.__PI_HOME__ = ${safeJson(home)};</script>`;
+  // Only window.__PI_HOME__ is read by the UI. The whole config used to be
+  // injected here too — nothing consumed it, and it wrote the user's `env` map
+  // (potentially API keys) into the generated temp document for no reason.
+  const configScript = `<script>window.__PI_HOME__ = ${safeJson(home)};</script>`;
 
   // Inject THEME_CSS + SHIM into <head>
   const lines = html.split("\n");

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
-import { join, sep, basename } from "node:path";
+import { join, sep, basename, isAbsolute, relative } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
   existsSync,
@@ -335,9 +335,19 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
   });
 }
 
+/** Sessions may only be opened from the pi sessions directory. */
+function isSessionFile(p: string): boolean {
+  if (!p || !isAbsolute(p) || p.startsWith("\\\\") || p.startsWith("//")) return false;
+  if (!p.toLowerCase().endsWith(".jsonl")) return false;
+  const root = join(PI_AGENT_DIR, "sessions");
+  const rel = relative(root, p);
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
 ipcMain.handle("pi:open-session-window", async (_e, sessionFile: string) => {
   const f = String(sessionFile || "");
-  if (!f || !existsSync(f)) return { ok: false, error: "会话文件不存在" };
+  if (!isSessionFile(f)) return { ok: false, error: "会话文件无效" };
+  if (!existsSync(f)) return { ok: false, error: "会话文件不存在" };
   await openSessionWindow(f);
   return { ok: true };
 });
@@ -748,6 +758,10 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
         if (!file) {
           log.warn("ipc switchSession: no file", msg);
           return { ok: false, error: "缺少会话文件路径" };
+        }
+        if (!isSessionFile(file)) {
+          log.warn("ipc switchSession: refused path", file);
+          return { ok: false, error: "会话文件无效（必须在 ~/.pi/agent/sessions 下）" };
         }
         log.info("ipc switchSession ->", file);
         await session.switchTo(file);

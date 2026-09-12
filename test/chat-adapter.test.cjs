@@ -35,25 +35,41 @@ test("CSP is the first element inside <head>", { skip: !hasUi }, () => {
   assert.equal(/unsafe-eval/.test(lines[headIdx + 1]), false, "no unsafe-eval");
 });
 
-test("config values cannot break out of the injected script block", { skip: !hasUi }, () => {
+test("no config value is injected into the document", { skip: !hasUi }, () => {
   const html = build({
-    args: ["</script><img src=x onerror=alert(1)>"],
-    workspaceRoot: "C:\\w</script>",
-    env: { EVIL: "</script>" },
+    args: ["--secret-arg"],
+    env: { SECRET_TOKEN: "sk-should-not-appear" },
+    workspaceRoot: "C:\\secret-root",
+  });
+  // the whole config used to be injected (including `env`) although nothing in
+  // the UI read it — the renderer only needs __PI_HOME__
+  assert.equal(html.includes("SECRET_TOKEN"), false);
+  assert.equal(html.includes("sk-should-not-appear"), false);
+  assert.equal(html.includes("--secret-arg"), false);
+  assert.equal(html.includes("__PI_HEAO_CONFIG__"), false);
+  assert.match(html, /window\.__PI_HOME__/);
+});
+
+test("hostile config strings cannot break out of the document", { skip: !hasUi }, () => {
+  const payload = "</script><img src=x onerror=alert(1)>";
+  const countScripts = (s) => (s.match(/<\/script>/g) || []).length;
+
+  const hostile = build({
+    args: [payload],
+    workspaceRoot: "C:\\w" + payload,
+    env: { EVIL: payload },
   });
 
-  const injected = html.match(/<script>window\.__PI_HEAO_CONFIG__[\s\S]*?<\/script>/);
-  assert.ok(injected, "config script injected");
-  assert.equal(injected[0].includes("</script><img"), false, "no premature </script>");
-  assert.equal(injected[0].includes("<img"), false);
-  assert.match(injected[0], /\\u003c\/script>/);
-  assert.equal(html.includes("onerror=alert(1)></script>"), false);
+  assert.equal(countScripts(hostile), countScripts(build()), "no extra </script> was produced");
+  // the payload may survive as text inside a JS string, but only in escaped form
+  assert.equal(hostile.includes("</script><img"), false);
+  assert.equal(hostile.includes("\\u003c/script>"), true, "`<` must be escaped as \\u003c");
 });
 
 test("no unreplaced placeholders are left behind", { skip: !hasUi }, () => {
   const html = build();
   assert.equal(/PI_[A-Z_]+_PLACEHOLDER/.test(html), false);
-  assert.match(html, /PI_HEAO/);
+  assert.match(html, /window\.__PI_HOME__ = "/);
 });
 
 test("build signature and author watermark are present", { skip: !hasUi }, () => {

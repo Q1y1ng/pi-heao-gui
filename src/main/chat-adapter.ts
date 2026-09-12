@@ -64,6 +64,9 @@ const VENDOR_JS = [
   "xterm.js",
   "addon-fit.js",
   "codemirror.js",
+  // Rust's mode is written against the simple-mode addon; without it the mode
+  // throws "CodeMirror.defineSimpleMode is not a function" in the renderer.
+  "addon-mode-simple.js",
   "mode-javascript.js",
   "mode-xml.js",
   "mode-css.js",
@@ -428,7 +431,10 @@ html, body {
  * stylesheet ends up as body text (which the shell then moves into #pi-main).
  */
 function styleTag(id: string, css: string): string {
-  return `<style id="${id}">${css}</style>`;
+  // The DOM id is namespaced: the panels' own wrappers already carry ids like
+  // "pi-palette" and "pi-dock", and a duplicate id makes getElementById hand
+  // back this <style> element instead — which silently disabled Ctrl+K.
+  return `<style id="pi-style-${id.replace(/^pi-/, "")}">${css}</style>`;
 }
 
 function buildChromeHtml(): string {

@@ -23,23 +23,23 @@ export const STATS_HTML = `
       <section class="pi-stats-grid">
         <div class="pi-stat-card">
           <div class="pi-stat-label">首 token 延迟 (TTFT)</div>
-          <div class="pi-stat-value" id="pi-stat-ttft">–</div>
-          <div class="pi-stat-sub" id="pi-stat-ttft-sub">本轮 / 会话均值</div>
+          <div class="pi-stat-value" id="pi-stat-modal-ttft">–</div>
+          <div class="pi-stat-sub" id="pi-stat-modal-ttft-sub">本轮 / 会话均值</div>
         </div>
         <div class="pi-stat-card">
           <div class="pi-stat-label">解码速度</div>
-          <div class="pi-stat-value" id="pi-stat-tps">–</div>
-          <div class="pi-stat-sub" id="pi-stat-tps-sub">output tokens / 解码秒</div>
+          <div class="pi-stat-value" id="pi-stat-modal-tps">–</div>
+          <div class="pi-stat-sub" id="pi-stat-modal-tps-sub">output tokens / 解码秒</div>
         </div>
         <div class="pi-stat-card">
           <div class="pi-stat-label">缓存命中率</div>
-          <div class="pi-stat-value" id="pi-stat-cache">–</div>
-          <div class="pi-stat-sub" id="pi-stat-cache-sub">cacheRead / (cacheRead + input)</div>
+          <div class="pi-stat-value" id="pi-stat-modal-cache">–</div>
+          <div class="pi-stat-sub" id="pi-stat-modal-cache-sub">cacheRead / (cacheRead + input)</div>
         </div>
         <div class="pi-stat-card">
           <div class="pi-stat-label">花费</div>
-          <div class="pi-stat-value" id="pi-stat-cost">–</div>
-          <div class="pi-stat-sub" id="pi-stat-cost-sub">今日 / 本月</div>
+          <div class="pi-stat-value" id="pi-stat-modal-cost">–</div>
+          <div class="pi-stat-sub" id="pi-stat-modal-cost-sub">今日 / 本月</div>
         </div>
       </section>
 
@@ -124,15 +124,15 @@ export const STATS_SCRIPT = `
       if (lv) lv.hidden = true;
     }
 
-    set('pi-stat-ttft', lastTurn ? ms(lastTurn.ttftMs) : ms(agg.avgTtftMs));
-    set('pi-stat-ttft-sub', '均值 ' + ms(agg.avgTtftMs) + ' · p50 ' + ms(agg.p50TtftMs) + ' · p95 ' + ms(agg.p95TtftMs));
-    set('pi-stat-tps', lastTurn && lastTurn.tps ? lastTurn.tps + ' t/s' : (agg.avgTps ? agg.avgTps + ' t/s' : '–'));
-    set('pi-stat-tps-sub', '均值 ' + (agg.avgTps != null ? agg.avgTps + ' t/s' : '–') + ' · 本轮输出 ' + (lastTurn ? num(lastTurn.outputTokens) : '–'));
-    set('pi-stat-cache', pct(agg.cacheHitRate));
-    set('pi-stat-cache-sub', '读 ' + num(agg.cacheRead) + ' · 写 ' + num(agg.cacheWrite));
-    set('pi-stat-cost', usd(agg.cost));
-    set('pi-stat-cost-sub', '今日 ' + usd(stats.costToday) + ' · 本月 ' + usd(stats.costMonth));
-    set('pi-stats-path', stats.sessionFile || '');
+    set('pi-stat-modal-ttft', lastTurn ? ms(lastTurn.ttftMs) : ms(agg.avgTtftMs));
+    set('pi-stat-modal-ttft-sub', '均值 ' + ms(agg.avgTtftMs) + ' · p50 ' + ms(agg.p50TtftMs) + ' · p95 ' + ms(agg.p95TtftMs));
+    set('pi-stat-modal-tps', lastTurn && lastTurn.tps ? lastTurn.tps + ' t/s' : (agg.avgTps ? agg.avgTps + ' t/s' : '–'));
+    set('pi-stat-modal-tps-sub', '均值 ' + (agg.avgTps != null ? agg.avgTps + ' t/s' : '–') + ' · 本轮输出 ' + (lastTurn ? num(lastTurn.outputTokens) : '–'));
+    set('pi-stat-modal-cache', pct(agg.cacheHitRate));
+    set('pi-stat-modal-cache-sub', '读 ' + num(agg.cacheRead) + ' · 写 ' + num(agg.cacheWrite));
+    set('pi-stat-modal-cost', usd(agg.cost));
+    set('pi-stat-modal-cost-sub', '今日 ' + usd(stats.costToday) + ' · 本月 ' + usd(stats.costMonth));
+    set('pi-stats-path', stats.sessionFile || '（当前会话尚未写入磁盘）');
 
     document.getElementById('pi-stats-totals').innerHTML = [
       kv('轮次', num(agg.turns)),

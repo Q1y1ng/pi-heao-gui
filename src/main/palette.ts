@@ -268,6 +268,13 @@ export const PALETTE_SCRIPT = `
     if (mod && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
       if (root.hidden) open(); else close();
+      return;
+    }
+    // Escape closes from anywhere: focus can sit on a result row, not just the
+    // input, and the input's own handler only fires while it has focus.
+    if (e.key === 'Escape' && !root.hidden) {
+      e.preventDefault();
+      close();
     }
   });
 })();

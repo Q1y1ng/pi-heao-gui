@@ -100,9 +100,13 @@ test("generated chat page: CSS is wrapped in <style>, never bare text", () => {
   // Every injected stylesheet must carry its own <style> element. A bare text
   // node in <head> is invalid: the parser closes </head> early and the CSS ends
   // up rendered as body text (this shipped once and looked like a wall of CSS).
-  for (const id of ["pi-stats", "pi-palette", "pi-dock-css"]) {
+  for (const id of ["pi-style-stats", "pi-style-palette", "pi-style-dock-css"]) {
     assert.ok(html.includes(`<style id="${id}">`), `missing <style id="${id}">`);
   }
+  // The style ids are namespaced: reusing a panel's own id here made
+  // getElementById hand the <style> element to that panel's script (the command
+  // palette silently stopped opening). Assert the collision stays fixed.
+  assert.ok(!html.includes('<style id="pi-palette">'), "style tag must not reuse a panel id");
 
   const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
   assert.ok(head.length > 0, "head not found");

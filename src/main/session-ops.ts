@@ -104,6 +104,13 @@ export async function deleteSession(file: string): Promise<{ ok: boolean; error?
     return { ok: true };
   } catch (e) {
     log.warn("deleteSession:", errText(e));
+    // A raw "ENOENT: ... unlink 'C:\\...'" tells the user nothing: the common
+    // cause is a stale path (the session was archived, restored or removed
+    // elsewhere), so say that instead.
+    const code = (e as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") return { ok: false, error: "会话文件不存在，可能已被移动或删除" };
+    if (code === "EBUSY" || code === "EPERM")
+      return { ok: false, error: "会话文件被占用，请先切换到其它会话再删除" };
     return { ok: false, error: errText(e) };
   }
 }

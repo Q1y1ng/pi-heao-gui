@@ -70,9 +70,18 @@ test("reads the changelog next to the resolved binary", async () => {
 
 test("reports a clear error when the changelog is missing", async () => {
   const { cli } = makePackageTree({ withChangelog: false });
-  const res = await readPiChangelog(cli);
-  assert.equal(res.ok, false);
-  assert.match(res.error, /CHANGELOG/);
+  // Hide npm for this call: otherwise the "npm root -g" fallback finds the
+  // globally installed pi (which does have a changelog) and reports success,
+  // which is correct behaviour but not what this test is about.
+  const savedPath = process.env.PATH;
+  process.env.PATH = path.join(os.tmpdir(), "pi-e2e-no-npm");
+  try {
+    const res = await readPiChangelog(cli);
+    assert.equal(res.ok, false);
+    assert.match(res.error, /CHANGELOG/);
+  } finally {
+    process.env.PATH = savedPath;
+  }
 });
 
 test("a missing pi path is a clean failure, not a throw", async () => {

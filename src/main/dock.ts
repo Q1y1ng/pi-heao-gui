@@ -272,6 +272,10 @@ export const DOCK_SCRIPT = `
 
   async function restartTerm() {
     if (term) { try { term.dispose(); } catch (e) {} term = null; fitAddon = null; }
+    // An open that is still in flight would otherwise leave termOpening stuck,
+    // and ensureTerm() would return immediately: the panel would show a dead
+    // terminal that swallows every keystroke.
+    termOpening = false;
     await window.pi.invoke('pi:term-close');
     ensureTerm();
   }

@@ -982,6 +982,10 @@ ipcMain.handle(
   ) => {
     const sender = e.sender;
     disposeTerminalFor(sender.id);
+    // Killing a ConPTY on Windows leaves state behind for a moment; creating the
+    // replacement in the same tick made the new shell exit on its first write
+    // (the dock then sat on a dead terminal that swallowed every keystroke).
+    await new Promise((resolve) => setTimeout(resolve, 250));
     // The terminal follows the window's pi session so `pi` resumes the same chat.
     const session = sessionFor(sender);
     const kind: TerminalKind = msg?.kind === "shell" ? "shell" : "pi";
@@ -1010,7 +1014,11 @@ ipcMain.handle(
 );
 
 ipcMain.handle("pi:term-input", (e, data: string) => {
-  terminals.get(e.sender.id)?.write(String(data ?? ""));
+  const term = terminals.get(e.sender.id);
+  // Say so instead of swallowing the keystrokes: the dock creates its PTY
+  // asynchronously, so a write can arrive before there is anything to write to.
+  if (!term) return { ok: false, error: "终端尚未就绪" };
+  term.write(String(data ?? ""));
   return { ok: true };
 });
 

@@ -78,7 +78,13 @@ export async function readPiChangelog(piPath: string | undefined): Promise<Chang
 
   try {
     const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-    const { stdout } = await execFileAsync(npmBin, ["root", "-g"], { timeout: 15_000 });
+    // Windows ships npm as a .cmd shim, and Node refuses to spawn one without a
+    // shell (EINVAL) — which silently disabled this whole fallback. The
+    // arguments are ours, so there is nothing to inject into the shell.
+    const { stdout } = await execFileAsync(npmBin, ["root", "-g"], {
+      timeout: 15_000,
+      shell: true,
+    });
     const globalRoot = stdout.trim();
     if (globalRoot) candidates.push(join(globalRoot, PI_PACKAGE_NAME));
   } catch (e) {

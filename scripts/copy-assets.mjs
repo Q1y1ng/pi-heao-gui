@@ -26,6 +26,7 @@ const assets = [
   ["node_modules/codemirror/lib/codemirror.js", "codemirror.js"],
   ["node_modules/codemirror/lib/codemirror.css", "codemirror.css"],
   // CodeMirror modes used by the file panel's mode map
+  ["node_modules/codemirror/addon/mode/simple.js", "addon-mode-simple.js"],
   ["node_modules/codemirror/mode/javascript/javascript.js", "mode-javascript.js"],
   ["node_modules/codemirror/mode/xml/xml.js", "mode-xml.js"],
   ["node_modules/codemirror/mode/css/css.js", "mode-css.js"],

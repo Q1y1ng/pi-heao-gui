@@ -1,7 +1,7 @@
 {
   "name": "pi-heao-gui",
-  "version": "0.1.0",
-  "description": "Pi Heao GUI — standalone desktop client for the pi coding agent (Electron shell for `pi --mode rpc`). made by HEAOZIE",
+  "version": "1.0.0",
+  "description": "Windows desktop client for the pi coding agent, extracted from the pi-agent-studio VS Code extension",
   "main": "dist/main/main.js",
   "author": "HEAOZIE",
   "license": "MIT",
@@ -50,11 +50,30 @@
       "!**/tsconfig*.json",
       "!**/*.md",
       "vendor/upstream/bridge/agents/**/*",
-      "node_modules/node-pty/**"
+      "node_modules/node-pty/**",
+      "LICENSE",
+      "NOTICE.md"
     ],
     "win": {
-      "target": "portable",
+      "target": [
+            "portable",
+            "nsis"
+      ],
       "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Pi Heao GUI ${version} Portable.exe"
+    },
+    "nsis": {
+      "artifactName": "Pi Heao GUI Setup ${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Pi Heao GUI",
+      "uninstallDisplayName": "Pi Heao GUI ${version}",
+      "deleteAppDataOnUninstall": false
     },
     "asarUnpack": [
       "**/node_modules/node-pty/**"
@@ -66,5 +85,8 @@
     "@xterm/xterm": "6.0.0",
     "codemirror": "5.65.21",
     "node-pty": "1.1.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

@@ -1,6 +1,6 @@
 # Pi Heao GUI
 
-> **V0.1** · made by HEAOZIE
+> **V1.0** · made by HEAOZIE
 
 **对话体验**：从 [Pi Agent Studio](https://github.com/JohnnyZ93/pi-agent-studio)（VS Code 扩展，MIT）**原样剥离**的聊天 UI —— vendored、字节级校验、零改动。
 **应用层**：独立 Electron 外壳，重新实现原本由 VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / 设置界面，并在其上提供原版没有的增强。
@@ -46,25 +46,34 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 ## 安装
 
-### 方式一：Portable exe
+### 方式一：安装包（推荐）
 
-下载 `Pi Heao GUI 0.1.0.exe`，双击运行。无需安装。
+下载 `Pi Heao GUI Setup 1.0.0.exe`，双击安装：可自选安装目录，会自动创建桌面与开始菜单快捷方式，带卸载项（卸载不会删除你的 pi 会话与配置）。
 
-### 方式二：从源码构建
+### 方式二：免安装 Portable
+
+下载 `Pi Heao GUI 1.0.0 Portable.exe`，双击直接运行，不写入安装目录。
+
+> **两个包都未签名**，首次运行 Windows SmartScreen 会提示“已保护你的电脑”；
+> 点“更多信息”→“仍要运行”即可，建议先比对 Release 页面里的 SHA256。
+>
+> **首次运行**：应用会自动检查 pi CLI；未安装时会弹出安装指引并可一键打开设置。
+
+### 方式三：从源码构建
 
 ```bash
 git clone <this-repo>
-cd pi-standalone-gui
-npm install
-npm run build:renderer   # 构建 pi-chat
-npm run build            # 编译 TypeScript
+cd pi-heao-gui
+npm ci
+npm run build:renderer   # 构建上游 pi-chat UI（仓库不含该产物，需要联网）
+npm run build            # 编译 TypeScript + 内联编辑器/终端资源
 npm start                # 开发模式运行
-npm run dist             # 打包 portable exe
+npm run dist             # 打包（portable + NSIS 安装包）
 ```
 
 ## 配置
 
-配置文件位于 `~/.pi/standalone/config.json`（V0.1 沿用该路径以兼容早期构建），也可在应用内「设置」面板编辑。
+配置文件位于 `~/.pi/standalone/config.json`（V1.0 沿用该路径以兼容早期构建），也可在应用内「设置」面板编辑。
 
 关键配置项：
 
@@ -81,7 +90,7 @@ pi agent 自身配置仍在 `~/.pi/agent/`（settings.json、models.json、auth.
 ## 架构
 
 ```text
-Pi Heao GUI V0.1 (Electron Main, Node.js)
+Pi Heao GUI V1.0 (Electron Main, Node.js)
   ├─ spawn pi --mode rpc  (JSONL stdio)
   ├─ chat-session 编排
   ├─ IPC handlers

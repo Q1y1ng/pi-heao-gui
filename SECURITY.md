@@ -39,7 +39,7 @@ requests and collects no telemetry.
 Please open a private security advisory on the repository (Security → Report a
 vulnerability) rather than a public issue, and include:
 
-- affected version (the About dialog shows `Pi Heao GUI V0.1`),
+- affected version (the About dialog shows `Pi Heao GUI V1.0`),
 - reproduction steps or a proof of concept,
 - whether it requires a malicious model response, a malicious workspace, or only
   local access.

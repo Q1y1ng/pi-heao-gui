@@ -74,7 +74,10 @@ test("no unreplaced placeholders are left behind", { skip: !hasUi }, () => {
 
 test("build signature and author watermark are present", { skip: !hasUi }, () => {
   const html = build();
-  assert.match(html, /<!-- Pi Heao GUI V0\.1 · made by HEAOZIE -->/);
+  // Version-agnostic on purpose: the watermark must be present and attributed,
+  // and a version bump should not be able to fail this test.
+  assert.match(html, /^<!-- Pi Heao GUI V\d+\.\d+ · made by HEAOZIE -->/);
+  assert.match(html, /made by HEAOZIE/);
   const brand = html.match(/<span class="pi-tb-brand"[^>]*>([^<]*)<\/span>/);
   assert.ok(brand, "titlebar brand span exists");
   assert.match(brand[1], /HEAOZIE/);

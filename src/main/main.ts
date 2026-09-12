@@ -1635,7 +1635,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V0.1",
+              message: "Pi Heao GUI V1.0",
               detail,
               buttons: ["好"],
             };
@@ -1647,6 +1647,38 @@ function setupChineseMenu(): void {
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+/**
+ * First-run guidance. A fresh download has no pi CLI, and the shell is useless
+ * without it — so say so once per version instead of failing silently.
+ */
+async function checkPiAvailable(): Promise<void> {
+  const pi = findPiBinary(config.piPath || undefined);
+  if (pi && existsSync(pi)) return;
+  if (config.lastOnboardedVersion === app.getVersion()) return;
+  saveConfig({ ...config, lastOnboardedVersion: app.getVersion() });
+
+  const result = await dialog.showMessageBox({
+    type: "warning",
+    title: "缺少 pi CLI",
+    message: "未检测到 pi CLI —— 对话无法启动",
+    detail: [
+      "Pi Heao GUI 只是外壳，真正的 agent 由 pi 提供。",
+      "",
+      "请先安装（需要 Node.js 22 或更高）：",
+      "",
+      "  npm install -g --ignore-scripts @earendil-works/pi-coding-agent",
+      "",
+      "然后在「设置 → 模型配置」填入 API Key（或用「提供商就绪检查 → 登录」完成 OAuth），",
+      "再重启本应用即可开始对话。",
+    ].join("\n"),
+    buttons: ["打开设置", "我知道了"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (result.response === 0) openSettingsWindow();
 }
 
 app.whenReady().then(async () => {
@@ -1706,6 +1738,9 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // After the shell is up, tell a first-time user what is missing.
+  void checkPiAvailable();
 });
 
 app.on("before-quit", () => {

@@ -11,8 +11,8 @@ Windows 桌面客户端，把 VSCode 扩展 **Pi Agent Studio** 的聊天界面�
 
 | 文件 | 说明 |
 | --- | --- |
-| `Pi Heao GUI Setup 1.0.0.exe` | **推荐**：安装向导，可自选目录，创建快捷方式，带卸载项 |
-| `Pi Heao GUI 1.0.0 Portable.exe` | 免安装，双击即用 |
+| `Pi.Heao.GUI.Setup.1.0.0.exe` | **推荐**：安装向导，可自选目录，创建快捷方式，带卸载项 |
+| `Pi.Heao.GUI.1.0.0.Portable.exe` | 免安装，双击即用 |
 | `pi-heao-gui-1.0.0-source.zip` | 源码包（已含上游 UI 构建产物，可直接 `npm ci && npm run build`） |
 
 ### ⚠️ 未签名
@@ -23,8 +23,8 @@ Windows 桌面客户端，把 VSCode 扩展 **Pi Agent Studio** 的聊天界面�
 请比对校验和：
 
 ```
-SHA256  Pi Heao GUI Setup 1.0.0.exe    = 452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208
-SHA256  Pi Heao GUI 1.0.0 Portable.exe = 866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b
+SHA256  Pi.Heao.GUI.Setup.1.0.0.exe    = 452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208
+SHA256  Pi.Heao.GUI.1.0.0.Portable.exe = 866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b
 ```
 
 ## 前置要求
@@ -64,14 +64,14 @@ SHA256  Pi Heao GUI 1.0.0 Portable.exe = 866aa4a49b141e942aa38f4df4222dcb4ab198a
 ## 校验和
 
 ```
-452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208  Pi Heao GUI Setup 1.0.0.exe
-866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b  Pi Heao GUI 1.0.0 Portable.exe
+452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208  Pi.Heao.GUI.Setup.1.0.0.exe
+866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b  Pi.Heao.GUI.1.0.0.Portable.exe
 ```
 
 下载后可用：
 
 ```powershell
-certutil -hashfile "Pi Heao GUI Setup 1.0.0.exe" SHA256
+certutil -hashfile "Pi.Heao.GUI.Setup.1.0.0.exe" SHA256
 ```
 
 ## 致谢

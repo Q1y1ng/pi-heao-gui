@@ -559,13 +559,31 @@ const channelToMsgType: Record<string, string> = {
 // Register handlers for all chat-session-bound channels
 for (const [channel, msgType] of Object.entries(channelToMsgType)) {
   ipcMain.handle(channel, async (_e, msg: Record<string, unknown>) => {
-    if (!chatSession) return;
-    if (msgType === "switchSession" && msg?.sessionFile) {
-      await chatSession.switchTo(String(msg.sessionFile));
-    } else if (msgType === "newSession") {
-      await chatSession.newSession();
-    } else {
-      await chatSession.handleMessage({ ...msg, type: msgType });
+    if (!chatSession) {
+      console.warn(`[ipc] ${channel}: chatSession is null`);
+      return { ok: false, error: "会话未就绪" };
+    }
+    try {
+      if (msgType === "switchSession") {
+        const file = String(msg?.sessionFile || msg?.file || "");
+        if (!file) {
+          console.warn("[ipc] switchSession: no file", msg);
+          return { ok: false, error: "缺少会话文件路径" };
+        }
+        console.log("[ipc] switchSession ->", file);
+        await chatSession.switchTo(file);
+        return { ok: true };
+      } else if (msgType === "newSession") {
+        await chatSession.newSession();
+        return { ok: true };
+      } else {
+        await chatSession.handleMessage({ ...msg, type: msgType });
+        return { ok: true };
+      }
+    } catch (e) {
+      const err = e instanceof Error ? e.message : String(e);
+      console.error(`[ipc] ${channel} error:`, err);
+      return { ok: false, error: err };
     }
   });
 }

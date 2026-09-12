@@ -109,6 +109,17 @@ export const SIDEBAR_SCRIPT = `
     return d.innerHTML;
   }
 
+  function showToast(text) {
+    var toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = text;
+      toast.className = 'toast show error';
+      setTimeout(function() { toast.className = 'toast'; }, 3000);
+    } else {
+      console.warn('[toast]', text);
+    }
+  }
+
   function shortenPath(p) {
     if (!p) return '选择工作目录…';
     var home = (window.__PI_HOME__ || '').replace(/\\\\/g, '/');
@@ -228,16 +239,35 @@ export const SIDEBAR_SCRIPT = `
         '</div>' +
         '<div class="pi-session-time">' + esc(fmtTime(s.mtime)) + '</div>';
       item.onclick = function(e) {
-        if (e.target.classList && e.target.classList.contains('pi-pin-btn')) {
+        // Pin toggle
+        if (e.target.closest && e.target.closest('.pi-pin-btn')) {
           e.stopPropagation();
+          e.preventDefault();
           if (window.pi) {
             window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
           }
           return;
         }
-        if (window.pi && s.file) {
-          window.pi.postMessage({ type: 'switchSession', sessionFile: s.file });
-        }
+        // Switch session
+        if (!s.file) { console.warn('[sidebar] no file for session', s); return; }
+        if (!window.pi) { console.warn('[sidebar] window.pi missing'); return; }
+        // Highlight active
+        var prev = listEl.querySelector('.pi-session-item.active');
+        if (prev) prev.classList.remove('active');
+        item.classList.add('active');
+        window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: s.file })
+          .then(function(r) {
+            if (r && r.ok === false) {
+              console.error('[sidebar] switch failed:', r.error);
+              showToast('切换失败: ' + (r.error || '未知错误'));
+              item.classList.remove('active');
+            }
+          })
+          .catch(function(err) {
+            console.error('[sidebar] switch error:', err);
+            showToast('切换出错');
+            item.classList.remove('active');
+          });
       };
       item.oncontextmenu = function(e) {
         e.preventDefault();

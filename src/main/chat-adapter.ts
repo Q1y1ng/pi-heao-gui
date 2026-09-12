@@ -365,24 +365,10 @@ const REPARENT_SCRIPT = `
       if (n.nodeType === 3 && !n.textContent.trim()) continue;
       main.appendChild(n);
     }
-    // Set title from workspace path — show full path with ~ for home
+    // Keep title center clean — workspace path lives in sidebar only
     var titleEl = document.getElementById('pi-title-text');
-    var cfg = window.__PI_STANDALONE_CONFIG__;
-    if (titleEl && cfg) {
-      var ws = cfg.workspaceRoot || '';
-      if (ws) {
-        var home = (window.__PI_HOME__ || '').replace(/\\\\/g, '/');
-        var norm = String(ws).replace(/\\\\/g, '/');
-        var display = ws;
-        if (home && norm.indexOf(home) === 0) display = '~' + norm.slice(home.length);
-        titleEl.textContent = display;
-        titleEl.title = ws;
-        document.title = display + ' — Pi Standalone';
-      } else {
-        titleEl.textContent = '未选择工作区';
-        document.title = 'Pi Standalone';
-      }
-    }
+    if (titleEl) titleEl.textContent = '';
+    document.title = 'Pi Standalone';
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', wrap);

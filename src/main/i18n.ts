@@ -1,9 +1,19 @@
 /**
  * UI language for the app's OWN strings.
  *
- * The upstream chat UI has its own locales (`vendor/upstream/pi-chat/src/locales`,
- * driven by PI_LANG_PLACEHOLDER) — this module only covers the shell this project
- * added: settings window, dock, sidebar, palette, tray, dialogs.
+ * Scope today (accurate, not aspirational):
+ *   - COVERED: the settings window (all eight tab labels) plus the language
+ *     selector itself. `buildSettingsHtml(lang)` renders them through t().
+ *   - NOT COVERED YET: the chat-window surfaces this project adds — dock
+ *     (terminal/files/changes), sidebar, command palette, telemetry panel — and
+ *     the tray/menu/dialog strings. Those still carry Chinese literals.
+ *
+ * The upstream chat UI is unaffected either way: it has its own locales under
+ * vendor/upstream/pi-chat/src/locales, driven by PI_LANG_PLACEHOLDER.
+ *
+ * Extending coverage is mechanical: add keyed entries here, then replace the
+ * literal in the module with t("key", lang). Modules that build HTML strings
+ * must take `lang` as a parameter (buildSettingsHtml already does).
  *
  * Usage: `t("settings.tab.models", lang)`. Missing keys fall back to zh-cn and
  * then to the key itself, so a half-translated surface degrades instead of

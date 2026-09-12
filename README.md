@@ -24,7 +24,9 @@ MIT License
 - 命令面板 Ctrl+K（命令 / 会话 / 历史命中 / 斜杠指令）
 - 会话列表侧栏（新建 / 切换 / 重命名 / 置顶 / 搜索 / 右键菜单 / 键盘导航 / 拖拽文件）
 - 多窗口：一个会话一个独立 pi 进程，**每窗口独立工作目录**
-- 设置窗：主题（深/浅/跟随系统）+ 任意强调色 + 字号、预算、开机自启、**扩展安装/卸载**（`pi install/remove/list`）、**技能新建/编辑**、诊断面板、provider 就绪检查
+- 设置窗：主题（深/浅/跟随系统）+ 任意强调色 + 字号、预算、开机自启、**扩展安装/卸载**（`pi install/remove/list`）、**技能新建/编辑**、诊断面板、**pi 更新日志**、provider 就绪检查
+- **provider 登录**：就绪列表里一键在内置终端中运行 pi 自己的 `/login <provider>`（凭据由 pi 写入 auth.json）
+- **界面语言**：设置窗（8 个 tab 与选择器）已支持中/英；聊天窗自有文案（终端面板/侧栏/命令面板/统计面板）仍为中文——机制与字典已就绪，范围以 [src/main/i18n.ts](src/main/i18n.ts) 头注释为准
 - 标题栏 token 指标 + 系统托盘（最近会话 / 未读角标）+ 桌面通知
 - bundled 扩展：todo、subagent、questionnaire、permission-gate、rewind-code、btw、mcp
 - `@file` 文件补全、文件对话框、系统默认程序打开文件、**内置 diff 窗口**（读 rewind 快照作基线）

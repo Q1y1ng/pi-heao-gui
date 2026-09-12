@@ -113,6 +113,20 @@ test("diagnostics panel offers every supported operation", () => {
   assert.ok(html.includes("pi:diagnostics"), "diagnostics channel is never called");
 });
 
+test("the settings document renders in the requested language", () => {
+  const zh = buildSettingsHtml("zh-cn");
+  const en = buildSettingsHtml("en");
+  // tab labels go through t(); both languages must be present in their own build
+  assert.match(zh, /data-tab="models"[^>]*>模型配置</);
+  assert.match(zh, /data-tab="changelog"[^>]*>更新日志</);
+  assert.match(en, /data-tab="models"[^>]*>Models</);
+  assert.match(en, /data-tab="changelog"[^>]*>Changelog</);
+  assert.equal(en.includes("模型配置"), false, "english build must not keep chinese tab labels");
+  // the selector itself exists so the language can be changed from the UI
+  assert.ok(zh.includes('id="ui-language"'), "language selector missing");
+  assert.ok(en.includes('value="en"'), "language options missing");
+});
+
 test("no template leakage in the generated markup", () => {
   // Only the static markup is checked: the injected script legitimately compares
   // against `undefined` and builds strings at runtime.

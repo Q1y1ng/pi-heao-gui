@@ -1,7 +1,12 @@
+import { TOKENS_CSS } from "./theme";
+
 /**
- * Settings window for Pi Standalone GUI.
+ * Settings window for Pi Heao GUI.
  * Tabs: 模型配置 | 扩展插件 | 技能 | 系统提示词 | 常规
  * Models/auth/extensions are fully editable.
+ *
+ * Styling: the legacy rules above are kept for layout, and a design layer that
+ * consumes the shared --pi-* tokens is appended last so it wins.
  */
 export function buildSettingsHtml(): string {
   return `<!DOCTYPE html>
@@ -84,10 +89,353 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 .switch input:checked + .slider{background:#0e639c}
 .switch input:checked + .slider:before{transform:translateX(16px)}
 </style>
+<style id="pi-heao-settings">
+${TOKENS_CSS}
+/* ── Design layer ───────────────────────────────────────────────────── */
+body {
+  background: var(--pi-bg);
+  color: var(--pi-text);
+  font-family: var(--pi-font-ui);
+  font-size: var(--pi-fs-md);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* header */
+.toolbar {
+  height: 48px;
+  padding: 0 16px;
+  gap: 10px;
+  background: linear-gradient(180deg, var(--pi-surface), #12141a);
+  border-bottom: 1px solid var(--pi-border);
+}
+.toolbar .pi-tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #0b0b0b;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 1px;
+  box-sizing: border-box;
+}
+.toolbar h1 {
+  font-size: var(--pi-fs-lg);
+  font-weight: 600;
+  color: var(--pi-text);
+  margin-right: auto;
+}
+.toolbar .pi-ver {
+  font-size: 9.5px;
+  color: #464c56;
+  letter-spacing: 0.35px;
+  margin-right: 4px;
+}
+.toolbar button {
+  padding: 6px 14px;
+  border-radius: var(--pi-radius);
+  border: 1px solid var(--pi-border);
+  background: var(--pi-raised);
+  color: var(--pi-text-dim);
+  font-size: var(--pi-fs-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);
+}
+.toolbar button:hover {
+  background: var(--pi-overlay);
+  border-color: var(--pi-border-strong);
+  color: var(--pi-text);
+}
+.toolbar button.primary {
+  background: var(--pi-accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+.toolbar button.primary:hover {
+  background: var(--pi-accent-hover);
+}
+
+/* tabs */
+.tabs {
+  background: var(--pi-surface);
+  border-bottom: 1px solid var(--pi-border);
+  padding: 0 12px;
+  gap: 2px;
+}
+.tab {
+  padding: 10px 12px 9px;
+  color: var(--pi-text-dim);
+  font-size: var(--pi-fs-sm);
+  border-bottom: 2px solid transparent;
+  transition: color var(--pi-speed), border-color var(--pi-speed);
+}
+.tab:hover {
+  color: var(--pi-text);
+}
+.tab.active {
+  color: var(--pi-accent);
+  border-bottom-color: var(--pi-accent);
+}
+
+/* content */
+.content {
+  padding: 18px 20px 28px;
+}
+.section-title {
+  font-size: var(--pi-fs-sm);
+  font-weight: 600;
+  color: var(--pi-text);
+  border-bottom: 1px solid var(--pi-border);
+  padding-bottom: 6px;
+  margin: 22px 0 10px;
+}
+.section-title:first-child {
+  margin-top: 0;
+}
+.section-title .btn-add {
+  border: 1px solid var(--pi-accent);
+  border-radius: var(--pi-radius-sm);
+  color: var(--pi-accent);
+  padding: 3px 10px;
+  font-size: var(--pi-fs-xs);
+  background: transparent;
+}
+.section-title .btn-add:hover {
+  background: var(--pi-accent);
+  color: #fff;
+}
+
+/* fields */
+.field {
+  margin-bottom: 14px;
+}
+.field label {
+  font-size: var(--pi-fs-sm);
+  color: var(--pi-text-dim);
+  margin-bottom: 6px;
+}
+.field input,
+.field select,
+.field textarea,
+.json-editor {
+  padding: 8px 10px;
+  border-radius: var(--pi-radius);
+  border: 1px solid var(--pi-border);
+  background: var(--pi-bg);
+  color: var(--pi-text);
+  font-size: var(--pi-fs-sm);
+  font-family: inherit;
+  transition: border-color var(--pi-speed), box-shadow var(--pi-speed);
+}
+.field textarea,
+.json-editor {
+  font-family: var(--pi-font-mono);
+  font-size: var(--pi-fs-sm);
+  line-height: 1.55;
+  min-height: 96px;
+}
+.field input:hover,
+.field select:hover,
+.field textarea:hover,
+.json-editor:hover {
+  border-color: var(--pi-border-strong);
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.json-editor:focus {
+  outline: none;
+  border-color: var(--pi-accent);
+  box-shadow: var(--pi-ring);
+}
+.field .hint,
+.hint {
+  font-size: var(--pi-fs-xs);
+  color: var(--pi-text-faint);
+  margin-top: 4px;
+}
+
+/* cards + lists */
+.card {
+  background: var(--pi-surface);
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.card-title {
+  font-size: var(--pi-fs-md);
+  color: var(--pi-text);
+}
+.card-desc {
+  color: var(--pi-text-dim);
+  font-size: var(--pi-fs-sm);
+}
+.card-badge {
+  border-radius: var(--pi-radius-pill);
+  padding: 1px 8px;
+  font-size: 10px;
+  background: var(--pi-accent-soft);
+  color: var(--pi-accent);
+}
+.card-badge.ok {
+  background: rgba(53, 192, 139, 0.15);
+  color: var(--pi-success);
+}
+.card-badge.warn {
+  background: rgba(226, 179, 65, 0.15);
+  color: var(--pi-warn);
+}
+.card-badge.muted {
+  background: var(--pi-overlay);
+  color: var(--pi-text-dim);
+}
+.list-item {
+  background: var(--pi-bg);
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius);
+  padding: 8px 10px;
+  transition: border-color var(--pi-speed), background var(--pi-speed);
+}
+.list-item:hover {
+  background: var(--pi-raised);
+  border-color: var(--pi-border-strong);
+}
+.list-item .name {
+  color: var(--pi-text);
+  font-size: var(--pi-fs-sm);
+}
+.list-item .meta {
+  color: var(--pi-text-faint);
+  font-size: var(--pi-fs-xs);
+}
+.empty-hint {
+  color: var(--pi-text-faint);
+  font-size: var(--pi-fs-sm);
+}
+
+/* buttons */
+.btn-sm {
+  padding: 3px 9px;
+  border-radius: var(--pi-radius-sm);
+  border: 1px solid var(--pi-border-strong);
+  background: transparent;
+  color: var(--pi-text-dim);
+  font-size: var(--pi-fs-xs);
+  font-family: inherit;
+  transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);
+}
+.btn-sm:hover {
+  background: var(--pi-overlay);
+  color: var(--pi-text);
+}
+.btn-sm.danger {
+  border-color: rgba(240, 97, 109, 0.5);
+  color: var(--pi-danger);
+}
+.btn-sm.danger:hover {
+  background: rgba(240, 97, 109, 0.14);
+  color: var(--pi-danger);
+}
+.btn-sm.ok {
+  border-color: rgba(53, 192, 139, 0.5);
+  color: var(--pi-success);
+}
+
+/* switch */
+.switch .slider {
+  background: var(--pi-border-strong);
+}
+.switch input:checked + .slider {
+  background: var(--pi-accent);
+}
+.checkbox-row input[type="checkbox"] {
+  accent-color: var(--pi-accent);
+}
+
+/* modal */
+.modal-bg {
+  background: rgba(6, 8, 11, 0.66);
+}
+.modal {
+  background: var(--pi-overlay);
+  border: 1px solid var(--pi-border-strong);
+  border-radius: var(--pi-radius-lg);
+  box-shadow: var(--pi-shadow-2);
+}
+.modal h3 {
+  color: var(--pi-text);
+}
+.modal .actions button {
+  border-radius: var(--pi-radius);
+  border: 1px solid var(--pi-border);
+  background: var(--pi-raised);
+  color: var(--pi-text-dim);
+}
+.modal .actions button.primary {
+  background: var(--pi-accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* footer */
+.status {
+  border-top: 1px solid var(--pi-border);
+  background: var(--pi-surface);
+  color: var(--pi-text-dim);
+  font-size: var(--pi-fs-xs);
+  padding: 7px 16px;
+}
+.status.ok {
+  color: var(--pi-success);
+}
+.status.err {
+  color: var(--pi-danger);
+}
+.brand {
+  background: var(--pi-surface);
+  color: #464c56;
+  font-size: 9.5px;
+  letter-spacing: 0.35px;
+  padding: 0 16px 8px;
+  text-align: right;
+}
+
+/* scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a414d80;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--pi-radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a5361cc;
+  background-clip: content-box;
+}
+::selection {
+  background: rgba(76, 141, 255, 0.32);
+}
+</style>
 </head>
 <body>
 <div class="toolbar">
-  <h1>⚙ Pi Heao GUI 设置</h1>
+  <span class="pi-tile" aria-hidden="true">π</span>
+  <h1>Pi Heao GUI 设置</h1>
+  <span class="pi-ver" title="Pi Heao GUI V0.1 — made by HEAOZIE">V0.1</span>
   <button id="btn-reload">重新加载</button>
   <button id="btn-save" class="primary">保存更改</button>
 </div>

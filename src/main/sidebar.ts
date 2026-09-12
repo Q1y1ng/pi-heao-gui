@@ -1,93 +1,416 @@
 /**
- * Sessions sidebar injected into the pi-chat HTML.
- * Dark theme with high-contrast text. XSS-safe rendering.
- * Includes workspace picker + session filter.
- * Designed as a flex child of #pi-body (not position:fixed).
+ * Sessions sidebar injected into the pi-chat document.
+ *
+ * Owns the sidebar's look (the shell only sizes the container) and the session
+ * list behaviour: grouping, filtering, pinning, switching, drag & drop.
+ * All icons are inline SVG — no colour emoji, which clashes with a monochrome UI.
  */
+
+const ICON = {
+  brand: '<path d="M5 8h14"/><path d="M8 8v10"/><path d="M16 8v10"/>',
+  collapse:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M15 10l-2 2 2 2"/>',
+  expand:
+    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M13 10l2 2-2 2"/>',
+  folder:
+    '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  star: '<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/>',
+  export:
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+};
+
+function svg(paths: string, size = 14): string {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
+
 export const SIDEBAR_HTML = `
-<div class="pi-sidebar-inner" style="
-  display:flex;flex-direction:column;height:100%;width:100%;
-  font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-  font-size:13px;color:#e0e0e0;
-">
-  <div id="pi-sidebar-header" style="padding:8px 12px 6px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
-    <span style="font-size:14px;color:#cccccc;font-weight:600;">π</span>
-    <span style="font-weight:500;flex:1;color:#cccccc;font-size:12px;">会话</span>
-    <button id="pi-sidebar-toggle" title="折叠侧栏" style="
-      background:none;border:none;color:#8a8a8a;cursor:pointer;font-size:14px;padding:2px 6px;
-      border-radius:4px;line-height:1;
-    ">«</button>
+<div class="pi-sidebar-inner">
+  <div id="pi-sidebar-header">
+    <span class="pi-brand-tile">π</span>
+    <span class="pi-brand-label">会话</span>
+    <button id="pi-sidebar-toggle" title="折叠侧栏 (Ctrl+B)" aria-label="折叠侧栏">${svg(ICON.collapse, 15)}</button>
   </div>
-  <div style="padding:4px 10px 6px;flex-shrink:0;">
-    <button id="pi-pick-workspace" title="选择工作目录" style="
-      width:100%;padding:5px 10px;border-radius:5px;border:1px solid #3a3a3a;
-      background:#2a2a2a;color:#aaa;cursor:pointer;font-size:11px;
-      display:flex;align-items:center;gap:6px;text-align:left;
-      overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
-    ">
-      <span style="flex-shrink:0;">📁</span>
-      <span id="pi-workspace-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;">选择工作目录…</span>
+
+  <button id="pi-pick-workspace" class="pi-ws-chip" title="选择工作目录">
+    <span class="pi-ws-icon">${svg(ICON.folder, 14)}</span>
+    <span id="pi-workspace-label">选择工作目录…</span>
+  </button>
+
+  <div class="pi-search">
+    <span class="pi-search-icon">${svg(ICON.search, 13)}</span>
+    <input id="pi-session-filter" type="text" placeholder="搜索会话…" spellcheck="false" aria-label="搜索会话" />
+  </div>
+
+  <button id="pi-new-session" class="pi-btn-primary">
+    <span>${svg(ICON.plus, 14)}</span><span>新建会话</span>
+  </button>
+
+  <div id="pi-session-list" role="list"></div>
+
+  <div class="pi-sidebar-footer">
+    <button id="pi-export-chat" class="pi-btn-ghost" title="导出对话为 Markdown">
+      <span>${svg(ICON.export, 13)}</span><span>导出</span>
     </button>
-  </div>
-  <div style="padding:0 10px 6px;flex-shrink:0;">
-    <input id="pi-session-filter" type="text" placeholder="搜索会话…" style="
-      width:100%;padding:5px 10px;border-radius:5px;border:1px solid #3a3a3a;
-      background:#1e1e1e;color:#e0e0e0;font-size:11px;outline:none;
-      box-sizing:border-box;
-    " />
-  </div>
-  <div style="padding:0 10px 6px;flex-shrink:0;">
-    <button id="pi-new-session" style="
-      width:100%;padding:6px 12px;border-radius:6px;border:1px solid #0e639c;
-      background:#0e639c;color:#fff;cursor:pointer;font-size:12px;font-weight:500;
-      display:flex;align-items:center;justify-content:center;gap:6px;
-    ">
-      <span style="font-size:14px;">+</span> 新建会话
+    <button id="pi-open-settings" class="pi-btn-ghost" title="设置 (Ctrl+,)">
+      <span>${svg(ICON.gear, 13)}</span><span>设置</span>
     </button>
-  </div>
-  <div id="pi-session-list" style="flex:1;overflow-y:auto;padding:0 6px 8px;min-height:0;"></div>
-  <div style="padding:6px 10px;border-top:1px solid #2a2a2a;display:flex;gap:6px;flex-shrink:0;">
-    <button id="pi-export-chat" title="导出对话为 Markdown" style="
-      flex:1;padding:5px 8px;border-radius:5px;border:1px solid #3a3a3a;
-      background:none;color:#9a9a9a;cursor:pointer;font-size:11px;
-    ">⤓ 导出</button>
-    <button id="pi-open-settings" style="
-      flex:1;padding:5px 8px;border-radius:5px;border:1px solid #3a3a3a;
-      background:none;color:#9a9a9a;cursor:pointer;font-size:11px;
-    ">⚙ 设置</button>
   </div>
 </div>
 <style>
+  /* ── Sidebar layout + look ─────────────────────────────────────────── */
+  #pi-sidebar .pi-sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    padding: 0 8px 8px;
+    box-sizing: border-box;
+    font-family: var(--pi-font-ui);
+    font-size: var(--pi-fs-md);
+    color: var(--pi-text);
+  }
+
+  /* header row — the only draggable strip inside the sidebar */
+  #pi-sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 2px 10px;
+    flex-shrink: 0;
+  }
+  #pi-sidebar-header .pi-brand-tile {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: #0b0b0b;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 1px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+  #pi-sidebar-header .pi-brand-label {
+    flex: 1;
+    font-size: var(--pi-fs-sm);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--pi-text);
+  }
+  #pi-sidebar-header button {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--pi-radius-sm);
+    background: transparent;
+    color: var(--pi-text-faint);
+    cursor: pointer;
+    transition: background var(--pi-speed), color var(--pi-speed);
+  }
+  #pi-sidebar-header button:hover {
+    background: var(--pi-raised);
+    color: var(--pi-text);
+  }
+
+  /* workspace chip */
+  #pi-sidebar .pi-ws-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 9px;
+    margin-bottom: 8px;
+    border-radius: var(--pi-radius);
+    border: 1px solid var(--pi-border);
+    background: var(--pi-raised);
+    color: var(--pi-text-dim);
+    font-size: var(--pi-fs-sm);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--pi-speed), color var(--pi-speed), background var(--pi-speed);
+    flex-shrink: 0;
+  }
+  #pi-sidebar .pi-ws-chip:hover {
+    border-color: var(--pi-border-strong);
+    background: var(--pi-overlay);
+    color: var(--pi-text);
+  }
+  #pi-sidebar .pi-ws-chip .pi-ws-icon {
+    display: inline-flex;
+    color: var(--pi-accent);
+    flex-shrink: 0;
+  }
+  #pi-sidebar .pi-ws-chip span:last-child {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* search */
+  #pi-sidebar .pi-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  #pi-sidebar .pi-search .pi-search-icon {
+    position: absolute;
+    left: 9px;
+    display: inline-flex;
+    color: var(--pi-text-faint);
+    pointer-events: none;
+  }
+  #pi-sidebar #pi-session-filter {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 9px 7px 30px;
+    border-radius: var(--pi-radius);
+    border: 1px solid var(--pi-border);
+    background: var(--pi-bg);
+    color: var(--pi-text);
+    font-size: var(--pi-fs-sm);
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--pi-speed), box-shadow var(--pi-speed);
+  }
+  #pi-sidebar #pi-session-filter::placeholder {
+    color: var(--pi-text-faint);
+  }
+  #pi-sidebar #pi-session-filter:focus {
+    border-color: var(--pi-accent) !important;
+    box-shadow: var(--pi-ring);
+  }
+
+  /* primary action */
+  #pi-sidebar .pi-btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+    border-radius: var(--pi-radius);
+    background: var(--pi-accent);
+    color: #fff;
+    font-size: var(--pi-fs-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--pi-speed), transform var(--pi-speed), box-shadow var(--pi-speed);
+  }
+  #pi-sidebar .pi-btn-primary:hover {
+    background: var(--pi-accent-hover);
+    box-shadow: 0 4px 14px rgba(76, 141, 255, 0.25);
+  }
+  #pi-sidebar .pi-btn-primary:active {
+    transform: translateY(1px);
+  }
+
+  /* list */
+  #pi-session-list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 0 2px 6px;
+    margin: 0 -2px;
+  }
+  #pi-sidebar .pi-group {
+    padding: 10px 8px 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--pi-text-faint);
+    user-select: none;
+  }
+  #pi-sidebar .pi-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--pi-text-faint);
+    font-size: var(--pi-fs-sm);
+    line-height: 1.6;
+  }
+
   #pi-sidebar .pi-session-item {
-    padding:7px 10px;border-radius:5px;cursor:pointer;margin:1px 0;
-    transition:background 0.12s;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 9px 8px 11px;
+    margin: 2px 0;
+    border-radius: var(--pi-radius);
+    border: 1px solid transparent;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    transition: background var(--pi-speed), border-color var(--pi-speed);
   }
-  #pi-sidebar .pi-session-item:hover { background:#2a2d2e; }
-  #pi-sidebar .pi-session-item.active { background:#094771; }
-  #pi-sidebar .pi-session-item.pinned { border-left:2px solid #cca700; }
-  #pi-sidebar .pi-session-item .pi-session-name {
-    font-size:12px;color:#e0e0e0;line-height:1.4;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
+  #pi-sidebar .pi-session-item:hover {
+    background: var(--pi-raised);
+    border-color: var(--pi-border);
   }
-  #pi-sidebar .pi-session-item .pi-session-time { font-size:10px;color:#6a6a6a;margin-top:2px; }
-  #pi-sidebar .pi-session-item .pi-session-status {
-    display:inline-block;width:6px;height:6px;border-radius:50%;
-    background:#555;vertical-align:middle;flex-shrink:0;
+  #pi-sidebar .pi-session-item.active {
+    background: var(--pi-accent-soft);
+    border-color: rgba(76, 141, 255, 0.4);
   }
-  #pi-sidebar .pi-session-item .pi-session-status.running { background:#4ec9b0; }
+  #pi-sidebar .pi-session-item.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--pi-accent);
+  }
+  #pi-sidebar .pi-session-dot {
+    width: 6px;
+    height: 6px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--pi-border-strong);
+    flex-shrink: 0;
+  }
+  #pi-sidebar .pi-session-dot.running {
+    background: var(--pi-success);
+    box-shadow: 0 0 0 3px rgba(53, 192, 139, 0.16);
+  }
+  #pi-sidebar .pi-session-main {
+    flex: 1;
+    min-width: 0;
+  }
+  #pi-sidebar .pi-session-name {
+    font-size: var(--pi-fs-sm);
+    color: var(--pi-text);
+    line-height: 1.45;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #pi-sidebar .pi-session-item.active .pi-session-name {
+    color: #fff;
+  }
+  #pi-sidebar .pi-session-time {
+    margin-top: 1px;
+    font-size: 10.5px;
+    color: var(--pi-text-faint);
+  }
   #pi-sidebar .pi-pin-btn {
-    background:none;border:none;color:#666;cursor:pointer;font-size:12px;
-    padding:0 2px;opacity:0;transition:opacity .15s,color .15s;flex-shrink:0;
-    line-height:1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    border: none;
+    border-radius: var(--pi-radius-sm);
+    background: transparent;
+    color: var(--pi-text-faint);
+    cursor: pointer !important;
+    opacity: 0;
+    flex-shrink: 0;
+    transition: opacity var(--pi-speed), color var(--pi-speed), background var(--pi-speed);
   }
-  #pi-sidebar .pi-session-item:hover .pi-pin-btn { opacity:1; }
-  #pi-sidebar .pi-session-item.pinned .pi-pin-btn { opacity:1;color:#cca700; }
-  #pi-sidebar .pi-pin-btn:hover { color:#ffcc00 !important; }
-  #pi-sidebar .pi-session-empty { padding:20px 10px;text-align:center;color:#555;font-size:12px; }
-  #pi-session-list::-webkit-scrollbar { width:5px; }
-  #pi-session-list::-webkit-scrollbar-track { background:transparent; }
-  #pi-session-list::-webkit-scrollbar-thumb { background:#3a3a3a;border-radius:3px; }
-  #pi-session-filter:focus { border-color:#0e639c !important; }
+  #pi-sidebar .pi-pin-btn svg {
+    fill: none;
+  }
+  #pi-sidebar .pi-session-item:hover .pi-pin-btn {
+    opacity: 0.6;
+  }
+  #pi-sidebar .pi-pin-btn:hover {
+    opacity: 1 !important;
+    background: var(--pi-overlay);
+    color: var(--pi-warn);
+  }
+  #pi-sidebar .pi-session-item.pinned .pi-pin-btn {
+    opacity: 1;
+    color: var(--pi-warn);
+  }
+  #pi-sidebar .pi-session-item.pinned .pi-pin-btn svg {
+    fill: var(--pi-warn);
+  }
+
+  #pi-sidebar .pi-session-item.loading {
+    background: var(--pi-raised);
+    border-color: var(--pi-border-strong);
+  }
+  #pi-sidebar .pi-session-item.loading .pi-session-dot {
+    background: var(--pi-accent);
+    animation: pi-pulse 900ms ease-in-out infinite;
+  }
+  @keyframes pi-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+  .pi-tb-title.is-loading {
+    color: var(--pi-accent) !important;
+    animation: pi-pulse 1200ms ease-in-out infinite;
+  }
+
+  /* footer */
+  #pi-sidebar .pi-sidebar-footer {
+    display: flex;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--pi-border);
+    flex-shrink: 0;
+  }
+  #pi-sidebar .pi-btn-ghost {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--pi-border);
+    border-radius: var(--pi-radius);
+    background: transparent;
+    color: var(--pi-text-dim);
+    font-size: var(--pi-fs-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);
+  }
+  #pi-sidebar .pi-btn-ghost:hover {
+    background: var(--pi-raised);
+    border-color: var(--pi-border-strong);
+    color: var(--pi-text);
+  }
+
+  #pi-session-list::-webkit-scrollbar {
+    width: 8px;
+  }
+  #pi-session-list::-webkit-scrollbar-thumb {
+    background: #3a414d80;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  #pi-session-list::-webkit-scrollbar-thumb:hover {
+    background: #4a5361cc;
+    background-clip: content-box;
+  }
 </style>
 `;
 
@@ -102,6 +425,11 @@ export const SIDEBAR_SCRIPT = `
   var currentFile = null;
   var sessions = [];
   var filterText = '';
+  /** Guards against queuing a second switch while pi is still loading one
+   *  (a multi-MB session takes tens of seconds to parse). */
+  var switching = false;
+
+  var STAR_OUTLINE = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/></svg>';
 
   function esc(s) {
     var d = document.createElement('div');
@@ -120,19 +448,43 @@ export const SIDEBAR_SCRIPT = `
     }
   }
 
+  /**
+   * Session switching is a blocking RPC: a multi-MB session file takes tens of
+   * seconds inside pi before anything comes back. Showing progress there is the
+   * difference between "nothing happened" and "it's working".
+   */
+  function setTitleLoading(text) {
+    var el = document.getElementById('pi-title-text');
+    if (!el) return;
+    if (text) {
+      el.textContent = text;
+      el.classList.remove('is-empty');
+      el.classList.add('is-loading');
+    } else {
+      el.classList.remove('is-loading');
+    }
+  }
+
+  /** Keep the tail visible: the deepest folder is the useful part of a path. */
+  function elidePath(p, max) {
+    if (!p || p.length <= max) return p;
+    var head = p.slice(0, 10);
+    var tail = p.slice(-(max - 11));
+    return head + '…' + tail;
+  }
+
   function shortenPath(p) {
     if (!p) return '选择工作目录…';
     var home = (window.__PI_HOME__ || '').replace(/\\\\/g, '/');
     var norm = String(p).replace(/\\\\/g, '/');
-    if (home && norm.indexOf(home) === 0) return '~' + norm.slice(home.length);
-    return p;
+    var short = (home && norm.indexOf(home) === 0) ? '~' + norm.slice(home.length) : p;
+    return elidePath(short, 34);
   }
 
   function setCollapsed(c) {
-    // In shell layout: #pi-sidebar and #pi-sidebar-collapsed are siblings inside .pi-body
     if (sidebar) sidebar.style.display = c ? 'none' : 'flex';
     if (collapsed) collapsed.style.display = c ? 'flex' : 'none';
-    try { localStorage.setItem('pi-sidebar-collapsed', c ? '1' : '0'); } catch(e) {}
+    try { localStorage.setItem('pi-sidebar-collapsed', c ? '1' : '0'); } catch (e) {}
   }
 
   var toggleBtn = document.getElementById('pi-sidebar-toggle');
@@ -140,10 +492,9 @@ export const SIDEBAR_SCRIPT = `
   var expandBtn = document.getElementById('pi-sidebar-expand');
   if (expandBtn) expandBtn.onclick = function() { setCollapsed(false); };
 
-  // Restore collapse state
   try {
     if (localStorage.getItem('pi-sidebar-collapsed') === '1') setCollapsed(true);
-  } catch(e) {}
+  } catch (e) {}
 
   // Workspace picker
   var pickBtn = document.getElementById('pi-pick-workspace');
@@ -159,55 +510,75 @@ export const SIDEBAR_SCRIPT = `
     });
   };
 
-  var newBtn = document.getElementById('pi-new-session');
-  if (newBtn) newBtn.onclick = function() {
-    if (window.pi) window.pi.postMessage({ type: 'newSession' });
-  };
-  var newMini = document.getElementById('pi-new-session-mini');
-  if (newMini) newMini.onclick = function() {
-    if (window.pi) window.pi.postMessage({ type: 'newSession' });
-  };
-  var settingsBtn = document.getElementById('pi-open-settings');
-  if (settingsBtn) settingsBtn.onclick = function() {
-    if (window.pi) window.pi.invoke('pi:open-settings');
-  };
-  var exportBtn = document.getElementById('pi-export-chat');
-  if (exportBtn) exportBtn.onclick = function() {
+  function wire(id, fn) {
+    var el = document.getElementById(id);
+    if (el) el.onclick = fn;
+  }
+  wire('pi-new-session', function() { if (window.pi) window.pi.postMessage({ type: 'newSession' }); });
+  wire('pi-new-session-mini', function() { if (window.pi) window.pi.postMessage({ type: 'newSession' }); });
+  wire('pi-open-settings', function() { if (window.pi) window.pi.invoke('pi:open-settings'); });
+  wire('pi-open-settings-mini', function() { if (window.pi) window.pi.invoke('pi:open-settings'); });
+  wire('pi-export-chat', function() {
     if (!window.pi) return;
     window.pi.invoke('pi:export-conversation').then(function(path) {
-      if (path) {
-        var toast = document.getElementById('toast');
-        if (toast) {
-          toast.textContent = '已导出到: ' + path;
-          toast.className = 'toast show success';
-          setTimeout(function() { toast.className = 'toast'; }, 3000);
-        }
+      if (!path) return;
+      var toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = '已导出到: ' + path;
+        toast.className = 'toast show success';
+        setTimeout(function() { toast.className = 'toast'; }, 3000);
       }
     });
-  };
-  var settingsMini = document.getElementById('pi-open-settings-mini');
-  if (settingsMini) settingsMini.onclick = function() {
-    if (window.pi) window.pi.invoke('pi:open-settings');
-  };
+  });
 
-  // Session filter
   if (filterInput) {
     filterInput.addEventListener('input', function() {
       filterText = (filterInput.value || '').toLowerCase();
       renderSessions();
+    });
+    filterInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { filterInput.value = ''; filterText = ''; renderSessions(); }
     });
   }
 
   function fmtTime(ms) {
     if (!ms) return '';
     var d = new Date(ms);
-    var now = new Date();
-    var diff = now - d;
+    var diff = Date.now() - d.getTime();
     if (diff < 60000) return '刚刚';
-    if (diff < 3600000) return Math.floor(diff/60000) + ' 分钟前';
-    if (diff < 86400000) return Math.floor(diff/3600000) + ' 小时前';
+    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
     if (diff < 172800000) return '昨天';
-    return (d.getMonth()+1) + '/' + d.getDate();
+    return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+  }
+
+  function groupOf(s) {
+    if (s.pinned) return '置顶';
+    var diff = Date.now() - (s.mtime || 0);
+    if (diff < 86400000) return '今天';
+    if (diff < 172800000) return '昨天';
+    if (diff < 604800000) return '本周';
+    return '更早';
+  }
+
+  function itemEl(s, idx) {
+    var item = document.createElement('div');
+    item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '') + (s.file === currentFile ? ' active' : '');
+    item.setAttribute('data-idx', String(idx));
+    item.setAttribute('data-file', s.file || '');
+    item.setAttribute('role', 'listitem');
+    item.innerHTML =
+      '<span class="pi-session-dot' + (s.running ? ' running' : '') + '"></span>' +
+      '<div class="pi-session-main">' +
+        '<div class="pi-session-name" title="' + esc(s.name || s.sessionId || '未命名') + '">' +
+          esc(s.name || s.sessionId || '未命名') +
+        '</div>' +
+        '<div class="pi-session-time">' + esc(fmtTime(s.mtime)) + '</div>' +
+      '</div>' +
+      '<button class="pi-pin-btn" data-pin="1" title="' + (s.pinned ? '取消置顶' : '置顶') + '" aria-label="置顶">' +
+        STAR_OUTLINE +
+      '</button>';
+    return item;
   }
 
   function renderSessions() {
@@ -216,34 +587,34 @@ export const SIDEBAR_SCRIPT = `
     var filtered = sessions;
     if (filterText) {
       filtered = sessions.filter(function(s) {
-        var name = (s.name || s.sessionId || s.file || '').toLowerCase();
-        return name.indexOf(filterText) !== -1;
+        return ((s.name || '') + ' ' + (s.sessionId || '') + ' ' + (s.file || '')).toLowerCase().indexOf(filterText) !== -1;
       });
     }
     if (!filtered.length) {
-      listEl.innerHTML = '<div style="padding:20px 10px;text-align:center;color:#555;font-size:12px">' + (filterText ? '无匹配会话' : '暂无会话') + '</div>';
+      var empty = document.createElement('div');
+      empty.className = 'pi-empty';
+      empty.textContent = filterText ? '没有匹配的会话' : '还没有会话\\n点击「新建会话」开始';
+      empty.style.whiteSpace = 'pre-line';
+      listEl.appendChild(empty);
       return;
     }
+    var lastGroup = '';
     filtered.forEach(function(s, idx) {
-      var item = document.createElement('div');
-      item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '');
-      item.setAttribute('data-idx', String(idx));
-      item.setAttribute('data-file', s.file || '');
-      // Inline styles — belt and suspenders so cursor/click always work
-      item.style.cssText = 'padding:7px 10px;border-radius:5px;cursor:pointer;pointer-events:auto;margin:1px 0;user-select:none;';
-      var pinIcon = s.pinned ? '★' : '☆';
-      item.innerHTML =
-        '<div style="display:flex;align-items:center;gap:4px;pointer-events:none">' +
-          '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + (s.running ? '#4ec9b0' : '#555') + ';flex-shrink:0"></span>' +
-          '<span class="pi-session-name" style="font-size:12px;color:#e0e0e0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s.name || s.sessionId || '未命名') + '</span>' +
-          '<button class="pi-pin-btn" data-pin="1" style="background:none;border:none;color:#666;cursor:pointer;font-size:12px;padding:0 2px;opacity:0;line-height:1;pointer-events:auto">' + pinIcon + '</button>' +
-        '</div>' +
-        '<div style="font-size:10px;color:#6a6a6a;margin-top:2px;pointer-events:none">' + esc(fmtTime(s.mtime)) + '</div>';
-      listEl.appendChild(item);
+      if (!filterText) {
+        var g = groupOf(s);
+        if (g !== lastGroup) {
+          var head = document.createElement('div');
+          head.className = 'pi-group';
+          head.textContent = g;
+          listEl.appendChild(head);
+          lastGroup = g;
+        }
+      }
+      listEl.appendChild(itemEl(s, idx));
     });
   }
 
-  // Event delegation on the list — survives re-renders
+  // Event delegation — survives re-renders
   if (listEl) {
     listEl.addEventListener('click', function(e) {
       var pinBtn = e.target.closest ? e.target.closest('.pi-pin-btn') : null;
@@ -252,31 +623,41 @@ export const SIDEBAR_SCRIPT = `
       var file = item.getAttribute('data-file') || '';
       if (pinBtn) {
         e.stopPropagation();
-        if (window.pi && file) {
-          window.pi.invoke('pi:toggle-pin', file).then(function() { requestSessions(); });
-        }
+        if (window.pi && file) window.pi.invoke('pi:toggle-pin', file).then(function() { requestSessions(); });
         return;
       }
-      if (!file) { console.warn('[sidebar] item has no data-file'); return; }
-      if (!window.pi) { console.warn('[sidebar] window.pi missing'); showToast('桥接未就绪'); return; }
-      console.log('[sidebar] switching to', file);
+      if (!file) return;
+      if (!window.pi) { showToast('桥接未就绪'); return; }
+      if (switching) return;
+      switching = true;
+      setTitleLoading('载入会话…');
       var prev = listEl.querySelector('.pi-session-item.active');
       if (prev) prev.classList.remove('active');
-      item.classList.add('active');
+      item.classList.add('active', 'loading');
+      currentFile = file;
+      listEl.classList.add('is-loading');
+      var settle = function(ok) {
+        switching = false;
+        item.classList.remove('loading');
+        listEl.classList.remove('is-loading');
+        if (!ok) {
+          item.classList.remove('active');
+          setTitleLoading('');
+        }
+      };
       window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file })
         .then(function(r) {
-          console.log('[sidebar] switch result', r);
           if (r && r.ok === false) {
             showToast('切换失败: ' + (r.error || '未知错误'));
-            item.classList.remove('active');
+            settle(false);
           } else {
+            settle(true);
             requestSessions();
           }
         })
         .catch(function(err) {
-          console.error('[sidebar] switch error', err);
           showToast('切换出错: ' + (err && err.message || err));
-          item.classList.remove('active');
+          settle(false);
         });
     });
     listEl.addEventListener('contextmenu', function(e) {
@@ -284,7 +665,7 @@ export const SIDEBAR_SCRIPT = `
       if (!item) return;
       e.preventDefault();
       var file = item.getAttribute('data-file') || '';
-      var s = sessions.find(function(x) { return x.file === file; }) || { file: file };
+      var s = sessions.filter(function(x) { return x.file === file; })[0] || { file: file };
       showContextMenu(e.clientX, e.clientY, s);
     });
   }
@@ -297,30 +678,27 @@ export const SIDEBAR_SCRIPT = `
   function showContextMenu(x, y, s) {
     hideContextMenu();
     ctxMenu = document.createElement('div');
-    ctxMenu.style.cssText = 'position:fixed;z-index:10000;background:#2a2a2a;border:1px solid #444;border-radius:6px;padding:4px 0;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-size:12px;color:#d4d4d4;';
+    ctxMenu.className = 'pi-ctx';
     var items = [
-      { label: s.pinned ? '☆ 取消置顶' : '★ 置顶', action: function() {
+      { label: s.pinned ? '取消置顶' : '置顶', action: function() {
         if (window.pi) window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
       }},
-      { label: '⧉ 在新窗口打开', action: function() {
+      { label: '在新窗口打开', action: function() {
         if (window.pi) window.pi.invoke('pi:open-session-window', s.file);
       }},
-      { label: '⎘ 复制会话路径', action: function() {
+      { label: '复制会话路径', action: function() {
         if (window.pi) window.pi.invoke('pi:copy', s.file);
       }},
     ];
     items.forEach(function(it) {
       var el = document.createElement('div');
+      el.className = 'pi-ctx-item';
       el.textContent = it.label;
-      el.style.cssText = 'padding:6px 14px;cursor:pointer;';
-      el.onmouseenter = function() { el.style.background = '#094771'; };
-      el.onmouseleave = function() { el.style.background = ''; };
       el.onclick = function() { hideContextMenu(); it.action(); };
       ctxMenu.appendChild(el);
     });
     document.body.appendChild(ctxMenu);
-    // Position, keep in viewport
-    var mw = 170, mh = items.length * 30 + 8;
+    var mw = 170, mh = items.length * 32 + 10;
     if (x + mw > window.innerWidth) x = window.innerWidth - mw - 4;
     if (y + mh > window.innerHeight) y = window.innerHeight - mh - 4;
     ctxMenu.style.left = x + 'px';
@@ -328,11 +706,10 @@ export const SIDEBAR_SCRIPT = `
   }
   document.addEventListener('click', hideContextMenu);
   document.addEventListener('contextmenu', function(e) {
-    // Don't hide if right-clicking on a session item (handled above)
     if (!e.target.closest || !e.target.closest('.pi-session-item')) hideContextMenu();
   });
 
-  // Listen for session list updates from main
+  // main -> renderer messages
   window.addEventListener('message', function(e) {
     var msg = e.data;
     if (!msg) return;
@@ -340,12 +717,11 @@ export const SIDEBAR_SCRIPT = `
       sessions = msg.sessions || msg.payload || [];
       renderSessions();
     }
-    if (msg.type === 'workspaceChanged') {
-      if (wsLabel && msg.path) wsLabel.textContent = shortenPath(msg.path);
+    if (msg.type === 'workspaceChanged' && wsLabel && msg.path) {
+      wsLabel.textContent = shortenPath(msg.path);
     }
   });
 
-  // Request session list on load
   function requestSessions() {
     if (window.pi && window.pi.invoke) {
       window.pi.invoke('pi:list-sessions').then(function(list) {
@@ -357,14 +733,13 @@ export const SIDEBAR_SCRIPT = `
     }
   }
   requestSessions();
-  // Session list refresh: cheap now that main caches parsed metadata, but still
-  // no reason to do it every 5s — plus an immediate refresh when the window wakes up.
+  // The main process caches parsed metadata, but there is no reason to poll often
+  // — refresh on demand, on focus, and every 15s as a safety net.
   setInterval(requestSessions, 15000);
   window.addEventListener('focus', requestSessions);
 
+  // Drag & drop files -> composer
   function dragAndDropFiles(files) {
-    // Electron >= 32 removed File.path in the renderer — the path can only be
-    // resolved through webUtils, which lives in the preload.
     var paths = [];
     for (var i = 0; i < files.length; i++) {
       var p = '';
@@ -372,20 +747,42 @@ export const SIDEBAR_SCRIPT = `
       if (p) paths.push(p);
     }
     if (paths.length && window.pi) {
-      window.pi.postMessage({ type: 'appendInput', text: paths.join('\\n') });
+      window.pi.postMessage({ type: 'appendInput', text: paths.join('\\\\n') });
     } else if (files.length) {
       showToast('无法解析拖入文件的路径');
     }
   }
-
-  // Drag & drop files
   document.addEventListener('dragover', function(e) { e.preventDefault(); });
   document.addEventListener('drop', function(e) {
     e.preventDefault();
     var files = e.dataTransfer && e.dataTransfer.files;
-    if (!files || !files.length) return;
-    dragAndDropFiles(files);
+    if (files && files.length) dragAndDropFiles(files);
   });
 })();
 </script>
+<style>
+  /* context menu (rendered on document.body, outside the sidebar) */
+  .pi-ctx {
+    position: fixed;
+    z-index: 10000;
+    min-width: 168px;
+    padding: 4px;
+    border: 1px solid var(--pi-border-strong);
+    border-radius: var(--pi-radius);
+    background: var(--pi-overlay);
+    box-shadow: var(--pi-shadow-2);
+    font-family: var(--pi-font-ui);
+    font-size: var(--pi-fs-sm);
+    color: var(--pi-text);
+  }
+  .pi-ctx-item {
+    padding: 6px 10px;
+    border-radius: var(--pi-radius-sm);
+    cursor: pointer;
+  }
+  .pi-ctx-item:hover {
+    background: var(--pi-accent-soft);
+    color: #fff;
+  }
+</style>
 `;

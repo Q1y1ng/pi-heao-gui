@@ -1,242 +1,479 @@
 /**
- * Dark theme CSS overrides injected into pi-chat HTML.
- * Defines VS Code CSS variables that pi-chat expects but Electron doesn't provide.
+ * Design tokens + chat-surface styling injected into the pi-chat document.
+ *
+ * Two layers:
+ *  1. `--pi-*` tokens — the single source of truth for colour, radius, type and
+ *     motion. Everything else (shell, sidebar, settings) consumes these.
+ *  2. `--vscode-*` overrides — pi-chat is upstream code driven by VS Code theme
+ *     variables, so re-pointing those variables is how the chat area gets the
+ *     same look without patching vendored sources.
+ *
+ * Injected into <head> before the bundle runs; pi-chat injects its own styles at
+ * runtime, so anything that must win uses !important or a token override.
  */
+/**
+ * Design tokens, shared by every surface (chat shell, sidebar, settings window).
+ * The settings window is a separate document, so it imports this block directly
+ * instead of re-declaring the palette.
+ */
+export const TOKENS_CSS = `
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* surfaces: app < surface < raised < overlay */
+  --pi-bg: #0e1013;
+  --pi-surface: #14171c;
+  --pi-raised: #1a1e24;
+  --pi-overlay: #1f242b;
+  --pi-border: #252a32;
+  --pi-border-strong: #333a45;
+
+  /* text */
+  --pi-text: #e7eaf0;
+  --pi-text-dim: #9ba3af;
+  --pi-text-faint: #6b7381;
+
+  /* accent + semantics */
+  --pi-accent: #4c8dff;
+  --pi-accent-hover: #6ba1ff;
+  --pi-accent-soft: rgba(76, 141, 255, 0.14);
+  --pi-success: #35c08b;
+  --pi-warn: #e2b341;
+  --pi-danger: #f0616d;
+
+  /* geometry */
+  --pi-radius-sm: 5px;
+  --pi-radius: 8px;
+  --pi-radius-lg: 12px;
+  --pi-radius-pill: 999px;
+  --pi-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --pi-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --pi-ring: 0 0 0 2px rgba(76, 141, 255, 0.35);
+
+  /* type */
+  --pi-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+    "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --pi-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
+    Consolas, "Liberation Mono", Menlo, monospace;
+  --pi-fs-xs: 11px;
+  --pi-fs-sm: 12px;
+  --pi-fs-md: 13px;
+  --pi-fs-lg: 14px;
+
+  --pi-speed: 130ms;
+}
+
+/* ── VS Code variable bridge (drives pi-chat's own CSS) ─────────────── */
+:root {
+  --vscode-editor-background: var(--pi-bg);
+  --vscode-editor-foreground: var(--pi-text);
+  --vscode-foreground: var(--pi-text);
+  --vscode-descriptionForeground: var(--pi-text-dim);
+  --vscode-widget-border: var(--pi-border);
+  --vscode-panel-border: var(--pi-border);
+  --vscode-input-background: var(--pi-raised);
+  --vscode-input-foreground: var(--pi-text);
+  --vscode-input-border: var(--pi-border-strong);
+  --vscode-input-placeholderForeground: var(--pi-text-faint);
+  --vscode-button-background: var(--pi-accent);
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: var(--pi-accent-hover);
+  --vscode-button-secondaryBackground: var(--pi-overlay);
+  --vscode-button-secondaryForeground: var(--pi-text);
+  --vscode-dropdown-background: var(--pi-overlay);
+  --vscode-dropdown-foreground: var(--pi-text);
+  --vscode-dropdown-border: var(--pi-border-strong);
+  --vscode-list-hoverBackground: var(--pi-raised);
+  --vscode-list-activeSelectionBackground: var(--pi-accent-soft);
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-badge-background: var(--pi-overlay);
+  --vscode-badge-foreground: var(--pi-text);
+  --vscode-scrollbarSlider-background: #3a414d80;
+  --vscode-scrollbarSlider-hoverBackground: #4a5361cc;
+  --vscode-focusBorder: var(--pi-accent);
+  --vscode-errorForeground: var(--pi-danger);
+  --vscode-warningForeground: var(--pi-warn);
+  --vscode-textLink-foreground: var(--pi-accent);
+  --vscode-textLink-activeForeground: var(--pi-accent-hover);
+  --vscode-editorWidget-background: var(--pi-raised);
+  --vscode-editorWidget-foreground: var(--pi-text);
+  --vscode-editorWidget-border: var(--pi-border-strong);
+  --vscode-menu-background: var(--pi-overlay);
+  --vscode-menu-foreground: var(--pi-text);
+  --vscode-menu-selectionBackground: var(--pi-accent-soft);
+  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-sideBar-background: var(--pi-surface);
+  --vscode-sideBar-foreground: var(--pi-text);
+  --vscode-sideBar-border: var(--pi-border);
+  --vscode-panel-background: var(--pi-surface);
+  --vscode-peekViewResult-background: var(--pi-surface);
+  --vscode-font-family: var(--pi-font-ui);
+  --vscode-font-size: var(--pi-fs-md);
+}
+
+`;
+
 export const THEME_CSS = `
-<style id="pi-standalone-theme">
-/* Electron titleBarStyle: hidden — make existing bars draggable */
-.toolbar { -webkit-app-region: drag; }
-.toolbar button, .toolbar .icon-btn, .toolbar select, .toolbar input { -webkit-app-region: no-drag; }
-/* Sidebar header draggable — it must target the header ROW only.
-   Anything inside a -webkit-app-region:drag area stops receiving mouse events,
-   so the old "#pi-sidebar > div:first-child" selector (which matches the whole
-   .pi-sidebar-inner wrapper) made every session row, the filter box and the
-   sidebar buttons unclickable, and dragging anywhere in the sidebar moved the
-   window. */
-#pi-sidebar-header { -webkit-app-region: drag; }
-#pi-sidebar-header button { -webkit-app-region: no-drag; }
-/* Belt and braces: nothing else in the sidebar may become a drag handle. */
+<style id="pi-heao-theme">
+${TOKENS_CSS}
+
+/* ── Base ───────────────────────────────────────────────────────────── */
+html,
+body,
+body * {
+  font-family: var(--pi-font-ui);
+}
+html,
+body {
+  background: var(--pi-bg) !important;
+  color: var(--pi-text) !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0.005em;
+}
+::selection {
+  background: rgba(76, 141, 255, 0.32);
+}
+
+/* pi-chat's own drag bars are replaced by our title bar */
+.toolbar {
+  -webkit-app-region: drag;
+}
+.toolbar button,
+.toolbar .icon-btn,
+.toolbar select,
+.toolbar input {
+  -webkit-app-region: no-drag;
+}
+
+/* Draggable strips: the sidebar header row and the collapsed strip.
+   Everything else in the sidebar must stay no-drag — any element inside a drag
+   region stops receiving mouse events, which is what once made every session
+   row unclickable. */
+#pi-sidebar-header {
+  -webkit-app-region: drag;
+}
+#pi-sidebar-header button {
+  -webkit-app-region: no-drag;
+}
+#pi-sidebar-collapsed {
+  -webkit-app-region: drag;
+}
+#pi-sidebar-collapsed button {
+  -webkit-app-region: no-drag;
+}
 #pi-sidebar,
 #pi-sidebar .pi-sidebar-inner,
-#pi-sidebar-content,
 #pi-session-list,
 #pi-session-list *,
 .pi-session-item,
 #pi-session-filter,
 #pi-sidebar button,
-#pi-sidebar input { -webkit-app-region: no-drag; }
-/* Collapsed sidebar strip draggable */
-#pi-sidebar-collapsed { -webkit-app-region: drag; }
-#pi-sidebar-collapsed button { -webkit-app-region: no-drag; }
-
-/* Toolbar polish */
-.toolbar {
-  background: #252526 !important;
-  border-bottom: 1px solid #3c3c3c !important;
-  padding: 6px 12px !important;
-  min-height: 36px;
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-}
-.toolbar .session-info {
-  font-size: 12px !important;
-  color: #999 !important;
-  max-width: 50%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-.toolbar .status {
-  font-size: 11px !important;
-  color: #888 !important;
-}
-.toolbar .icon-btn {
-  color: #999 !important;
-  opacity: 0.8;
-  padding: 4px 6px !important;
-  border-radius: 4px !important;
-}
-.toolbar .icon-btn:hover {
-  background: #333 !important;
-  color: #e0e0e0 !important;
-  opacity: 1;
+#pi-sidebar input {
+  -webkit-app-region: no-drag;
 }
 
-:root {
-  /* VS Code Dark+ palette */
-  --vscode-editor-background: #1e1e1e;
-  --vscode-editor-foreground: #d4d4d4;
-  --vscode-foreground: #cccccc;
-  --vscode-descriptionForeground: #999999;
-  --vscode-widget-border: #3c3c3c;
-  --vscode-panel-border: #3c3c3c;
-  --vscode-input-background: #3c3c3c;
-  --vscode-input-foreground: #cccccc;
-  --vscode-input-border: #3c3c3c;
-  --vscode-input-placeholderForeground: #888888;
-  --vscode-button-background: #0e639c;
-  --vscode-button-foreground: #ffffff;
-  --vscode-button-hoverBackground: #1177bb;
-  --vscode-button-secondaryBackground: #3a3d41;
-  --vscode-button-secondaryForeground: #cccccc;
-  --vscode-dropdown-background: #3c3c3c;
-  --vscode-dropdown-foreground: #cccccc;
-  --vscode-dropdown-border: #3c3c3c;
-  --vscode-list-hoverBackground: #2a2d2e;
-  --vscode-list-activeSelectionBackground: #094771;
-  --vscode-list-activeSelectionForeground: #ffffff;
-  --vscode-badge-background: #4d4d4d;
-  --vscode-badge-foreground: #ffffff;
-  --vscode-scrollbarSlider-background: #79797966;
-  --vscode-scrollbarSlider-hoverBackground: #646464b3;
-  --vscode-focusBorder: #007fd4;
-  --vscode-errorForeground: #f44747;
-  --vscode-warningForeground: #cca700;
-  --vscode-terminal-foreground: #cccccc;
-  --vscode-terminal-background: #1e1e1e;
-  --vscode-font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --vscode-font-size: 13px;
-  /* Accent */
-  --vscode-textLink-foreground: #3794ff;
-  --vscode-textLink-activeForeground: #3794ff;
-  --vscode-editorWidget-background: #252526;
-  --vscode-editorWidget-foreground: #cccccc;
-  --vscode-editorWidget-border: #454545;
-  --vscode-menu-background: #252526;
-  --vscode-menu-foreground: #cccccc;
-  --vscode-menu-selectionBackground: #094771;
-  --vscode-menu-selectionForeground: #ffffff;
-  --vscode-peekViewEditor-background: #000000;
-  --vscode-peekViewResult-background: #252526;
-  --vscode-sideBar-background: #252526;
-  --vscode-sideBar-foreground: #cccccc;
-  --vscode-sideBar-border: #3c3c3c;
-  --vscode-activityBar-background: #333333;
-  --vscode-activityBar-foreground: #ffffff;
-  --vscode-titleBar-activeBackground: #3c3c3c;
-  --vscode-titleBar-activeForeground: #cccccc;
-  --vscode-statusBar-background: #007acc;
-  --vscode-statusBar-foreground: #ffffff;
-  --vscode-tab-activeBackground: #1e1e1e;
-  --vscode-tab-inactiveBackground: #2d2d2d;
-  --vscode-tab-activeForeground: #ffffff;
-  --vscode-tab-inactiveForeground: #888888;
+/* ── Chat surfaces ──────────────────────────────────────────────────── */
+.app,
+.messages,
+.messages-inner {
+  background: var(--pi-bg) !important;
+  color: var(--pi-text) !important;
 }
-/* Force high-contrast text everywhere */
-body, .app, .messages, .messages-inner {
-  color: #d4d4d4 !important;
-  background: #1e1e1e !important;
+.messages {
+  padding-top: 6px;
 }
-.empty, .empty-line, .empty-hint {
-  color: #b0b0b0 !important;
+
+/* code */
+pre,
+code,
+kbd,
+samp {
+  font-family: var(--pi-font-mono) !important;
+  font-variant-ligatures: none;
 }
-.empty-accent {
-  color: #3794ff !important;
+code {
+  background: var(--pi-raised) !important;
+  color: #e3c9a0 !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius-sm) !important;
+  padding: 0.1em 0.38em !important;
+  font-size: 0.9em !important;
+}
+pre {
+  background: #12151a !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius) !important;
+  padding: 12px 14px !important;
+  box-shadow: var(--pi-shadow-1);
+}
+pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #d7dbe2 !important;
 }
 kbd {
-  background: #3c3c3c !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #555 !important;
+  background: var(--pi-overlay) !important;
+  color: var(--pi-text) !important;
+  border: 1px solid var(--pi-border-strong) !important;
+  border-bottom-width: 2px !important;
+  border-radius: var(--pi-radius-sm) !important;
+  padding: 1px 6px !important;
+  font-size: var(--pi-fs-xs) !important;
 }
-/* Composer */
-.composer-input, .composer-box {
-  color: #d4d4d4 !important;
-}
-.composer-input:empty::before {
-  color: #888 !important;
-}
-/* Message bubbles */
-.msg-user, .msg-assistant {
-  color: #d4d4d4 !important;
-}
-/* Code blocks */
-pre, code {
-  color: #d4d4d4 !important;
-  background: #2d2d2d !important;
-}
-/* Links */
 a {
-  color: #3794ff !important;
+  color: var(--pi-accent) !important;
+  text-decoration-color: rgba(76, 141, 255, 0.4);
+  text-underline-offset: 2px;
 }
-/* Toolbar */
-.toolbar {
-  background: #2d2d2d !important;
-  border-bottom-color: #3c3c3c !important;
-  color: #cccccc !important;
+a:hover {
+  color: var(--pi-accent-hover) !important;
 }
-.toolbar .status, .toolbar .session-info {
-  color: #aaaaaa !important;
+blockquote {
+  border-left: 2px solid var(--pi-border-strong) !important;
+  color: var(--pi-text-dim) !important;
+  margin: 8px 0 !important;
+  padding: 2px 0 2px 12px !important;
 }
-/* Model picker */
-.model-trigger, .model-popup, .model-search, .model-list {
-  color: #d4d4d4 !important;
+table {
+  border-collapse: collapse !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius) !important;
+  overflow: hidden;
+  margin: 10px 0 !important;
 }
-.model-popup {
-  background: #252526 !important;
-  border-color: #454545 !important;
+th,
+td {
+  border: 1px solid var(--pi-border) !important;
+  padding: 6px 10px !important;
 }
-/* Select dropdowns */
-select, .select-borderless {
-  color: #d4d4d4 !important;
+th {
+  background: var(--pi-raised) !important;
+  font-weight: 600 !important;
+}
+hr {
+  border: none !important;
+  border-top: 1px solid var(--pi-border) !important;
+  margin: 14px 0 !important;
+}
+
+/* message rhythm */
+.msg-user,
+.msg-assistant,
+.message {
+  color: var(--pi-text) !important;
+}
+.role,
+.msg-role,
+.timestamp,
+.time {
+  color: var(--pi-text-faint) !important;
+  font-size: var(--pi-fs-xs) !important;
+}
+.empty,
+.empty-line,
+.empty-hint {
+  color: var(--pi-text-dim) !important;
+}
+.empty-accent {
+  color: var(--pi-accent) !important;
+}
+
+/* thinking blocks read as a quiet aside */
+.thinking,
+.thinking-block,
+details.thinking {
+  background: var(--pi-surface) !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius) !important;
+  color: var(--pi-text-dim) !important;
+  padding: 8px 12px !important;
+}
+
+/* ── Composer ───────────────────────────────────────────────────────── */
+.composer-box,
+.composer {
+  background: var(--pi-surface) !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius-lg) !important;
+  box-shadow: var(--pi-shadow-1);
+  transition: border-color var(--pi-speed), box-shadow var(--pi-speed);
+}
+.composer-box:focus-within,
+.composer:focus-within {
+  border-color: var(--pi-accent) !important;
+  box-shadow: var(--pi-ring);
+}
+.composer-input,
+.composer-input * {
+  color: var(--pi-text) !important;
+  caret-color: var(--pi-accent);
+}
+.composer-input:empty::before,
+.composer-input[data-empty="true"]::before {
+  color: var(--pi-text-faint) !important;
+}
+.composer-toolbar,
+.composer .toolbar,
+.composer-footer {
+  border-top: 1px solid var(--pi-border) !important;
   background: transparent !important;
+  color: var(--pi-text-dim) !important;
+}
+.composer-toolbar button,
+.composer .toolbar button {
+  border-radius: var(--pi-radius-sm) !important;
+  transition: background var(--pi-speed), color var(--pi-speed);
+}
+.composer-toolbar button:hover,
+.composer .toolbar button:hover {
+  background: var(--pi-overlay) !important;
+  color: var(--pi-text) !important;
+}
+.send-btn,
+#send-btn,
+.composer .send {
+  background: var(--pi-accent) !important;
+  color: #fff !important;
+  border-radius: var(--pi-radius) !important;
+  transition: background var(--pi-speed), transform var(--pi-speed);
+}
+.send-btn:hover,
+#send-btn:hover,
+.composer .send:hover {
+  background: var(--pi-accent-hover) !important;
+}
+
+/* pi-chat paints the user bubble with --vscode-button-background, which we map
+   to the accent — a wall of saturated blue. Use a tinted surface instead. */
+.user-bubble {
+  background: linear-gradient(180deg, rgba(76, 141, 255, 0.17), rgba(76, 141, 255, 0.1)) !important;
+  color: var(--pi-text) !important;
+  border: 1px solid rgba(76, 141, 255, 0.34) !important;
+  border-radius: var(--pi-radius) !important;
+  box-shadow: var(--pi-shadow-1);
+}
+.user-bubble code {
+  background: rgba(0, 0, 0, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e8d7b6 !important;
+}
+.msg {
+  padding: 2px 0 !important;
+}
+.msg + .msg {
+  margin-top: 8px;
+}
+.msg.assistant .md,
+.msg.assistant .bubble {
+  line-height: 1.62;
+  letter-spacing: 0.012em;
+}
+.msg h1,
+.msg h2,
+.msg h3 {
+  color: #f2f4f8 !important;
+  margin: 14px 0 6px !important;
+  line-height: 1.35;
+}
+.msg h1 {
+  font-size: 1.25em !important;
+}
+.msg h2 {
+  font-size: 1.14em !important;
+}
+.msg h3 {
+  font-size: 1.05em !important;
+}
+.msg ul,
+.msg ol {
+  padding-left: 1.35em !important;
+  margin: 6px 0 !important;
+}
+.msg li {
+  margin: 3px 0 !important;
+}
+.turn-head,
+.turn-header {
+  color: var(--pi-text-faint) !important;
+}
+
+/* ── Popups ─────────────────────────────────────────────────────────── */
+.model-popup,
+.autocomplete,
+.info-panel,
+.widget,
+.widget-card,
+.modal,
+.overlay > div {
+  background: var(--pi-overlay) !important;
+  border: 1px solid var(--pi-border-strong) !important;
+  border-radius: var(--pi-radius) !important;
+  box-shadow: var(--pi-shadow-2) !important;
+  color: var(--pi-text) !important;
+}
+.model-trigger,
+.model-popup,
+.model-search,
+.model-list,
+.select-borderless,
+.permission-select,
+.thinking-select,
+select {
+  color: var(--pi-text) !important;
 }
 select option {
-  background: #252526 !important;
-  color: #d4d4d4 !important;
+  background: var(--pi-overlay) !important;
+  color: var(--pi-text) !important;
 }
-/* Scrollbar */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #1e1e1e; }
-::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
-/* Toast */
-.toast {
-  color: #e0e0e0 !important;
-  background: #333 !important;
-  border: 1px solid #555 !important;
+.autocomplete .item:hover,
+.model-list .item:hover,
+.model-list [role="option"]:hover {
+  background: var(--pi-raised) !important;
 }
-/* Widget */
-.widget, .widget-card {
-  background: #252526 !important;
-  border-color: #3c3c3c !important;
-  color: #d4d4d4 !important;
-}
-/* Queue */
 .queue-item {
-  background: #2a2d2e !important;
-  color: #d4d4d4 !important;
+  background: var(--pi-surface) !important;
+  border: 1px solid var(--pi-border) !important;
+  border-radius: var(--pi-radius-sm) !important;
+  color: var(--pi-text-dim) !important;
 }
-/* Timeline rail */
+.toast {
+  background: var(--pi-overlay) !important;
+  border: 1px solid var(--pi-border-strong) !important;
+  border-radius: var(--pi-radius) !important;
+  color: var(--pi-text) !important;
+  box-shadow: var(--pi-shadow-2) !important;
+}
 .timeline-rail {
-  color: #666 !important;
+  color: var(--pi-text-faint) !important;
 }
-/* Context ring */
-.ctx-ring-track { stroke: #3c3c3c !important; }
-.ctx-ring-prog { stroke: #007acc !important; }
-/* Autocomplete */
-.autocomplete {
-  background: #252526 !important;
-  border-color: #454545 !important;
-  color: #d4d4d4 !important;
+.ctx-ring-track {
+  stroke: var(--pi-border-strong) !important;
 }
-/* Overlay / dialogs */
+.ctx-ring-prog {
+  stroke: var(--pi-accent) !important;
+}
 .overlay {
-  background: rgba(0,0,0,0.5) !important;
+  background: rgba(6, 8, 11, 0.62) !important;
 }
-.info-panel {
-  background: #252526 !important;
-  border-color: #454545 !important;
-  color: #d4d4d4 !important;
+
+/* ── Scrollbars ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
-/* Permission select */
-.permission-select {
-  color: #d4d4d4 !important;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-/* Thinking select */
-.thinking-select {
-  color: #d4d4d4 !important;
+::-webkit-scrollbar-thumb {
+  background: #3a414d80;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--pi-radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a5361cc;
+  background-clip: content-box;
 }
 </style>
 `;

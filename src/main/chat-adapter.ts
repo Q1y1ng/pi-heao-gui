@@ -105,20 +105,27 @@ function svgIcon(paths: string, size = 14): string {
 
 const ICONS = {
   plus: `<path d="M12 5v14M5 12h14"/>`,
-  search: `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>`,
+  search: `<circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/>`,
   download: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>`,
-  gear: `<circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>`,
-  history: `<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>`,
+  gear: `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4.6a2 2 0 1 1 4 0A1.7 1.7 0 0 0 16.9 6l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4Z"/>`,
+  history: `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>`,
+  refresh: `<path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/>`,
+  panel: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>`,
+  folder: `<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>`,
+  star: `<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/>`,
+  copy: `<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>`,
+  external: `<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M19 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>`,
 };
 
 const CHROME_CSS = `
 <style id="pi-standalone-chrome">
+/* Shell chrome. Colours come from the --pi-* tokens defined in theme.ts. */
 html, body {
   overflow: hidden !important;
   height: 100vh !important;
   margin: 0 !important;
   padding: 0 !important;
-  background: #1e1e1e !important;
+  background: var(--pi-bg, #0e1013) !important;
 }
 
 #pi-shell {
@@ -127,17 +134,19 @@ html, body {
   height: 100vh !important;
   width: 100vw !important;
   overflow: hidden !important;
-  background: #1e1e1e;
+  background: var(--pi-bg, #0e1013);
 }
 
-/* ── Title bar: 32px, full width ── */
+/* ── Title bar ── */
 .pi-titlebar {
-  height: 32px;
+  height: 38px;
   flex-shrink: 0;
   display: flex;
-  align-items: stretch;
-  background: #181818;
-  border-bottom: 1px solid #2a2a2a;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px 0 12px;
+  background: linear-gradient(180deg, var(--pi-surface, #14171c), #12141a);
+  border-bottom: 1px solid var(--pi-border, #252a32);
   -webkit-app-region: drag;
   user-select: none;
   z-index: 1000;
@@ -146,45 +155,42 @@ html, body {
 .pi-tb-left {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 14px;
+  gap: 9px;
   flex-shrink: 0;
-  width: auto;
 }
 .pi-tb-logo {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   background: #0b0b0b;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   padding-bottom: 1px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
-
+.pi-tb-app {
+  font-size: var(--pi-fs-md, 13px);
+  font-weight: 600;
+  color: var(--pi-text, #e7eaf0);
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
 /* Author mark: present but deliberately quiet. */
 .pi-tb-brand {
   font-size: 9.5px;
-  color: #4a4a4a;
+  color: #464c56;
   letter-spacing: 0.35px;
-  margin-left: 3px;
   white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
-}
-.pi-tb-app {
-  font-size: 12px;
-  font-weight: 500;
-  color: #cccccc;
-  letter-spacing: 0.15px;
-  white-space: nowrap;
+  padding-top: 2px;
 }
 .pi-tb-center {
   flex: 1;
@@ -192,71 +198,102 @@ html, body {
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 8px;
 }
 .pi-tb-title {
-  font-size: 11.5px;
-  color: #8a8a8a;
-  max-width: 60%;
+  font-size: var(--pi-fs-sm, 12px);
+  color: var(--pi-text-dim, #9ba3af);
+  max-width: 70%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   text-align: center;
 }
+.pi-tb-title.is-empty::before {
+  content: "未打开会话";
+  color: var(--pi-text-faint, #6b7381);
+}
+
+/* metrics: quiet chips, tabular figures */
 .pi-tb-stats {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 8px;
+  gap: 2px;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 .pi-stat {
-  font-size: 10.5px;
-  color: #7a7a7a;
+  font-size: var(--pi-fs-xs, 11px);
+  color: var(--pi-text-faint, #6b7381);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.2px;
+  padding: 2px 7px;
+  border-radius: var(--pi-radius-pill, 999px);
+  transition: background var(--pi-speed, 130ms), color var(--pi-speed, 130ms);
 }
-.pi-stat.pi-stat-active { color: #4ec9b0; }
-.pi-stat.pi-stat-warn { color: #cca700; }
-.pi-stat.pi-stat-err { color: #f44747; }
+.pi-stat:empty {
+  display: none;
+}
+.pi-stat:not(:empty):hover {
+  background: var(--pi-raised, #1a1e24);
+  color: var(--pi-text, #e7eaf0);
+}
+.pi-stat.pi-stat-active { color: var(--pi-success, #35c08b); }
+.pi-stat.pi-stat-warn { color: var(--pi-warn, #e2b341); }
+.pi-stat.pi-stat-err { color: var(--pi-danger, #f0616d); }
+
 .pi-tb-right {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 .pi-tb-actions {
   display: flex;
   align-items: center;
-  padding: 0 2px;
-  gap: 0;
+  gap: 1px;
+  padding: 2px;
+  border-radius: var(--pi-radius, 8px);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 .pi-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border: none;
+  border-radius: var(--pi-radius-sm, 5px);
   background: transparent;
-  color: #9a9a9a;
+  color: var(--pi-text-dim, #9ba3af);
   cursor: pointer;
   padding: 0;
   -webkit-app-region: no-drag;
-  transition: color 0.1s, background 0.1s;
+  transition: color var(--pi-speed, 130ms), background var(--pi-speed, 130ms);
 }
 .pi-icon-btn:hover {
-  color: #e4e4e4;
-  background: rgba(255,255,255,0.06);
+  color: var(--pi-text, #e7eaf0);
+  background: rgba(255, 255, 255, 0.08);
 }
 .pi-icon-btn:active {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.13);
+}
+.pi-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--pi-ring, 0 0 0 2px rgba(76, 141, 255, 0.35));
 }
 .pi-icon-btn svg {
   display: block;
   pointer-events: none;
+}
+.pi-tb-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--pi-border, #252a32);
+  margin: 0 2px;
 }
 
 /* ── Body: sidebar + main ── */
@@ -265,17 +302,18 @@ html, body {
   display: flex;
   min-height: 0;
   overflow: hidden;
+  background: var(--pi-bg, #0e1013);
 }
 
 #pi-sidebar {
-  width: 248px;
-  min-width: 200px;
-  max-width: 380px;
+  width: 268px;
+  min-width: 216px;
+  max-width: 420px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #2a2a2a;
-  background: #181818;
+  border-right: 1px solid var(--pi-border, #252a32);
+  background: var(--pi-surface, #14171c);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -287,7 +325,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #1e1e1e;
+  background: var(--pi-bg, #0e1013);
   position: relative;
 }
 
@@ -306,70 +344,23 @@ html, body {
 
 /* Center pi-chat .app nicely in main area */
 #pi-main .app {
-  max-width: 920px !important;
+  max-width: 900px !important;
   margin: 0 auto !important;
   width: 100% !important;
+  padding: 0 18px !important;
 }
 
-/* ── Session list (injected in head so it always applies) ── */
-#pi-sidebar { pointer-events: auto !important; }
-#pi-session-list { pointer-events: auto !important; }
-#pi-sidebar .pi-session-item,
+/* ── Session list layout only — the visuals live in sidebar.ts ── */
+#pi-sidebar {
+  pointer-events: auto !important;
+}
+#pi-session-list {
+  pointer-events: auto !important;
+}
 .pi-session-item {
-  padding: 7px 10px !important;
-  border-radius: 5px !important;
   cursor: pointer !important;
   pointer-events: auto !important;
-  margin: 1px 0 !important;
-  transition: background 0.12s !important;
   user-select: none !important;
-}
-#pi-sidebar .pi-session-item:hover,
-.pi-session-item:hover { background: #2a2d2e !important; }
-#pi-sidebar .pi-session-item.active,
-.pi-session-item.active { background: #094771 !important; }
-.pi-session-item .pi-session-name {
-  font-size: 12px !important;
-  color: #e0e0e0 !important;
-  line-height: 1.4 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  flex: 1 !important;
-  min-width: 0 !important;
-}
-.pi-session-item .pi-session-time {
-  font-size: 10px !important;
-  color: #6a6a6a !important;
-  margin-top: 2px !important;
-}
-.pi-session-item .pi-pin-btn {
-  background: none !important;
-  border: none !important;
-  color: #666 !important;
-  cursor: pointer !important;
-  font-size: 12px !important;
-  padding: 0 2px !important;
-  opacity: 0 !important;
-  flex-shrink: 0 !important;
-  line-height: 1 !important;
-}
-.pi-session-item:hover .pi-pin-btn { opacity: 1 !important; }
-.pi-session-item.pinned .pi-pin-btn { opacity: 1 !important; color: #cca700 !important; }
-
-/* Sidebar header refinement */
-#pi-sidebar .sidebar-header {
-  padding: 10px 12px 8px !important;
-}
-#pi-sidebar .sidebar-header h3 {
-  font-size: 12.5px !important;
-  margin: 0 !important;
-  color: #cccccc !important;
-  font-weight: 500 !important;
-}
-#pi-sidebar .sidebar-collapse-btn {
-  width: 22px !important;
-  height: 22px !important;
 }
 </style>
 `;
@@ -384,7 +375,7 @@ function buildChromeHtml(): string {
       <span class="pi-tb-brand" title="Pi Heao GUI V0.1 — made by HEAOZIE">made by HEAOZIE</span>
     </div>
     <div class="pi-tb-center">
-      <span class="pi-tb-title" id="pi-title-text"></span>
+      <span class="pi-tb-title is-empty" id="pi-title-text" title="当前会话"></span>
     </div>
     <div class="pi-tb-stats" id="pi-token-stats" title="Token 用量">
       <span class="pi-stat" id="pi-stat-ctx" title="上下文占用"></span>
@@ -394,35 +385,36 @@ function buildChromeHtml(): string {
     </div>
     <div class="pi-tb-right">
       <div class="pi-tb-actions">
-        <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)">${svgIcon(ICONS.plus)}</button>
-        <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)">${svgIcon(ICONS.history)}</button>
-        <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)">${svgIcon(ICONS.search)}</button>
-        <button class="pi-icon-btn" id="pi-tb-refresh" title="重新加载会话">${svgIcon(ICONS.history)}</button>
-        <button class="pi-icon-btn" id="pi-tb-export" title="导出当前会话">${svgIcon(ICONS.download)}</button>
-        <button class="pi-icon-btn" id="pi-tb-settings" title="设置 (Ctrl+,)">${svgIcon(ICONS.gear)}</button>
+        <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)" aria-label="新建会话">${svgIcon(ICONS.plus)}</button>
+        <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)" aria-label="会话历史">${svgIcon(ICONS.history)}</button>
+        <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)" aria-label="搜索会话">${svgIcon(ICONS.search)}</button>
+        <button class="pi-icon-btn" id="pi-tb-refresh" title="重新加载会话" aria-label="重新加载会话">${svgIcon(ICONS.refresh)}</button>
+        <button class="pi-icon-btn" id="pi-tb-export" title="导出当前会话" aria-label="导出会话">${svgIcon(ICONS.download)}</button>
+        <span class="pi-tb-sep" aria-hidden="true"></span>
+        <button class="pi-icon-btn" id="pi-tb-settings" title="设置 (Ctrl+,)" aria-label="设置">${svgIcon(ICONS.gear)}</button>
       </div>
     </div>
   </header>
   <div class="pi-body">
     <div id="pi-sidebar-collapsed" style="
       display:none;flex-direction:column;align-items:center;padding-top:8px;gap:4px;
-      width:40px;flex-shrink:0;background:#181818;border-right:1px solid #2a2a2a;
+      width:42px;flex-shrink:0;background:var(--pi-surface,#14171c);border-right:1px solid var(--pi-border,#252a32);
     ">
-      <button id="pi-sidebar-expand" title="展开侧栏" style="
-        background:none;border:none;color:#8a8a8a;cursor:pointer;padding:6px;
-        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
-      ">»</button>
-      <div style="width:20px;height:1px;background:#2a2a2a;margin:2px 0;"></div>
-      <button id="pi-new-session-mini" title="新建会话" style="
-        background:none;border:none;color:#8a8a8a;cursor:pointer;font-size:16px;padding:6px;
-        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
-      ">+</button>
+      <button id="pi-sidebar-expand" title="展开侧栏" aria-label="展开侧栏" style="
+        background:none;border:none;color:var(--pi-text-dim,#9ba3af);cursor:pointer;padding:6px;
+        border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+      ">${svgIcon(ICONS.panel)}</button>
+      <div style="width:18px;height:1px;background:var(--pi-border,#252a32);margin:4px 0;"></div>
+      <button id="pi-new-session-mini" title="新建会话" aria-label="新建会话" style="
+        background:none;border:none;color:var(--pi-text-dim,#9ba3af);cursor:pointer;padding:6px;
+        border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+      ">${svgIcon(ICONS.plus)}</button>
       <div style="flex:1;"></div>
-      <button id="pi-open-settings-mini" title="设置" style="
-        background:none;border:none;color:#8a8a8a;cursor:pointer;font-size:14px;padding:6px;
-        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
-        margin-bottom:8px;
-      ">⚙</button>
+      <button id="pi-open-settings-mini" title="设置" aria-label="设置" style="
+        background:none;border:none;color:var(--pi-text-dim,#9ba3af);cursor:pointer;padding:6px;
+        border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+        margin-bottom:10px;
+      ">${svgIcon(ICONS.gear)}</button>
     </div>
     <aside id="pi-sidebar">
 ${SIDEBAR_HTML}
@@ -452,9 +444,7 @@ const REPARENT_SCRIPT = `
       if (n.nodeType === 3 && !n.textContent.trim()) continue;
       main.appendChild(n);
     }
-    // Keep title center clean — workspace path lives in sidebar only
-    var titleEl = document.getElementById('pi-title-text');
-    if (titleEl) titleEl.textContent = '';
+    // The center title is filled from sessionInfo/state messages (see TOKENS_SCRIPT)
     document.title = 'Pi Heao GUI';
   }
   if (document.readyState === 'loading') {
@@ -562,8 +552,28 @@ const TOKENS_SCRIPT = `
     el.textContent = text || '';
     el.className = 'pi-stat' + (cls ? ' ' + cls : '');
   }
+  function setTitle(text) {
+    var el = document.getElementById('pi-title-text');
+    if (!el) return;
+    var v = (text || '').trim();
+    if (v) {
+      el.textContent = v;
+      el.classList.remove('is-empty');
+    } else {
+      el.textContent = '';
+      el.classList.add('is-empty');
+    }
+  }
+
   function onMsg(data) {
     if (!data) return;
+    // session name / workspace label pushed by chat-session
+    if (data.type === 'sessionInfo') {
+      setTitle(data.label || '');
+    } else if (data.type === 'state') {
+      var st = data.state || {};
+      if (st.sessionName) setTitle(st.sessionName);
+    }
     if (data.type === 'contextUsage' && data.usage) {
       var u = data.usage;
       var pct = u.percent != null ? Math.round(u.percent) : null;

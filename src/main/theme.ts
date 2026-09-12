@@ -14,6 +14,41 @@ export const THEME_CSS = `
 #pi-sidebar-collapsed { -webkit-app-region: drag; }
 #pi-sidebar-collapsed button { -webkit-app-region: no-drag; }
 
+/* Toolbar polish */
+.toolbar {
+  background: #252526 !important;
+  border-bottom: 1px solid #3c3c3c !important;
+  padding: 6px 12px !important;
+  min-height: 36px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.toolbar .session-info {
+  font-size: 12px !important;
+  color: #999 !important;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.toolbar .status {
+  font-size: 11px !important;
+  color: #888 !important;
+}
+.toolbar .icon-btn {
+  color: #999 !important;
+  opacity: 0.8;
+  padding: 4px 6px !important;
+  border-radius: 4px !important;
+}
+.toolbar .icon-btn:hover {
+  background: #333 !important;
+  color: #e0e0e0 !important;
+  opacity: 1;
+}
+
 :root {
   /* VS Code Dark+ palette */
   --vscode-editor-background: #1e1e1e;

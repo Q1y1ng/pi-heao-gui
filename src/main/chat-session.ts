@@ -136,7 +136,8 @@ export async function createChatSession(opts: {
   cwd?: string;
 }): Promise<ChatSession | undefined> {
   const piPath = findPiBinary(opts.config.piPath || undefined);
-  const cwd = opts.cwd || opts.config.workspaceRoot || process.cwd();
+  // Prefer explicit workspace; never fall back to process.cwd() (portable exe = temp dir)
+  const cwd = opts.cwd || opts.config.workspaceRoot || homedir();
   const extArgs = buildExtensionArgs(opts.appPath, opts.config);
   const env = buildEnv(opts.config, opts.appPath);
 

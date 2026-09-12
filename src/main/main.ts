@@ -6,6 +6,7 @@ import { StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
 import { createChatSession, type ChatSession } from "./chat-session";
 import { buildSettingsHtml } from "./settings-window";
+import { createTray, showNotification, destroyTray } from "./tray";
 
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
@@ -164,6 +165,60 @@ ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: 
     writePiFile("settings.json", data.settings);
   }
   return { ok: true };
+});
+
+ipcMain.handle("pi:pick-workspace", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+    defaultPath: config.workspaceRoot || homedir(),
+    buttonLabel: "选择",
+    title: "选择工作目录",
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle("pi:set-workspace", (_e, dir: string) => {
+  config.workspaceRoot = String(dir || "");
+  saveConfig(config);
+  return config;
+});
+
+ipcMain.handle("pi:export-conversation", async () => {
+  if (!chatSession || !mainWindow) return null;
+  try {
+    const messages = await chatSession.rpc.getMessages();
+    let md = "# Pi 对话导出\n\n";
+    md += `导出时间: ${new Date().toLocaleString("zh-CN")}\n\n---\n\n`;
+    for (const msg of messages as any[]) {
+      const role = msg.role || msg.message?.role || "unknown";
+      const content = msg.content ?? msg.message?.content;
+      let text = "";
+      if (typeof content === "string") text = content;
+      else if (Array.isArray(content)) {
+        for (const b of content) {
+          if (b && typeof b === "object") {
+            if (b.type === "text" && b.text) text += (text ? "\n\n" : "") + b.text;
+            else if (b.type === "thinking" && b.thinking) text += (text ? "\n\n" : "") + "> 💭 " + b.thinking.slice(0, 200) + "…";
+            else if (b.type === "toolcall") text += (text ? "\n\n" : "") + "🔧 `" + (b.name || "tool") + "`";
+          }
+        }
+      }
+      if (!text.trim()) continue;
+      const label = role === "user" ? "👤 用户" : role === "assistant" ? "🤖 Assistant" : role;
+      md += `**${label}**\n\n${text}\n\n---\n\n`;
+    }
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: join(homedir(), "Desktop", `pi-对话-${new Date().toISOString().slice(0, 10)}.md`),
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    writeFileSync(result.filePath, md, "utf8");
+    return result.filePath;
+  } catch (e) {
+    return null;
+  }
 });
 
 ipcMain.handle("pi:get-env-info", () => {
@@ -440,6 +495,15 @@ function setupChineseMenu(): void {
 app.whenReady().then(async () => {
   setupChineseMenu();
   await createWindow();
+  createTray(() => mainWindow);
+
+  // Minimize to tray instead of quit
+  mainWindow?.on("close", (e) => {
+    if (!(app as any).isQuiting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   // Create chat session after window is ready
   if (mainWindow) {
@@ -449,6 +513,13 @@ app.whenReady().then(async () => {
         config,
         host: {
           postToRenderer: (msg) => {
+            // Desktop notification when agent finishes
+            const m = msg as any;
+            if (m?.type === "event" && m.event?.type === "agent_settled") {
+              if (mainWindow && !mainWindow.isFocused()) {
+                showNotification("Pi Standalone", "Agent 已完成回复");
+              }
+            }
             if (mainWindow && !mainWindow.isDestroyed()) {
               // Determine which IPC channel to use based on msg.type
               const typeToChannel: Record<string, string> = {

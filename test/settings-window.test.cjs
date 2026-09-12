@@ -15,25 +15,43 @@ test("all tabs have a matching panel", () => {
   for (const tab of tabs) {
     assert.ok(html.includes(`id="panel-${tab}"`), `missing panel for tab ${tab}`);
   }
-  for (const required of ["models", "extensions", "skills", "sysprompt", "appearance", "diagnostics", "general"]) {
+  for (const required of [
+    "models",
+    "extensions",
+    "skills",
+    "sysprompt",
+    "appearance",
+    "diagnostics",
+    "general",
+  ]) {
     assert.ok(tabs.includes(required), `tab ${required} is missing`);
   }
 });
 
 test("every control id the script uses exists in the document", () => {
-  const ids = [...new Set([...html.matchAll(/getElementById\(['"]([\w-]+)['"]\)/g)].map((m) => m[1]))];
+  const ids = [
+    ...new Set([...html.matchAll(/getElementById\(['"]([\w-]+)['"]\)/g)].map((m) => m[1])),
+  ];
   const orphans = ids.filter((id) => !html.includes(`id="${id}"`));
   assert.deepEqual(orphans, [], `script references missing elements: ${orphans.join(", ")}`);
 });
 
 test("appearance panel wires theme, accent and font size", () => {
-  for (const id of ["theme-group", "accent-swatches", "accent-custom", "ap-fontSize", "ap-fontPreview"]) {
+  for (const id of [
+    "theme-group",
+    "accent-swatches",
+    "accent-custom",
+    "ap-fontSize",
+    "ap-fontPreview",
+  ]) {
     assert.ok(html.includes(`id="${id}"`), `missing ${id}`);
   }
   for (const theme of ["dark", "light", "system"]) {
     assert.ok(html.includes(`data-theme="${theme}"`), `missing theme choice ${theme}`);
   }
-  const swatches = [...html.matchAll(/class="swatch" data-accent="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+  const swatches = [...html.matchAll(/class="swatch" data-accent="(#[0-9a-f]{6})"/g)].map(
+    (m) => m[1],
+  );
   assert.ok(swatches.length >= 6, "expected at least six accent presets");
   assert.ok(html.includes("ap-fontSize"), "font size control missing");
 });
@@ -87,5 +105,8 @@ test("the settings document loads nothing from the network", () => {
   const loadable = [
     ...html.matchAll(/<(?:script|link|img|iframe|source)[^>]*(?:src|href)="(https?:)?\/\/[^"]+"/g),
   ];
-  assert.deepEqual(loadable.map((m) => m[0]), []);
+  assert.deepEqual(
+    loadable.map((m) => m[0]),
+    [],
+  );
 });

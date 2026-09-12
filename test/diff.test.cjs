@@ -62,7 +62,10 @@ test("new file and deleted file cases", () => {
   const added = unifiedDiff("", "a\nb");
   assert.equal(added.added, 2);
   assert.equal(added.removed, 0);
-  assert.equal(lines(added).every((l) => l.op === "add" || l.op === "context"), true);
+  assert.equal(
+    lines(added).every((l) => l.op === "add" || l.op === "context"),
+    true,
+  );
 
   const removed = unifiedDiff("a\nb", "");
   assert.equal(removed.removed, 2);

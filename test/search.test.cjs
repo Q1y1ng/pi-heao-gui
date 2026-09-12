@@ -49,7 +49,10 @@ test("case-insensitive, and returns the match offsets inside the snippet", async
   const file = sessionFile("b", [userMsg("Deploy to STAGING please", "2026-01-02T10:00:00.000Z")]);
   const hits = await searchSessions({ files: [file], nameOf: () => "b", query: "staging" });
   assert.equal(hits.length, 1);
-  assert.equal(hits[0].snippet.slice(hits[0].matchStart, hits[0].matchStart + 7).toLowerCase(), "staging");
+  assert.equal(
+    hits[0].snippet.slice(hits[0].matchStart, hits[0].matchStart + 7).toLowerCase(),
+    "staging",
+  );
 });
 
 test("queries shorter than two characters return nothing", async () => {
@@ -63,13 +66,24 @@ test("limits hits per file and in total, newest sessions first", async () => {
     userMsg(`needle ${i}`, `2026-02-0${(i % 9) + 1}T10:00:00.000Z`),
   );
   const file = sessionFile("d", many);
-  const hits = await searchSessions({ files: [file], nameOf: () => "d", query: "needle", perFile: 3 });
+  const hits = await searchSessions({
+    files: [file],
+    nameOf: () => "d",
+    query: "needle",
+    perFile: 3,
+  });
   assert.equal(hits.length, 3);
   // newest first
   assert.ok(hits[0].at >= hits[1].at);
   assert.ok(hits[1].at >= hits[2].at);
 
-  const capped = await searchSessions({ files: [file, file], nameOf: () => "d", query: "needle", limit: 4, perFile: 3 });
+  const capped = await searchSessions({
+    files: [file, file],
+    nameOf: () => "d",
+    query: "needle",
+    limit: 4,
+    perFile: 3,
+  });
   assert.equal(capped.length, 4);
 });
 
@@ -126,6 +140,10 @@ test("orderByRecency puts the most recently touched file first and skips missing
   const fresh = sessionFile("fresh", [userMsg("y", "2026-01-01T00:00:00.000Z")]);
   const past = new Date(Date.now() - 86_400_000);
   fs.utimesSync(old, past, past);
-  const ordered = await orderByRecency([old, fresh, path.join(os.tmpdir(), "does-not-exist.jsonl")]);
+  const ordered = await orderByRecency([
+    old,
+    fresh,
+    path.join(os.tmpdir(), "does-not-exist.jsonl"),
+  ]);
   assert.deepEqual(ordered, [fresh, old]);
 });

@@ -61,12 +61,28 @@ test("aggregate sums tokens and derives cache hit rate + reasoning share", () =>
   c.beginTurn(0);
   c.onDelta(100, usage({ output: 10 }));
   c.endTurn(200, {
-    usage: usage({ input: 1000, output: 200, cacheRead: 3000, cacheWrite: 500, reasoning: 50, totalTokens: 4700, cost: { total: 0.02 } }),
+    usage: usage({
+      input: 1000,
+      output: 200,
+      cacheRead: 3000,
+      cacheWrite: 500,
+      reasoning: 50,
+      totalTokens: 4700,
+      cost: { total: 0.02 },
+    }),
   });
   c.beginTurn(1000);
   c.onDelta(1100, usage({ output: 1 }));
   c.endTurn(1400, {
-    usage: usage({ input: 1000, output: 100, cacheRead: 4000, cacheWrite: 0, reasoning: 50, totalTokens: 5100, cost: { total: 0.01 } }),
+    usage: usage({
+      input: 1000,
+      output: 100,
+      cacheRead: 4000,
+      cacheWrite: 0,
+      reasoning: 50,
+      totalTokens: 5100,
+      cost: { total: 0.01 },
+    }),
   });
 
   const agg = c.aggregate();

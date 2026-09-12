@@ -106,7 +106,11 @@ app.whenReady().then(async () => {
       true,
     );
     check("palette opens", !palette.missing && palette.visible, JSON.stringify(palette));
-    check("palette renders commands immediately", palette.immediate > 3, `immediate=${palette.immediate}`);
+    check(
+      "palette renders commands immediately",
+      palette.immediate > 3,
+      `immediate=${palette.immediate}`,
+    );
     check("palette lists results", palette.items > 3, `items=${palette.items}`);
     check(
       "palette groups commands, sessions and slash commands",
@@ -123,7 +127,11 @@ app.whenReady().then(async () => {
 
     // ── 3. Sidebar: keyboard nav, archived toggle, context menu ───────
     await waitFor(
-      () => win.webContents.executeJavaScript("!!document.querySelector('#pi-session-list .pi-session-item')", true),
+      () =>
+        win.webContents.executeJavaScript(
+          "!!document.querySelector('#pi-session-list .pi-session-item')",
+          true,
+        ),
       30_000,
       "sidebar rows",
     );
@@ -162,7 +170,11 @@ app.whenReady().then(async () => {
       `window.pi.invoke('pi:diagnostics', 'info').then(r => ({ ok: r.ok, hasVersion: /Pi Heao GUI/.test(r.info || ''), masked: !/sk-[a-zA-Z0-9]{8}/.test(r.info || '') }))`,
       true,
     );
-    check("diagnostics info is available", diag.ok === true && diag.hasVersion === true, JSON.stringify(diag));
+    check(
+      "diagnostics info is available",
+      diag.ok === true && diag.hasVersion === true,
+      JSON.stringify(diag),
+    );
     check("diagnostics output masks secrets", diag.masked === true);
 
     const fontToggle = await win.webContents.executeJavaScript(
@@ -182,7 +194,11 @@ app.whenReady().then(async () => {
        })()`,
       true,
     );
-    check("light theme CSS is generated on demand", fontToggle.css === true, JSON.stringify(fontToggle));
+    check(
+      "light theme CSS is generated on demand",
+      fontToggle.css === true,
+      JSON.stringify(fontToggle),
+    );
 
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);

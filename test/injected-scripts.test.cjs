@@ -86,6 +86,28 @@ test("generated chat page: every inline script parses", () => {
   }
 });
 
+test("generated chat page: CSS is wrapped in <style>, never bare text", () => {
+  const bundle = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
+  if (!fs.existsSync(bundle)) return;
+  const { buildChatHtml } = require("../dist/main/chat-adapter.js");
+  const { DEFAULT_CONFIG } = require("../dist/shared/types.js");
+  const html = buildChatHtml(ROOT, { ...DEFAULT_CONFIG, workspaceRoot: ROOT });
+
+  // Every injected stylesheet must carry its own <style> element. A bare text
+  // node in <head> is invalid: the parser closes </head> early and the CSS ends
+  // up rendered as body text (this shipped once and looked like a wall of CSS).
+  for (const id of ["pi-stats", "pi-palette", "pi-dock-css"]) {
+    assert.ok(html.includes(`<style id="${id}">`), `missing <style id="${id}">`);
+  }
+
+  const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
+  assert.ok(head.length > 0, "head not found");
+  const withoutStyles = head
+    .replace(/<style[\s\S]*?<\/style>/g, "")
+    .replace(/<script[\s\S]*?<\/script>/g, "");
+  assert.equal(/[.#][\w-]+\s*\{/.test(withoutStyles), false, "bare CSS rule leaked into <head>");
+});
+
 test("generated chat page: no template literal leaked into the markup", () => {
   const bundle = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
   if (!fs.existsSync(bundle)) return;

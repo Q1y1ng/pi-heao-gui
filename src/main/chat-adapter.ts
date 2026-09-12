@@ -198,7 +198,10 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 6px 0 12px;
+  /* The Windows title-bar overlay (minimise / maximise / close) is drawn on top
+     of the window, ~138px wide for three buttons. Without this reservation our
+     own right-hand buttons sit underneath it and cannot be clicked. */
+  padding: 0 148px 0 12px;
   background: linear-gradient(180deg, var(--pi-surface, #14171c), #12141a);
   border-bottom: 1px solid var(--pi-border, #252a32);
   -webkit-app-region: drag;
@@ -418,6 +421,15 @@ html, body {
 }
 </style>
 `;
+
+/**
+ * CSS has to be wrapped in a <style> element before it goes into <head>: a bare
+ * text node there is invalid, so the parser implicitly closes </head> and the
+ * stylesheet ends up as body text (which the shell then moves into #pi-main).
+ */
+function styleTag(id: string, css: string): string {
+  return `<style id="${id}">${css}</style>`;
+}
 
 function buildChromeHtml(): string {
   return `
@@ -755,9 +767,9 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
       0,
       buildThemeCss(config.theme, config.accent),
       CHROME_CSS,
-      STATS_CSS,
-      PALETTE_CSS,
-      DOCK_CSS,
+      styleTag("pi-stats", STATS_CSS),
+      styleTag("pi-palette", PALETTE_CSS),
+      styleTag("pi-dock-css", DOCK_CSS),
       vendorAssets().css,
       SHIM_SCRIPT,
       configScript,
@@ -770,9 +782,9 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
         html.slice(0, bodyIdx) +
         buildThemeCss(config.theme, config.accent) +
         CHROME_CSS +
-        STATS_CSS +
-        PALETTE_CSS +
-        DOCK_CSS +
+        styleTag("pi-stats", STATS_CSS) +
+        styleTag("pi-palette", PALETTE_CSS) +
+        styleTag("pi-dock-css", DOCK_CSS) +
         vendorAssets().css +
         SHIM_SCRIPT +
         configScript +

@@ -14,3 +14,7 @@ vendor/upstream/pi-chat/src/model-icons-data.ts
 vendor/upstream/src/
 src/shared/*.js
 src/shared/*.js.map
+
+# Screenshots are regenerated per machine: they show real session names and
+# paths from whoever ran the screenshot harness. Never commit them.
+docs/screenshots/

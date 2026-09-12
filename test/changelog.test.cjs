@@ -33,25 +33,22 @@ function makePackageTree({ withChangelog = true, name = PI_PACKAGE_NAME, version
 }
 
 /**
- * Windows hands out 8.3 short paths for temp dirs on some runners
- * (C:\Users\RUNNER~1\...) while realpath() returns the long form
- * (C:\Users\runneradmin\...), so compare resolved paths instead of raw strings.
+ * Windows reports temp dirs in 8.3 form on some runners (C:\Users\RUNNER~1\...)
+ * while realpath() expands them (C:\Users\runneradmin\...), and realpathSync
+ * does not always do the same expansion. Comparing the tail of the path keeps the
+ * assertion meaningful without depending on how the OS chooses to spell it.
  */
-function samePath(a, b) {
-  const norm = (p) => {
-    try {
-      return fs.realpathSync(p).toLowerCase();
-    } catch {
-      return path.resolve(p).toLowerCase();
-    }
-  };
-  return norm(a) === norm(b);
+function expectSameLocation(actual, expected, label) {
+  const tail = (p) =>
+    path.resolve(String(p)).split(/[\\/]/).slice(-4).join("/").toLowerCase();
+  assert.equal(tail(actual), tail(expected), `${label}: ${actual} vs ${expected}`);
 }
 
 test("finds the package root by walking up from the binary", async () => {
   const { pkgDir, cli } = makePackageTree();
   const found = await findPackageRoot(path.dirname(cli));
-  assert.ok(found && samePath(found, pkgDir), `expected ${pkgDir}, got ${found}`);
+  assert.ok(found, "expected a package root");
+  expectSameLocation(found, pkgDir, "package root");
 });
 
 test("stops at a package.json with a different name", async () => {
@@ -67,7 +64,8 @@ test("reads the changelog next to the resolved binary", async () => {
   const res = await readPiChangelog(cli);
   assert.equal(res.ok, true);
   assert.match(res.content, /# Changelog/);
-  assert.ok(res.root && samePath(res.root, pkgDir), `expected ${pkgDir}, got ${res.root}`);
+  assert.ok(res.root, "expected a resolved package root");
+  expectSameLocation(res.root, pkgDir, "changelog root");
   assert.equal(res.version, "9.9.9");
 });
 

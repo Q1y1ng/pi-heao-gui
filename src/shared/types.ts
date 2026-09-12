@@ -33,6 +33,10 @@ export interface StandaloneConfig {
   showArchived: boolean;
   /** Most-recently used workspaces (per-window workspace switcher). */
   recentWorkspaces: string[];
+  /** Language for generated commit messages (upstream: pi-agent-studio.commitLanguage). */
+  commitLanguage: string;
+  /** Override for the commit-message system prompt (empty = upstream default). */
+  commitMessagePrompt: string;
 }
 
 export const DEFAULT_CONFIG: StandaloneConfig = {
@@ -61,6 +65,8 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   openAtLogin: false,
   showArchived: false,
   recentWorkspaces: [],
+  commitLanguage: "English",
+  commitMessagePrompt: "",
 };
 
 /** ChatHost abstraction — replaces vscode.Disposable with a plain unsubscribe fn. */

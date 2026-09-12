@@ -1,0 +1,431 @@
+/**
+ * Bottom dock: the standalone replacement for what VS Code itself provided in
+ * the original extension — a real terminal (upstream `terminal.ts`), a way to
+ * read/edit files and push a selection into the chat (upstream `add-to-chat.ts`)
+ * and commit-message generation (upstream `gitCommit/`).
+ *
+ * xterm.js and CodeMirror are UMD builds inlined from
+ * `dist/renderer/vendor/` — no network, no bundler, CSP untouched.
+ */
+export const DOCK_HTML = `
+<div id="pi-dock" hidden>
+  <div class="pi-dock-resize" id="pi-dock-resize" title="拖动调整高度"></div>
+  <div class="pi-dock-head">
+    <div class="pi-dock-tabs">
+      <button class="pi-dock-tab active" data-dock="term" type="button">终端</button>
+      <button class="pi-dock-tab" data-dock="files" type="button">文件</button>
+      <button class="pi-dock-tab" data-dock="changes" type="button">变更</button>
+    </div>
+    <span class="pi-dock-meta" id="pi-dock-meta"></span>
+    <div class="pi-dock-actions">
+      <button class="pi-dock-btn" id="pi-term-kind" type="button" title="在 pi TUI 与系统 shell 之间切换">pi TUI</button>
+      <button class="pi-dock-btn" id="pi-term-restart" type="button" title="重启终端">重启</button>
+      <button class="pi-dock-btn" id="pi-dock-close" type="button" title="关闭面板 (Ctrl+\`)">✕</button>
+    </div>
+  </div>
+  <div class="pi-dock-body">
+    <div class="pi-dock-pane active" id="pi-pane-term"><div id="pi-dock-term"></div></div>
+    <div class="pi-dock-pane" id="pi-pane-files">
+      <div class="pi-files-side">
+        <div class="pi-files-head">
+          <span id="pi-files-path">.</span>
+          <button class="pi-dock-btn" id="pi-files-up" type="button" title="上一级">↑</button>
+        </div>
+        <div id="pi-files-list"></div>
+      </div>
+      <div class="pi-files-main">
+        <div class="pi-files-bar">
+          <span id="pi-files-name">未打开文件</span>
+          <span class="pi-files-spacer"></span>
+          <button class="pi-dock-btn" id="pi-files-send" type="button" title="把选中的内容发送到对话输入框">发送选中到对话</button>
+          <button class="pi-dock-btn primary" id="pi-files-save" type="button" title="保存 (Ctrl+S)">保存</button>
+        </div>
+        <textarea id="pi-files-editor" spellcheck="false" placeholder="从左侧选择一个文件…"></textarea>
+      </div>
+    </div>
+    <div class="pi-dock-pane" id="pi-pane-changes">
+      <div class="pi-git-side">
+        <div class="pi-files-head"><span id="pi-git-branch">git</span>
+          <button class="pi-dock-btn" id="pi-git-refresh" type="button" title="刷新">刷新</button>
+        </div>
+        <div id="pi-git-list"></div>
+        <div class="pi-git-actions">
+          <input type="text" id="pi-git-notes" placeholder="给模型的备注（可选）" />
+          <button class="pi-dock-btn primary" id="pi-git-generate" type="button">生成提交信息</button>
+        </div>
+        <div class="pi-git-hint" id="pi-git-hint">默认使用已暂存改动（git add 后）；没有暂存则用工作区改动。</div>
+      </div>
+      <div class="pi-git-main">
+        <div class="pi-files-bar">
+          <span>提交信息</span>
+          <span class="pi-files-spacer"></span>
+          <button class="pi-dock-btn" id="pi-commit-copy" type="button">复制</button>
+          <button class="pi-dock-btn" id="pi-commit-insert" type="button" title="插入到对话输入框">插入到对话</button>
+        </div>
+        <textarea id="pi-commit-msg" spellcheck="false" placeholder="生成后会显示在这里，可以直接编辑…"></textarea>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+export const DOCK_CSS = `
+/* ── Bottom dock (terminal / files / changes) ────────────────────────── */
+#pi-dock {
+  order: 9;
+  flex: none;
+  height: var(--pi-dock-height, 42%);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--pi-border);
+  background: var(--pi-surface);
+  position: relative;
+}
+#pi-dock[hidden] { display: none; }
+.pi-dock-resize {
+  position: absolute; top: -3px; left: 0; right: 0; height: 6px;
+  cursor: ns-resize; z-index: 5;
+}
+.pi-dock-head {
+  display: flex; align-items: center; gap: 10px; padding: 0 8px 0 4px;
+  height: 34px; flex: none; border-bottom: 1px solid var(--pi-border);
+  background: var(--pi-raised);
+}
+.pi-dock-tabs { display: flex; gap: 2px; }
+.pi-dock-tab {
+  font-family: inherit; font-size: 12px; padding: 5px 12px; cursor: pointer;
+  background: none; border: none; color: var(--pi-text-dim);
+  border-bottom: 2px solid transparent;
+}
+.pi-dock-tab:hover { color: var(--pi-text); }
+.pi-dock-tab.active { color: var(--pi-text); border-bottom-color: var(--pi-accent); }
+.pi-dock-meta {
+  font-family: var(--pi-font-mono); font-size: 11px; color: var(--pi-text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pi-dock-actions { margin-left: auto; display: flex; gap: 6px; }
+.pi-dock-btn {
+  font-family: inherit; font-size: 11px; padding: 3px 9px; cursor: pointer;
+  background: var(--pi-raised); color: var(--pi-text-dim);
+  border: 1px solid var(--pi-border); border-radius: var(--pi-radius-sm);
+}
+.pi-dock-btn:hover { color: var(--pi-text); border-color: var(--pi-border-strong); }
+.pi-dock-btn.primary { background: var(--pi-accent); color: #fff; border-color: var(--pi-accent); }
+.pi-dock-body { flex: 1; min-height: 0; position: relative; }
+.pi-dock-pane { position: absolute; inset: 0; display: none; }
+.pi-dock-pane.active { display: flex; }
+#pi-pane-term { padding: 4px 6px; }
+#pi-dock-term { flex: 1; min-width: 0; height: 100%; }
+#pi-dock-term .xterm { height: 100%; }
+.pi-files-side { width: 240px; flex: none; border-right: 1px solid var(--pi-border); display: flex; flex-direction: column; }
+.pi-files-main, .pi-git-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pi-git-side { width: 280px; flex: none; border-right: 1px solid var(--pi-border); display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+.pi-files-head {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px; flex: none;
+  font-family: var(--pi-font-mono); font-size: 11px; color: var(--pi-text-dim);
+  border-bottom: 1px solid var(--pi-border);
+}
+#pi-files-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pi-files-list, #pi-git-list { flex: 1; overflow: auto; padding: 4px 0; }
+.pi-files-row {
+  display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer;
+  font-size: 12px; color: var(--pi-text-dim); white-space: nowrap;
+}
+.pi-files-row:hover { background: var(--pi-raised); color: var(--pi-text); }
+.pi-files-row.active { background: var(--pi-accent-soft); color: var(--pi-text); }
+.pi-files-row .pi-files-icon { width: 14px; text-align: center; opacity: 0.7; }
+.pi-files-bar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; flex: none;
+  border-bottom: 1px solid var(--pi-border); font-size: 12px;
+}
+.pi-files-spacer { flex: 1; }
+#pi-files-editor, #pi-commit-msg {
+  flex: 1; width: 100%; resize: none; border: none; outline: none;
+  background: var(--pi-bg); color: var(--pi-text);
+  font-family: var(--pi-font-mono); font-size: 12.5px; line-height: 1.55; padding: 8px;
+}
+.pi-git-actions { display: flex; flex-direction: column; gap: 6px; padding: 0 0 4px; }
+.pi-git-actions input {
+  background: var(--pi-raised); color: var(--pi-text); font-family: inherit; font-size: 12px;
+  border: 1px solid var(--pi-border); border-radius: var(--pi-radius-sm); padding: 5px 7px; outline: none;
+}
+.pi-git-actions input:focus { border-color: var(--pi-accent); box-shadow: var(--pi-ring); }
+.pi-git-hint { font-size: 10.5px; color: var(--pi-text-faint); line-height: 1.5; padding: 2px 0 4px; }
+.pi-git-file { display: flex; gap: 8px; align-items: center; padding: 3px 6px; font-size: 12px; }
+.pi-git-file .pi-git-add { color: var(--pi-success); font-family: var(--pi-font-mono); font-size: 11px; }
+.pi-git-file .pi-git-del { color: var(--pi-danger); font-family: var(--pi-font-mono); font-size: 11px; }
+.pi-git-file .pi-git-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-git-sec-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pi-text-faint); padding: 6px 6px 2px; }
+.CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: 12.5px !important; }
+`;
+
+export const DOCK_SCRIPT = `
+<script>
+(function () {
+  var dock = document.getElementById('pi-dock');
+  if (!dock || !window.pi) return;
+
+  var meta = document.getElementById('pi-dock-meta');
+  var height = 42;
+
+  function show(tab) {
+    dock.hidden = false;
+    document.documentElement.style.setProperty('--pi-dock-height', height + '%');
+    document.querySelectorAll('.pi-dock-tab').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-dock') === tab);
+    });
+    document.querySelectorAll('.pi-dock-pane').forEach(function (p) {
+      p.classList.toggle('active', p.id === 'pi-pane-' + tab);
+    });
+    document.body.classList.add('pi-dock-open');
+    if (tab === 'term') { ensureTerm(); setTimeout(fitTerm, 30); }
+    if (tab === 'files') { loadTree(treePath); }
+    if (tab === 'changes') { refreshGit(); }
+  }
+  function hide() {
+    dock.hidden = true;
+    document.body.classList.remove('pi-dock-open');
+  }
+  function toggle(tab) {
+    if (!dock.hidden && (!tab || dock.querySelector('.pi-dock-tab.active').getAttribute('data-dock') === tab)) hide();
+    else show(tab || 'term');
+  }
+  window.__piDock = { show: show, hide: hide, toggle: toggle };
+
+  document.querySelectorAll('.pi-dock-tab').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.getAttribute('data-dock')); });
+  });
+  document.getElementById('pi-dock-close').addEventListener('click', hide);
+  var tbToggle = document.getElementById('pi-dock-toggle');
+  if (tbToggle) tbToggle.addEventListener('click', function () { toggle(null); });
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey && (e.key === '\\\`' || e.key === '~')) { e.preventDefault(); toggle(null); }
+  });
+
+  // ── resize handle ──
+  (function () {
+    var grip = document.getElementById('pi-dock-resize');
+    var dragging = false;
+    grip.addEventListener('mousedown', function (e) { dragging = true; e.preventDefault(); });
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      var h = ((window.innerHeight - e.clientY) / window.innerHeight) * 100;
+      height = Math.min(85, Math.max(15, h));
+      document.documentElement.style.setProperty('--pi-dock-height', height + '%');
+      fitTerm();
+    });
+    window.addEventListener('mouseup', function () { dragging = false; });
+  })();
+
+  // ── terminal (xterm + node-pty in the main process) ──
+  var term = null, fitAddon = null, termKind = 'pi', termOpening = false;
+
+  function fitTerm() {
+    if (!term || !fitAddon) return;
+    try {
+      fitAddon.fit();
+      window.pi.invoke('pi:term-resize', { cols: term.cols, rows: term.rows });
+    } catch (e) { /* dock hidden */ }
+  }
+
+  async function ensureTerm() {
+    if (term || termOpening) return;
+    if (!window.Terminal) { meta.textContent = 'xterm.js 未加载'; return; }
+    termOpening = true;
+    var res = null;
+    try {
+      res = await window.pi.invoke('pi:term-open', { kind: termKind, cols: 100, rows: 26 });
+    } catch (e) {
+      meta.textContent = '终端启动失败: ' + e.message;
+      termOpening = false;
+      return;
+    }
+    if (!res || !res.ok) {
+      meta.textContent = (res && res.error) || '终端不可用';
+      termOpening = false;
+      return;
+    }
+    term = new Terminal({
+      fontFamily: 'Cascadia Code, JetBrains Mono, Consolas, monospace',
+      fontSize: 12.5,
+      cursorBlink: true,
+      convertEol: false,
+      allowProposedApi: true,
+      theme: {
+        background: '#0e1013', foreground: '#e7eaf0', cursor: '#4c8dff',
+        selectionBackground: '#26405f'
+      }
+    });
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('pi-dock-term'));
+    fitTerm();
+    term.onData(function (d) { window.pi.invoke('pi:term-input', d); });
+    window.pi.onTermData(function (m) { if (m && m.data && term) term.write(m.data); });
+    window.pi.onTermExit(function (m) {
+      if (term) term.write('\\r\\n[进程已退出' + (m && m.code != null ? ' code=' + m.code : '') + ']\\r\\n');
+    });
+    meta.textContent = (res.kind === 'pi' ? 'pi TUI' : res.shell) + ' · ' + res.cwd;
+    termOpening = false;
+    window.__piTerm = term;
+  }
+
+  async function restartTerm() {
+    if (term) { try { term.dispose(); } catch (e) {} term = null; fitAddon = null; }
+    await window.pi.invoke('pi:term-close');
+    ensureTerm();
+  }
+
+  document.getElementById('pi-term-restart').addEventListener('click', restartTerm);
+  document.getElementById('pi-term-kind').addEventListener('click', function () {
+    termKind = termKind === 'pi' ? 'shell' : 'pi';
+    this.textContent = termKind === 'pi' ? 'pi TUI' : '系统 shell';
+    restartTerm();
+  });
+
+  // ── files (browse, edit, push a selection into the chat) ──
+  var treePath = '.';
+  var currentFile = '';
+  var cm = null;
+
+  function editor() {
+    if (cm || !window.CodeMirror) return cm;
+    var ta = document.getElementById('pi-files-editor');
+    cm = CodeMirror.fromTextArea(ta, {
+      lineNumbers: true, mode: 'text/x-typescript', theme: 'default',
+      indentUnit: 2, lineWrapping: false
+    });
+    cm.setSize('100%', '100%');
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S') && !dock.hidden && currentFile) {
+        e.preventDefault();
+        saveFile();
+      }
+    });
+    return cm;
+  }
+
+  function modeFor(name) {
+    if (/\\.(ts|tsx)$/.test(name)) return 'text/typescript';
+    if (/\\.(js|jsx|mjs|cjs)$/.test(name)) return 'text/javascript';
+    if (/\\.json$/.test(name)) return 'application/json';
+    if (/\\.(md|markdown)$/.test(name)) return 'text/x-markdown';
+    if (/\\.(html?)$/.test(name)) return 'text/html';
+    if (/\\.css$/.test(name)) return 'text/css';
+    if (/\\.py$/.test(name)) return 'text/x-python';
+    if (/\\.(sh|bash)$/.test(name)) return 'text/x-sh';
+    if (/\\.(yml|yaml)$/.test(name)) return 'text/x-yaml';
+    if (/\\.rs$/.test(name)) return 'text/x-rust';
+    if (/\\.go$/.test(name)) return 'text/x-go';
+    return 'text/plain';
+  }
+
+  async function loadTree(path) {
+    treePath = path || '.';
+    var res = await window.pi.invoke('pi:fs-tree', treePath);
+    var list = document.getElementById('pi-files-list');
+    document.getElementById('pi-files-path').textContent = treePath;
+    if (!res || !res.ok) { list.innerHTML = '<div class="pi-git-hint">' + ((res && res.error) || '读取失败') + '</div>'; return; }
+    var rows = (res.items || []).map(function (it) {
+      return '<div class="pi-files-row" data-path="' + it.path + '" data-dir="' + (it.dir ? '1' : '0') + '">' +
+        '<span class="pi-files-icon">' + (it.dir ? '▸' : '·') + '</span><span>' + it.name + '</span></div>';
+    });
+    list.innerHTML = rows.join('') || '<div class="pi-git-hint">空目录</div>';
+  }
+
+  async function openFile(path) {
+    var res = await window.pi.invoke('pi:fs-read', path);
+    if (!res || !res.ok) { meta.textContent = (res && res.error) || '读取失败'; return; }
+    currentFile = path;
+    document.getElementById('pi-files-name').textContent = path;
+    var ed = editor();
+    if (ed) { ed.setOption('mode', modeFor(path)); ed.setValue(res.content || ''); }
+    else { document.getElementById('pi-files-editor').value = res.content || ''; }
+  }
+
+  async function saveFile() {
+    var ed = editor();
+    var content = ed ? ed.getValue() : document.getElementById('pi-files-editor').value;
+    var res = await window.pi.invoke('pi:fs-write', { path: currentFile, content: content });
+    meta.textContent = res && res.ok ? '已保存 ' + currentFile : '保存失败: ' + ((res && res.error) || '');
+  }
+
+  document.getElementById('pi-files-list').addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('.pi-files-row') : null;
+    if (!row) return;
+    var path = row.getAttribute('data-path');
+    if (row.getAttribute('data-dir') === '1') { loadTree(path); return; }
+    openFile(path);
+  });
+  document.getElementById('pi-files-up').addEventListener('click', function () {
+    var parts = treePath.split('/').filter(Boolean);
+    parts.pop();
+    loadTree(parts.join('/') || '.');
+  });
+  document.getElementById('pi-files-save').addEventListener('click', saveFile);
+  document.getElementById('pi-files-send').addEventListener('click', function () {
+    var ed = editor();
+    var text = ed ? ed.getSelection() : '';
+    if (!text) { meta.textContent = '先在编辑器里选择一段内容'; return; }
+    var header = '文件: ' + currentFile + '\\n\\n';
+    window.pi.postMessage({ type: 'appendInput', text: header + text });
+    meta.textContent = '已发送 ' + text.length + ' 个字符到对话输入框';
+  });
+
+  // ── changes (git status + commit message) ──
+  function gitRows(items, sign) {
+    return (items || []).map(function (f) {
+      return '<div class="pi-git-file"><span class="' + (sign === '+' ? 'pi-git-add' : 'pi-git-del') + '">' +
+        (sign === '+' ? '+' + f.added : '-' + f.removed) + '</span><span class="pi-git-path">' + f.path + '</span></div>';
+    }).join('');
+  }
+
+  async function refreshGit() {
+    var res = await window.pi.invoke('pi:git-info');
+    var list = document.getElementById('pi-git-list');
+    if (!res || !res.ok || !res.repo) {
+      document.getElementById('pi-git-branch').textContent = '非 git 仓库';
+      list.innerHTML = '<div class="pi-git-hint">当前工作目录不是 git 仓库。</div>';
+      return;
+    }
+    document.getElementById('pi-git-branch').textContent = res.branch || 'HEAD';
+    list.innerHTML =
+      '<div class="pi-git-sec-title">已暂存 (' + (res.staged || []).length + ')</div>' + gitRows(res.staged, '+') +
+      '<div class="pi-git-sec-title">未暂存 (' + (res.unstaged || []).length + ')</div>' + gitRows(res.unstaged, '-');
+  }
+
+  document.getElementById('pi-git-refresh').addEventListener('click', refreshGit);
+  document.getElementById('pi-git-generate').addEventListener('click', async function () {
+    var btn = this;
+    btn.disabled = true;
+    meta.textContent = '正在生成提交信息…';
+    try {
+      var res = await window.pi.invoke('pi:git-commit-message', {
+        stagedOnly: true,
+        notes: document.getElementById('pi-git-notes').value || ''
+      });
+      if (res && res.ok) {
+        document.getElementById('pi-commit-msg').value = res.message || '';
+        meta.textContent = res.truncated ? '已生成（diff 过大，按文件截断）' : '已生成';
+      } else {
+        meta.textContent = (res && res.error) || '生成失败';
+      }
+    } catch (e) {
+      meta.textContent = '生成失败: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  document.getElementById('pi-commit-copy').addEventListener('click', function () {
+    var text = document.getElementById('pi-commit-msg').value;
+    if (text) window.pi.invoke('pi:copy', text);
+  });
+  document.getElementById('pi-commit-insert').addEventListener('click', function () {
+    var text = document.getElementById('pi-commit-msg').value;
+    if (text) window.pi.postMessage({ type: 'appendInput', text: text });
+  });
+
+  // keep the terminal sized with the window
+  window.addEventListener('resize', fitTerm);
+})();
+</script>`;

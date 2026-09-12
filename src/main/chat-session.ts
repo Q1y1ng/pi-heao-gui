@@ -120,7 +120,7 @@ export function findPiBinary(customPath?: string): string {
   return "pi";
 }
 
-function buildExtensionArgs(appPath: string, config: StandaloneConfig): string[] {
+export function buildExtensionArgs(appPath: string, config: StandaloneConfig): string[] {
   const bridgeDir = getRealBridgeDir(appPath);
   const extensions = [
     "todo.ts",
@@ -151,7 +151,7 @@ function buildExtensionArgs(appPath: string, config: StandaloneConfig): string[]
   return args;
 }
 
-function buildEnv(config: StandaloneConfig, appPath: string): Record<string, string> {
+export function buildEnv(config: StandaloneConfig, appPath: string): Record<string, string> {
   const bridgeDir = getRealBridgeDir(appPath);
   const env: Record<string, string> = {
     PI_VSCODE_STATUS_BAR: "0",

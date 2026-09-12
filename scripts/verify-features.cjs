@@ -209,7 +209,8 @@ app.whenReady().then(async () => {
     let diffWin = null;
     try {
       diffWin = await waitFor(
-        () => BrowserWindow.getAllWindows().find((w) => w.id !== win.id && !w.isDestroyed()) || null,
+        () =>
+          BrowserWindow.getAllWindows().find((w) => w.id !== win.id && !w.isDestroyed()) || null,
         20_000,
         "diff window",
       );
@@ -231,6 +232,80 @@ app.whenReady().then(async () => {
       check("diff window renders changed lines", rows > 10, `rows=${rows}`);
       diffWin.destroy();
     }
+
+    // —─ 6. Dock: real PTY terminal, file panel, git ──────────────────
+    const dock = await win.webContents.executeJavaScript(
+      `(async () => {
+         if (!window.__piDock) return { missing: true };
+         window.__piDock.show('term');
+         await new Promise(r => setTimeout(r, 600));
+         const meta = document.getElementById('pi-dock-meta').textContent;
+         const deadline = Date.now() + 20000;
+         let lines = 0;
+         while (Date.now() < deadline) {
+           const t = window.__piTerm;
+           lines = t && t.buffer && t.buffer.active ? t.buffer.active.length : 0;
+           if (lines > 2) break;
+           await new Promise(r => setTimeout(r, 300));
+         }
+         return {
+           missing: false,
+           visible: !document.getElementById('pi-dock').hidden,
+           meta: meta,
+           lines: lines,
+           hasXterm: !!window.Terminal,
+           hasCM: !!window.CodeMirror
+         };
+       })()`,
+      true,
+    );
+    check("dock opens", !dock.missing && dock.visible, JSON.stringify(dock));
+    check("xterm.js and CodeMirror are inlined", dock.hasXterm === true && dock.hasCM === true);
+    check("terminal starts the pi TUI", /pi TUI/.test(String(dock.meta)), String(dock.meta));
+    check("PTY produces real terminal output", dock.lines > 2, `lines=${dock.lines}`);
+
+    const filesPane = await win.webContents.executeJavaScript(
+      `(async () => {
+         window.__piDock.show('files');
+         await new Promise(r => setTimeout(r, 1500));
+         const rows = [...document.querySelectorAll('#pi-files-list .pi-files-row')];
+         // pick a real file (directories would just navigate deeper)
+         const target = rows.find(r => r.getAttribute('data-dir') === '0');
+         if (target) { target.click(); await new Promise(r => setTimeout(r, 1500)); }
+         const name = document.getElementById('pi-files-name').textContent;
+         const cmEl = document.querySelector('.CodeMirror');
+         const cm = cmEl && cmEl.CodeMirror ? cmEl.CodeMirror : null;
+         const len = cm ? cm.getValue().length : 0;
+         return { rows: rows.length, name: name, cm: !!cm, opened: !!target, len: len };
+       })()`,
+      true,
+    );
+    check("file tree lists the workspace", filesPane.rows > 0, `rows=${filesPane.rows}`);
+    check("CodeMirror editor is attached", filesPane.cm === true);
+    check(
+      "opening a file loads its content",
+      filesPane.opened === true && filesPane.len > 0 && filesPane.name !== "未打开文件",
+      `name=${filesPane.name} chars=${filesPane.len}`,
+    );
+
+    const changesPane = await win.webContents.executeJavaScript(
+      `(async () => {
+         window.__piDock.show('changes');
+         await new Promise(r => setTimeout(r, 2500));
+         return {
+           branch: document.getElementById('pi-git-branch').textContent,
+           files: document.querySelectorAll('#pi-git-list .pi-git-file').length,
+           hasGenerate: !!document.getElementById('pi-git-generate')
+         };
+       })()`,
+      true,
+    );
+    check(
+      "changes tab answers with a branch or an explicit non-repo note",
+      !!changesPane.branch && changesPane.branch !== "git",
+      changesPane.branch,
+    );
+    check("changes tab offers commit-message generation", changesPane.hasGenerate === true);
 
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);

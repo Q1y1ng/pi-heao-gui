@@ -42,7 +42,11 @@ export interface CliOptions {
 }
 
 /** Run `pi <args>` once and capture its output. Never throws. */
-export function runPiCli(piPath: string, args: string[], opts: CliOptions = {}): Promise<CliResult> {
+export function runPiCli(
+  piPath: string,
+  args: string[],
+  opts: CliOptions = {},
+): Promise<CliResult> {
   const timeoutMs = opts.timeoutMs ?? 120_000;
   return new Promise<CliResult>((resolve) => {
     let target: { command: string; args: string[] };
@@ -81,7 +85,14 @@ export function runPiCli(piPath: string, args: string[], opts: CliOptions = {}):
       } catch {
         /* already gone */
       }
-      finish({ ok: false, code: null, stdout, stderr, timedOut: true, error: `超时（${timeoutMs} ms）` });
+      finish({
+        ok: false,
+        code: null,
+        stdout,
+        stderr,
+        timedOut: true,
+        error: `超时（${timeoutMs} ms）`,
+      });
     }, timeoutMs);
     timer.unref?.();
 

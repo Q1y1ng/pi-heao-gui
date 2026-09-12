@@ -8,6 +8,7 @@ import { join, extname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import type { StandaloneConfig } from "../shared/types";
 import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
+import { DOCK_HTML, DOCK_CSS, DOCK_SCRIPT } from "./dock";
 import { STATS_HTML, STATS_SCRIPT, STATS_CSS } from "./stats-panel";
 import { PALETTE_HTML, PALETTE_SCRIPT, PALETTE_CSS } from "./palette";
 import { buildThemeCss } from "./theme";
@@ -49,6 +50,56 @@ function safeJson(value: unknown): string {
  * data:/blob: assets. No remote script, and no remote exfiltration channel.
  */
 const CSP_META = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; base-uri 'none'; frame-src 'none';">`;
+
+/**
+ * Vendored UI libraries for the dock (xterm.js, CodeMirror + modes) are UMD
+ * builds copied into dist/renderer/vendor by scripts/copy-assets.mjs. They get
+ * inlined as plain tags: no bundler, no network, CSP stays remote-free.
+ * Missing files degrade the dock rather than breaking the chat window.
+ * (Newlines are built with fromCharCode so this file needs no escape layers.)
+ */
+let vendorCache: { js: string; css: string } | null = null;
+
+const VENDOR_JS = [
+  "xterm.js",
+  "addon-fit.js",
+  "codemirror.js",
+  "mode-javascript.js",
+  "mode-xml.js",
+  "mode-css.js",
+  "mode-markdown.js",
+  "mode-python.js",
+  "mode-shell.js",
+  "mode-yaml.js",
+  "mode-rust.js",
+  "mode-go.js",
+];
+const VENDOR_CSS = ["xterm.css", "codemirror.css"];
+
+function vendorAssets(): { js: string; css: string } {
+  if (vendorCache) return vendorCache;
+  const NL = String.fromCharCode(10);
+  const dir = join(__dirname, "..", "renderer", "vendor");
+  const read = (file: string): string => {
+    try {
+      return readFileSync(join(dir, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const wrap = (tag: string, src: string): string =>
+    "<" + tag + ">" + NL + src + NL + "</" + tag + ">";
+  const js = VENDOR_JS.map(read)
+    .filter((src) => src.length > 0)
+    .map((src) => wrap("script", src))
+    .join(NL);
+  const css = VENDOR_CSS.map(read)
+    .filter((src) => src.length > 0)
+    .map((src) => wrap("style", src))
+    .join(NL);
+  vendorCache = { js, css };
+  return vendorCache;
+}
 
 function resolveBgDataUrl(path?: string): string {
   if (!path || !isAbsolute(path)) return "";
@@ -117,6 +168,7 @@ const ICONS = {
   star: `<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/>`,
   copy: `<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>`,
   external: `<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M19 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>`,
+  terminal: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12 15h5"/>`,
 };
 
 const CHROME_CSS = `
@@ -388,6 +440,7 @@ function buildChromeHtml(): string {
     <div class="pi-tb-right">
       <div class="pi-tb-actions">
         <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)" aria-label="新建会话">${svgIcon(ICONS.plus)}</button>
+        <button class="pi-icon-btn" id="pi-dock-toggle" title="终端 / 文件 / 变更 (Ctrl+&#96;)" aria-label="打开终端面板">${svgIcon(ICONS.terminal)}</button>
         <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)" aria-label="会话历史">${svgIcon(ICONS.history)}</button>
         <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)" aria-label="搜索会话">${svgIcon(ICONS.search)}</button>
         <button class="pi-icon-btn" id="pi-tb-refresh" title="重新加载会话" aria-label="重新加载会话">${svgIcon(ICONS.refresh)}</button>
@@ -423,7 +476,9 @@ ${SIDEBAR_HTML}
     </aside>
 ${STATS_HTML}
 ${PALETTE_HTML}
-    <div id="pi-main"></div>
+    <div id="pi-main">
+${DOCK_HTML}
+    </div>
   </div>
 </div>
 `;
@@ -702,6 +757,8 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
       CHROME_CSS,
       STATS_CSS,
       PALETTE_CSS,
+      DOCK_CSS,
+      vendorAssets().css,
       SHIM_SCRIPT,
       configScript,
     );
@@ -715,6 +772,8 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
         CHROME_CSS +
         STATS_CSS +
         PALETTE_CSS +
+        DOCK_CSS +
+        vendorAssets().css +
         SHIM_SCRIPT +
         configScript +
         html.slice(bodyIdx);
@@ -772,6 +831,8 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
         TOKENS_SCRIPT,
         STATS_SCRIPT,
         PALETTE_SCRIPT,
+        vendorAssets().js,
+        DOCK_SCRIPT,
       );
       break;
     }

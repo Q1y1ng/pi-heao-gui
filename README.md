@@ -2,7 +2,10 @@
 
 > **V0.1** · made by HEAOZIE
 
-独立的 Pi coding agent 桌面客户端 — 从 [Pi Agent Studio](https://github.com/JohnnyZ93/pi-agent-studio) VS Code 插件中剥离出来的 Electron 壳，**不再需要 VS Code**。
+**对话体验**：从 [Pi Agent Studio](https://github.com/JohnnyZ93/pi-agent-studio)（VS Code 扩展，MIT）**原样剥离**的聊天 UI —— vendored、字节级校验、零改动。
+**应用层**：独立 Electron 外壳，重新实现原本由 VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / 设置界面，并在其上提供原版没有的增强。
+
+> 保真度实测见 [docs/FIDELITY.md](docs/FIDELITY.md)：上游聊天层保留 **143/253** 个符号；`npm run check:upstream` 在 CI 中断言 `vendor/upstream/` 仍与 pinned tag **字节一致**。
 
 MIT License
 
@@ -11,13 +14,20 @@ MIT License
 - 流式聊天（复用上游 `pi-chat` UI）
 - 模型切换 / thinking level
 - fork / revert
-- 会话列表侧栏（新建 / 切换 / 重命名 / 置顶 / 搜索 / 右键菜单 / 拖拽文件）
-- 多窗口：一个会话一个独立 pi 进程
-- 设置面板（本地配置 + pi agent 配置）
-- 标题栏 token 指标（上下文占用 / 首 token / t/s / 花费）
-- 系统托盘 + 桌面通知 + 关闭最小化
+- **底部 Dock（三个 tab，对应原版的终端 / 编辑器桥 / 提交信息）**
+  - **终端**：真 PTY（node-pty + xterm.js），默认直接在 PTY 里跑 `pi` TUI —— 即上游的 native terminal TUI
+  - **文件**：工作区文件树 + CodeMirror 编辑器，选中内容一键「发送到对话」（对应上游 `addSelectionToChat`）
+  - **变更**：git 分支 / 暂存状态 + 生成 conventional-commit 提交信息（对应上游 `generateGitCommitMessage`）
+- 会话管理：重命名 / 删除 / 归档 / 恢复（归档走 `sessions/_archived/`，pi CLI 也不再列出）
+- 跨会话全文搜索（命令面板内可直接跳到命中消息）
+- **Token 遥测面板**（Ctrl+Shift+S）：首 token 延迟 / 解码 t/s / 缓存命中率 / 推理占比 / p50-p95 / 日月花费与预算
+- 命令面板 Ctrl+K（命令 / 会话 / 历史命中 / 斜杠指令）
+- 会话列表侧栏（新建 / 切换 / 重命名 / 置顶 / 搜索 / 右键菜单 / 键盘导航 / 拖拽文件）
+- 多窗口：一个会话一个独立 pi 进程，**每窗口独立工作目录**
+- 设置窗：主题（深/浅/跟随系统）+ 任意强调色 + 字号、预算、开机自启、**扩展安装/卸载**（`pi install/remove/list`）、**技能新建/编辑**、诊断面板、provider 就绪检查
+- 标题栏 token 指标 + 系统托盘（最近会话 / 未读角标）+ 桌面通知
 - bundled 扩展：todo、subagent、questionnaire、permission-gate、rewind-code、btw、mcp
-- `@file` 文件补全、文件对话框、系统默认程序打开文件
+- `@file` 文件补全、文件对话框、系统默认程序打开文件、**内置 diff 窗口**（读 rewind 快照作基线）
 - Mermaid / KaTeX 渲染
 
 ## 前置要求
@@ -77,8 +87,12 @@ Pi Heao GUI V0.1 (Electron Main, Node.js)
 Electron Renderer (Chromium)
   ├─ pi-chat UI (vendored, single-file HTML)
   ├─ acquireVsCodeApi shim → window.pi (preload bridge)
-  └─ 会话侧栏 (injected)
+  ├─ 会话侧栏 / 标题栏 / 统计面板 / 命令面板 (injected)
+  └─ Dock：终端(xterm.js) · 文件(CodeMirror) · 变更(git)
 ```
+
+终端与文件面板需要主进程侧的原生/IO 能力：`node-pty`（N-API 预构建，Electron 与 Node 共用同一二进制）、
+受工作区根目录约束的 `pi:fs-*`、以及 `pi:git-*`（提交信息用 `pi -p` 一次性生成，不污染会话）。
 
 上游源码 vendored 于 `vendor/upstream/`（MIT）—— 只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、`assets/`
 等运行时必需品，上游版本 pin（tag `v1.3.8` / commit `8c50c0a`）与刷新流程见
@@ -87,13 +101,16 @@ Electron Renderer (Chromium)
 ## 开发脚本
 
 ```bash
-npm run build        # 编译 main/preload -> dist/ + 拷贝 renderer
+npm run build        # 编译 main/preload -> dist/ + 拷贝 renderer + 内联 xterm/CodeMirror
 npm run typecheck    # tsc --noEmit
 npm run lint         # biome lint（biome.json）
 npm run lint -- --write  # 自动修可修项
-npm test             # 构建 + node:test 单元测试（23 例，零依赖）
+npm test             # 构建 + node:test 单元测试（76 例，零依赖）
 npm start            # 直接启动（dist 需已构建）
-npm run smoke        # 运行时烟测（开一个真窗口，约 20s）
+npm run smoke        # 运行时烟测（开一个真窗口，约 20s，22 项断言）
+npm run verify       # 真机 UI 功能断言（33 项：面板 / 命令面板 / 侧栏 / 终端 / 文件 / 变更 / diff）
+npm run measure-load # 会话切换耗时归因（pi 解析 vs 渲染）
+npm run check:upstream # 断言 vendor/upstream 仍与 pinned tag 字节一致（需网络）
 npm run icon         # 重新生成 build/icon.png + 多尺寸 build/icon.ico
 npm run dist         # 打包 portable exe
 ```
@@ -109,7 +126,10 @@ npm run build:mcp        # 重建 MCP 扩展 bundle（vendor/upstream/pi-mcp）
   Windows shim 解析器（含 `&` 注入回归）、会话列表缓存/失效、生成 HTML 的 CSP 与注入转义。
 - `npm run smoke` 启动真实主进程并断言安全边界与会话链路（preload 白名单、CSP eval/fetch 拦截、
   openPath 拦截、侧栏会话列表、水印与改名、shim 解析器），失败以非 0 退出。
-- CI：`.github/workflows/ci.yml` —— `lint + typecheck + test` 为阻断作业，`smoke` 为咨询作业（Windows runner）。
+- CI：`.github/workflows/ci.yml` —— `lint + typecheck + test` 为阻断作业，`upstream`（保真度字节校验）
+  为阻断作业，`smoke` 为咨询作业（Windows runner）。
+- `npm run check:upstream` 是「聊天 UI 就是原版」这个承诺的守卫：它在 CI 中稀疏克隆 pinned tag
+  并与 `vendor/upstream/` 全量比对，只有 `docs/UPSTREAM.md` 记录的差异被容忍。
 
 ### 已知环境陷阱
 
@@ -145,13 +165,18 @@ unset ELECTRON_RUN_AS_NODE       # bash / git-bash
 
 | 能力 | VS Code 插件 | 本应用 |
 | --- | --- | --- |
-| 聊天 UI | ✓ | ✓ |
-| 终端 TUI | ✓ | ✗ |
-| diagnostics / LSP | ✓ | ✗ |
-| SCM 提交信息 | ✓ | ✗ |
-| 会话侧栏 | ✓ | ✓ |
+| 聊天 UI | ✓ | ✓ **同一份上游代码** |
+| 终端 TUI | ✓（VS Code 集成终端） | ✓（node-pty + xterm.js，同样跑 `pi` TUI） |
+| 编辑器桥（选区/文件→对话） | ✓ | ✓（Dock 文件面板 + 发送选中） |
+| SCM 提交信息 | ✓ | ✓（Dock 变更面板） |
+| 会话侧栏 | ✓ | ✓（分组 / 归档 / 键盘导航为额外增强） |
 | 设置面板 | ✓ | ✓ |
-| 资源占用 | VS Code 全家桶 | 仅 Electron |
+| 诊断 / LSP / 符号 | ✓ | ✗（依赖 VS Code 语言服务，不可剥离） |
+| 更新日志查看 | ✓ | ✗（尚未移植） |
+| OAuth 登录流程 | ✓（`models/oauth-flow.ts`） | ✗（仅 provider 就绪检查；新登录请在 pi CLI 完成） |
+| 资源占用 | VS Code 全家桶（同机实测 15 进程 / 2.3 GB） | 4 进程外壳 + pi 子进程（≈ 795 MB） |
+
+完整审计（符号级保留率、为什么外壳必须重写、未移植清单）见 **[docs/FIDELITY.md](docs/FIDELITY.md)**。
 
 ## License
 

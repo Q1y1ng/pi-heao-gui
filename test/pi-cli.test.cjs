@@ -5,7 +5,11 @@
  */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parseInstalledPackages, parseAuthStatus, isSafePackageSource } = require("../dist/main/pi-cli.js");
+const {
+  parseInstalledPackages,
+  parseAuthStatus,
+  isSafePackageSource,
+} = require("../dist/main/pi-cli.js");
 
 const REAL_LIST = `User packages:
   npm:pi-opencode-go-cache
@@ -24,7 +28,12 @@ test("parses user and project packages with their install paths", () => {
   assert.equal(pkgs.length, 4);
   assert.deepEqual(
     pkgs.map((p) => p.source),
-    ["npm:pi-opencode-go-cache", "npm:@narumitw/pi-statusline", "npm:pi-mcp-adapter", "npm:local-helper"],
+    [
+      "npm:pi-opencode-go-cache",
+      "npm:@narumitw/pi-statusline",
+      "npm:pi-mcp-adapter",
+      "npm:local-helper",
+    ],
   );
   assert.equal(pkgs[0].scope, "user");
   assert.equal(pkgs[3].scope, "project");
@@ -47,7 +56,9 @@ test("tolerates CRLF, blank lines, notices and an empty list", () => {
 test("parses the auth check JSON line", () => {
   const ready = parseAuthStatus('{"status":"ready","provider":"google"}');
   assert.deepEqual(ready, { provider: "google", status: "ready", reason: undefined });
-  const notReady = parseAuthStatus('{"status":"not_ready","provider":"google","reason":"credentials_not_configured"}');
+  const notReady = parseAuthStatus(
+    '{"status":"not_ready","provider":"google","reason":"credentials_not_configured"}',
+  );
   assert.equal(notReady.status, "not_ready");
   assert.equal(notReady.reason, "credentials_not_configured");
   assert.equal(parseAuthStatus("no json here"), null);

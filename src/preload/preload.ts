@@ -76,6 +76,15 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:show-diff",
   "pi:diagnostics",
   "pi:set-theme",
+ "pi:term-open",
+ "pi:term-input",
+ "pi:term-resize",
+ "pi:term-close",
+ "pi:fs-tree",
+ "pi:fs-read",
+ "pi:fs-write",
+ "pi:git-info",
+ "pi:git-commit-message",
 ]);
 
 // Main -> renderer channels that should be forwarded as MessageEvents
@@ -111,6 +120,8 @@ const forwardChannels = [
   "pi:mcp-status",
   "pi:theme",
   "pi:search-progress",
+  "pi:term-data",
+  "pi:term-exit",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;
@@ -149,6 +160,17 @@ contextBridge.exposeInMainWorld("pi", {
   },
   onMessage(fn: (msg: unknown) => void) {
     messageListener = fn;
+  },
+  /**
+   * Terminal stream, kept on its own channel: pi-chat owns the single
+   * onMessage listener, so the dock cannot share it. This extra registration is
+   * additive and invisible to upstream code.
+   */
+  onTermData(fn: (msg: { data?: string }) => void) {
+    ipcRenderer.on("pi:term-data", (_e, data) => fn(data));
+  },
+  onTermExit(fn: (msg: { code?: number }) => void) {
+    ipcRenderer.on("pi:term-exit", (_e, data) => fn(data));
   },
   invoke(channel: string, ...args: unknown[]): Promise<unknown> {
     if (!INVOKE_ALLOWED.has(channel)) {

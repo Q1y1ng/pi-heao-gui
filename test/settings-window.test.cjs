@@ -81,7 +81,7 @@ test("extension packages and skills are manageable from the settings window", ()
   for (const id of ["pkg-source", "btn-pkg-install", "btn-pkg-refresh", "pkg-status"]) {
     assert.ok(html.includes(`id="${id}"`), `missing ${id}`);
   }
-  assert.ok(html.includes("id=\"btn-add-skill\""), "missing skill creation button");
+  assert.ok(html.includes('id="btn-add-skill"'), "missing skill creation button");
   for (const channel of [
     "pi:pkg-list",
     "pi:pkg-install",

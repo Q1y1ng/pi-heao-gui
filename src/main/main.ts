@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
-import { join, sep, basename, dirname } from "node:path";
+import { join, sep, basename, dirname, resolve, relative, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
   existsSync,
@@ -11,12 +11,14 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { readdir as readdirAsync, readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
+import { readdir as readdirAsync, readFile, writeFile, mkdir, rename, rm, stat } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
-import { createChatSession, type ChatSession, findPiBinary } from "./chat-session";
+import { createChatSession, type ChatSession, findPiBinary, buildExtensionArgs, buildEnv } from "./chat-session";
+import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
+import { generateCommitMessage, git } from "./git";
 import {
   isSessionFile as isSessionFilePath,
   renameSession,
@@ -292,7 +294,10 @@ async function createWindow(): Promise<void> {
   }
 
   mainWindow.on("closed", () => {
-    if (mainWindowId >= 0) windowSessions.delete(mainWindowId);
+    if (mainWindowId >= 0) {
+      windowSessions.delete(mainWindowId);
+      disposeTerminalFor(mainWindowId);
+    }
     mainWindowId = -1;
     mainWindow = null;
     if (chatSession) {
@@ -348,7 +353,9 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
           toggleFavorite: (provider, modelId) => {
             const key = `${provider}/${modelId}`;
             const current = config.favoriteModels || [];
-            const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+            const next = current.includes(key)
+              ? current.filter((k) => k !== key)
+              : [...current, key];
             saveConfig({ ...config, favoriteModels: next });
             return next;
           },
@@ -744,7 +751,9 @@ ipcMain.handle("pi:get-stats", async (e) => {
  */
 async function showDiffFor(
   sender: Electron.WebContents,
-  msg: { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string } | undefined,
+  msg:
+    | { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string }
+    | undefined,
 ): Promise<{ ok: boolean; error?: string }> {
   const session = sessionFor(sender);
   let sessionId = msg?.sessionId ? String(msg.sessionId) : "";
@@ -811,7 +820,10 @@ ipcMain.handle("pi:pkg-list", async () => {
 ipcMain.handle("pi:pkg-install", async (_e, source: string) => {
   const src = String(source || "").trim();
   if (!isSafePackageSource(src)) {
-    return { ok: false, error: "安装源无效。示例：npm:@scope/pkg、git:github.com/user/repo、https://…" };
+    return {
+      ok: false,
+      error: "安装源无效。示例：npm:@scope/pkg、git:github.com/user/repo、https://…",
+    };
   }
   const res = await runPiCli(piCliPath(), ["install", src], {
     timeoutMs: 300_000,
@@ -923,6 +935,204 @@ ipcMain.handle("pi:delete-skill", async (_e, name: string) => {
   } catch (e) {
     return { ok: false, error: errText(e) };
   }
+});
+
+// ─── IPC: PTY terminal (the portable half of upstream's terminal TUI) ──
+
+/** One terminal per window; the pi TUI is spawned exactly like the chat session. */
+const terminals = new Map<number, TerminalHandle>();
+
+function disposeTerminalFor(webContentsId: number): void {
+  const handle = terminals.get(webContentsId);
+  if (!handle) return;
+  handle.kill();
+  terminals.delete(webContentsId);
+}
+
+ipcMain.handle(
+  "pi:term-open",
+  async (
+    e,
+    msg: { kind?: string; cols?: number; rows?: number; sessionFile?: string } | undefined,
+  ) => {
+    const sender = e.sender;
+    disposeTerminalFor(sender.id);
+    // The terminal follows the window's pi session so `pi` resumes the same chat.
+    const session = sessionFor(sender);
+    const kind: TerminalKind = msg?.kind === "shell" ? "shell" : "pi";
+    const result = createTerminal({
+      kind,
+      cwd: config.workspaceRoot || homedir(),
+      piPath: findPiBinary(config.piPath || undefined),
+      extensionArgs: buildExtensionArgs(app.getAppPath(), config),
+      sessionFile: msg?.sessionFile || session?.sessionFile,
+      env: buildEnv(config, app.getAppPath()),
+      cols: Number(msg?.cols) || 80,
+      rows: Number(msg?.rows) || 24,
+      onData: (data) => {
+        if (!sender.isDestroyed()) sender.send("pi:term-data", { data });
+      },
+      onExit: (code) => {
+        terminals.delete(sender.id);
+        if (!sender.isDestroyed()) sender.send("pi:term-exit", { code });
+      },
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+    const handle = result.handle;
+    terminals.set(sender.id, handle);
+    return { ok: true, kind: handle.kind, shell: handle.shell, cwd: handle.cwd, pid: handle.pid };
+  },
+);
+
+ipcMain.handle("pi:term-input", (e, data: string) => {
+  terminals.get(e.sender.id)?.write(String(data ?? ""));
+  return { ok: true };
+});
+
+ipcMain.handle("pi:term-resize", (e, msg: { cols?: number; rows?: number }) => {
+  terminals.get(e.sender.id)?.resize(Number(msg?.cols) || 80, Number(msg?.rows) || 24);
+  return { ok: true };
+});
+
+ipcMain.handle("pi:term-close", (e) => {
+  disposeTerminalFor(e.sender.id);
+  return { ok: true };
+});
+
+// ─── IPC: workspace files (file panel / add-to-chat) ───────────────────
+
+/** Every file path from the renderer is resolved against the workspace root. */
+function workspaceRootDir(): string {
+  return config.workspaceRoot || homedir();
+}
+
+function safeWorkspacePath(relPath: string): string | null {
+  const root = workspaceRootDir();
+  const raw = String(relPath || ".");
+  if (isAbsolute(raw)) return null; // the panel works in relative paths only
+  const full = resolve(root, raw);
+  const within = relative(root, full);
+  if (within.startsWith("..") || isAbsolute(within)) return null;
+  return full;
+}
+
+const FS_SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  ".vscode",
+  ".idea",
+  "dist",
+  "dist-electron",
+  "build",
+  "__pycache__",
+  ".next",
+  ".cache",
+  ".venv",
+]);
+
+ipcMain.handle("pi:fs-tree", async (_e, relPath: string) => {
+  const root = String(relPath || ".");
+  const dir = safeWorkspacePath(root);
+  if (!dir) return { ok: false, error: "路径无效" };
+  try {
+    const entries = await readdirAsync(dir, { withFileTypes: true });
+    const items = entries
+      .filter((en) => !FS_SKIP_DIRS.has(en.name))
+      .map((en) => ({
+        name: en.name,
+        dir: en.isDirectory(),
+        path: root === "." ? en.name : `${root}/${en.name}`,
+      }))
+      .sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name) : a.dir ? -1 : 1))
+      .slice(0, 500);
+    return { ok: true, root: workspaceRootDir(), path: root, items };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+});
+
+ipcMain.handle("pi:fs-read", async (_e, relPath: string) => {
+  const full = safeWorkspacePath(relPath);
+  if (!full) return { ok: false, error: "路径无效" };
+  try {
+    const st = await stat(full);
+    if (st.size > 4 * 1024 * 1024) return { ok: false, error: "文件过大（上限 4 MB）" };
+    const content = await readFile(full, "utf8");
+    return { ok: true, content, path: String(relPath), size: st.size };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+});
+
+ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string }) => {
+  const full = safeWorkspacePath(String(msg?.path || ""));
+  if (!full) return { ok: false, error: "路径无效" };
+  const content = String(msg?.content ?? "");
+  if (content.length > 4 * 1024 * 1024) return { ok: false, error: "内容过大（上限 4 MB）" };
+  try {
+    await writeFile(full, content, "utf8");
+    return { ok: true, path: String(msg?.path || "") };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+});
+
+// ─── IPC: git (branch, diff, commit message) ─────────────────────────
+
+ipcMain.handle("pi:git-info", async () => {
+  const cwd = workspaceRootDir();
+  const inside = await git(["rev-parse", "--is-inside-work-tree"], cwd);
+  if (!inside.ok || !inside.stdout.trim().startsWith("true")) {
+    return { ok: true, repo: false };
+  }
+  const [branch, statusRaw, stagedNumstat, unstagedNumstat] = await Promise.all([
+    git(["rev-parse", "--abbrev-ref", "HEAD"], cwd),
+    git(["status", "--porcelain"], cwd),
+    git(["diff", "--cached", "--numstat"], cwd),
+    git(["diff", "--numstat"], cwd),
+  ]);
+  const parseNumstat = (raw: string): Array<{ path: string; added: number; removed: number }> =>
+    raw
+      .split("\n")
+      .map((l) => l.trim().split("\t"))
+      .filter((p) => p.length === 3)
+      .map((p) => ({
+        path: p[2],
+        added: p[0] === "-" ? 0 : Number(p[0]) || 0,
+        removed: p[1] === "-" ? 0 : Number(p[1]) || 0,
+      }));
+  return {
+    ok: true,
+    repo: true,
+    cwd,
+    branch: branch.ok ? branch.stdout.trim() : "",
+    changed: statusRaw.stdout.trim() ? statusRaw.stdout.trim().split("\n").length : 0,
+    staged: parseNumstat(stagedNumstat.stdout),
+    unstaged: parseNumstat(unstagedNumstat.stdout),
+  };
+});
+
+ipcMain.handle("pi:git-commit-message", async (_e, msg: { stagedOnly?: boolean; notes?: string }) => {
+  const cwd = workspaceRootDir();
+  const stagedOnly = msg?.stagedOnly !== false;
+  const diffArgs = stagedOnly
+    ? ["diff", "--cached"]
+    : ["diff", "HEAD"];
+  let diff = (await git(diffArgs, cwd, 60_000)).stdout;
+  if (!diff.trim()) {
+    // nothing staged (or no HEAD yet) — fall back to the working tree
+    diff = (await git(["diff"], cwd, 60_000)).stdout;
+  }
+  if (!diff.trim()) return { ok: false, error: "没有可用的改动（请先 git add 或修改文件）" };
+
+  return generateCommitMessage({
+    piPath: piCliPath(),
+    cwd,
+    diff,
+    currentInput: String(msg?.notes || ""),
+    language: config.commitLanguage || "English",
+    systemPrompt: config.commitMessagePrompt || "",
+  });
 });
 
 // ─── IPC: diagnostics ────────────────────────────────────────────────
@@ -1450,6 +1660,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
+  for (const id of [...terminals.keys()]) disposeTerminalFor(id);
   destroyTray();
   cleanupTempFiles();
 });

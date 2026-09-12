@@ -14,7 +14,8 @@ import { log, errText } from "./log";
 export const DEFAULT_COMMIT_SYSTEM_PROMPT =
   "You are a helpful assistant that generates informative git commit messages based on git diffs output. Skip preamble and remove all backticks surrounding the commit message. Based on the provided git diff, generate a conventional format commit message.\n\n```\n<type>[optional scope]: <description>\n\n[optional body list]\n```";
 
-export const DEFAULT_COMMIT_USER_PROMPT = "Notes from developer (ignore if not relevant): {{USER_CURRENT_INPUT}}";
+export const DEFAULT_COMMIT_USER_PROMPT =
+  "Notes from developer (ignore if not relevant): {{USER_CURRENT_INPUT}}";
 
 const TRUNCATED_DIFF_SIZE = 64 * 1024;
 export const FILE_TRUNCATED_MARK = "\n[... file diff truncated ...]";
@@ -49,7 +50,9 @@ export function truncateDiffByFile(diff: string, maxSize: number): string {
   const budget = Math.max(1000, maxSize - preamble.length);
   const perFile = Math.max(500, Math.floor(budget / chunks.length));
   const kept = chunks.map((chunk) =>
-    chunk.length <= perFile ? chunk : chunk.slice(0, Math.max(0, perFile - FILE_TRUNCATED_MARK.length)) + FILE_TRUNCATED_MARK,
+    chunk.length <= perFile
+      ? chunk
+      : chunk.slice(0, Math.max(0, perFile - FILE_TRUNCATED_MARK.length)) + FILE_TRUNCATED_MARK,
   );
   return preamble + kept.join("");
 }
@@ -70,7 +73,10 @@ export function buildCommitPrompt(input: CommitPromptInput): { system: string; u
   const notes = (input.currentInput || "").trim();
   if (notes) parts.push(DEFAULT_COMMIT_USER_PROMPT.replace("{{USER_CURRENT_INPUT}}", notes));
   parts.push(truncateDiffByFile(input.diff, TRUNCATED_DIFF_SIZE));
-  return { system: `${system}\n\nGenerate commit message in ${language}.`, user: parts.join("\n\n") };
+  return {
+    system: `${system}\n\nGenerate commit message in ${language}.`,
+    user: parts.join("\n\n"),
+  };
 }
 
 /** Strip code fences / stray backticks the model sometimes adds. */
@@ -108,14 +114,7 @@ export async function generateCommitMessage(opts: {
     language: opts.language,
     systemPrompt: opts.systemPrompt,
   });
-  const args = [
-    "-p",
-    prompt.user,
-    "--system-prompt",
-    prompt.system,
-    "--no-session",
-    "--no-tools",
-  ];
+  const args = ["-p", prompt.user, "--system-prompt", prompt.system, "--no-session", "--no-tools"];
   const res = await runPiCli(opts.piPath, args, {
     cwd: opts.cwd,
     timeoutMs: opts.timeoutMs ?? 180_000,

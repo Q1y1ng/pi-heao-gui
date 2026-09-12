@@ -122,9 +122,7 @@ function shellCommand(): { command: string; args: string[] } {
 }
 
 /** Spawn a terminal; returns null when node-pty is missing (feature degrades). */
-export type TerminalResult =
-  | { ok: true; handle: TerminalHandle }
-  | { ok: false; error: string };
+export type TerminalResult = { ok: true; handle: TerminalHandle } | { ok: false; error: string };
 
 /** Spawn a terminal; a failure reports WHY (missing native module vs spawn). */
 export function createTerminal(opts: TerminalOptions): TerminalResult {

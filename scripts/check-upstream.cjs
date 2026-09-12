@@ -93,9 +93,7 @@ function main() {
     const out = { onlyUpstream: [], missing: [], differing: [] };
     for (const p of SPARSE_PATHS) compareTrees(tmp, vendor, p, out);
 
-    const unexpected = [...out.onlyUpstream, ...out.differing].filter(
-      (p) => !ALLOWED.includes(p),
-    );
+    const unexpected = [...out.onlyUpstream, ...out.differing].filter((p) => !ALLOWED.includes(p));
 
     if (out.missing.length) {
       console.log(`check:upstream — vendored paths missing vs upstream: ${out.missing.join(", ")}`);

@@ -94,7 +94,10 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     showArchived: bool(raw.showArchived, DEFAULT_CONFIG.showArchived),
     recentWorkspaces: strArray(raw.recentWorkspaces).slice(0, 8),
     commitLanguage: str(raw.commitLanguage, DEFAULT_CONFIG.commitLanguage).slice(0, 40),
-    commitMessagePrompt: str(raw.commitMessagePrompt, DEFAULT_CONFIG.commitMessagePrompt).slice(0, 8000),
+    commitMessagePrompt: str(raw.commitMessagePrompt, DEFAULT_CONFIG.commitMessagePrompt).slice(
+      0,
+      8000,
+    ),
   };
 }
 

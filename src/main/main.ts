@@ -11,12 +11,26 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { readdir as readdirAsync, readFile, writeFile, mkdir, rename, rm, stat } from "node:fs/promises";
+import {
+  readdir as readdirAsync,
+  readFile,
+  writeFile,
+  mkdir,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
-import { createChatSession, type ChatSession, findPiBinary, buildExtensionArgs, buildEnv } from "./chat-session";
+import {
+  createChatSession,
+  type ChatSession,
+  findPiBinary,
+  buildExtensionArgs,
+  buildEnv,
+} from "./chat-session";
 import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
 import { generateCommitMessage, git } from "./git";
 import {
@@ -1112,28 +1126,29 @@ ipcMain.handle("pi:git-info", async () => {
   };
 });
 
-ipcMain.handle("pi:git-commit-message", async (_e, msg: { stagedOnly?: boolean; notes?: string }) => {
-  const cwd = workspaceRootDir();
-  const stagedOnly = msg?.stagedOnly !== false;
-  const diffArgs = stagedOnly
-    ? ["diff", "--cached"]
-    : ["diff", "HEAD"];
-  let diff = (await git(diffArgs, cwd, 60_000)).stdout;
-  if (!diff.trim()) {
-    // nothing staged (or no HEAD yet) — fall back to the working tree
-    diff = (await git(["diff"], cwd, 60_000)).stdout;
-  }
-  if (!diff.trim()) return { ok: false, error: "没有可用的改动（请先 git add 或修改文件）" };
+ipcMain.handle(
+  "pi:git-commit-message",
+  async (_e, msg: { stagedOnly?: boolean; notes?: string }) => {
+    const cwd = workspaceRootDir();
+    const stagedOnly = msg?.stagedOnly !== false;
+    const diffArgs = stagedOnly ? ["diff", "--cached"] : ["diff", "HEAD"];
+    let diff = (await git(diffArgs, cwd, 60_000)).stdout;
+    if (!diff.trim()) {
+      // nothing staged (or no HEAD yet) — fall back to the working tree
+      diff = (await git(["diff"], cwd, 60_000)).stdout;
+    }
+    if (!diff.trim()) return { ok: false, error: "没有可用的改动（请先 git add 或修改文件）" };
 
-  return generateCommitMessage({
-    piPath: piCliPath(),
-    cwd,
-    diff,
-    currentInput: String(msg?.notes || ""),
-    language: config.commitLanguage || "English",
-    systemPrompt: config.commitMessagePrompt || "",
-  });
-});
+    return generateCommitMessage({
+      piPath: piCliPath(),
+      cwd,
+      diff,
+      currentInput: String(msg?.notes || ""),
+      language: config.commitLanguage || "English",
+      systemPrompt: config.commitMessagePrompt || "",
+    });
+  },
+);
 
 // ─── IPC: diagnostics ────────────────────────────────────────────────
 

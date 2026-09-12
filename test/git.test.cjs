@@ -53,7 +53,11 @@ test("commit prompt mirrors upstream: optional notes plus diff", () => {
 
 test("developer notes are only included when supplied", () => {
   const diff = fileDiff("a.ts", 3);
-  const withNotes = buildCommitPrompt({ diff, currentInput: "  fix the parser  ", language: "简体中文" });
+  const withNotes = buildCommitPrompt({
+    diff,
+    currentInput: "  fix the parser  ",
+    language: "简体中文",
+  });
   assert.match(withNotes.user, /Notes from developer \(ignore if not relevant\): fix the parser/);
   assert.ok(withNotes.user.endsWith(diff));
   assert.match(withNotes.system, /生成|Generate commit message in 简体中文/);

@@ -19,11 +19,7 @@ function makePackageTree({ withChangelog = true, name = PI_PACKAGE_NAME, version
   // <root>/lib/node_modules/<pkg>/dist/bundle/cli.js
   const pkgDir = path.join(root, "lib", "node_modules", ...name.split("/"));
   fs.mkdirSync(path.join(pkgDir, "dist", "bundle"), { recursive: true });
-  fs.writeFileSync(
-    path.join(pkgDir, "package.json"),
-    JSON.stringify({ name, version }),
-    "utf8",
-  );
+  fs.writeFileSync(path.join(pkgDir, "package.json"), JSON.stringify({ name, version }), "utf8");
   const cli = path.join(pkgDir, "dist", "bundle", "cli.js");
   fs.writeFileSync(cli, "// cli", "utf8");
   if (withChangelog) {
@@ -44,7 +40,10 @@ test("finds the package root by walking up from the binary", async () => {
 
 test("stops at a package.json with a different name", async () => {
   const { root } = makePackageTree({ name: "some-other-package" });
-  assert.equal(await findPackageRoot(path.join(root, "lib", "node_modules", "some-other-package")), null);
+  assert.equal(
+    await findPackageRoot(path.join(root, "lib", "node_modules", "some-other-package")),
+    null,
+  );
 });
 
 test("reads the changelog next to the resolved binary", async () => {

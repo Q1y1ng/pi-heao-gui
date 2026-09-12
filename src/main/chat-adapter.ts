@@ -1,6 +1,7 @@
 /**
  * Electron adapter for pi-chat webview.
  * Reads the built single-file HTML, injects acquireVsCodeApi shim + config globals.
+ * Also injects a full-window shell: custom title bar + sidebar + main content area.
  */
 import { readFileSync, existsSync, statSync } from "fs";
 import { join, extname, isAbsolute } from "path";
@@ -48,7 +49,6 @@ function resolveBgDataUrl(path?: string): string {
 const SHIM_SCRIPT = `
 <script>
 (function() {
-  // acquireVsCodeApi shim backed by window.pi (injected by preload)
   var _state = null;
   window.acquireVsCodeApi = function() {
     return {
@@ -63,10 +63,6 @@ const SHIM_SCRIPT = `
       setState: function(s) { _state = s; }
     };
   };
-
-  // Bridge main->renderer messages as MessageEvents
-  // pi-chat listens via: window.addEventListener('message', handler)
-  // Our preload delivers via: window.pi.onMessage(fn)
   function setupBridge() {
     if (window.pi && window.pi.onMessage) {
       window.pi.onMessage(function(data) {
@@ -74,7 +70,6 @@ const SHIM_SCRIPT = `
       });
       console.log("[pi-shim] bridge ready");
     } else {
-      // Retry shortly — preload may not have run yet
       setTimeout(setupBridge, 50);
     }
   }
@@ -83,19 +78,378 @@ const SHIM_SCRIPT = `
 </script>
 `;
 
-export function buildChatHtml(appPath: string, config: StandaloneConfig): string | null {
-  const chatHtmlPath = join(appPath, "vendor", "upstream", "pi-chat", "dist", "index.html");
-  if (!existsSync(chatHtmlPath)) return null;
+/** Inline SVG icons — no CDN */
+function svgIcon(paths: string, size = 14): string {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+}
 
-  let html = readFileSync(chatHtmlPath, "utf8");
+const ICONS = {
+  plus: `<path d="M12 5v14M5 12h14"/>`,
+  search: `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>`,
+  download: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>`,
+  gear: `<circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>`,
+  history: `<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>`,
+};
+
+const CHROME_CSS = `
+<style id="pi-standalone-chrome">
+${"" /* THEME_CSS is injected separately in head */}
+html, body {
+  overflow: hidden !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #1e1e1e !important;
+}
+
+#pi-shell {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  overflow: hidden !important;
+  background: #1e1e1e;
+}
+
+/* ── Title bar: 32px, full width ── */
+.pi-titlebar {
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  background: #181818;
+  border-bottom: 1px solid #2a2a2a;
+  -webkit-app-region: drag;
+  user-select: none;
+  z-index: 1000;
+  position: relative;
+}
+.pi-tb-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  width: auto;
+}
+.pi-tb-logo {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #0e639c 0%, #1177bb 100%);
+  flex-shrink: 0;
+}
+.pi-tb-app {
+  font-size: 12px;
+  font-weight: 500;
+  color: #cccccc;
+  letter-spacing: 0.15px;
+  white-space: nowrap;
+}
+.pi-tb-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 12px;
+}
+.pi-tb-title {
+  font-size: 11.5px;
+  color: #8a8a8a;
+  max-width: 60%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+.pi-tb-right {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.pi-tb-actions {
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  gap: 0;
+}
+.pi-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #9a9a9a;
+  cursor: pointer;
+  padding: 0;
+  -webkit-app-region: no-drag;
+  transition: color 0.1s, background 0.1s;
+}
+.pi-icon-btn:hover {
+  color: #e4e4e4;
+  background: rgba(255,255,255,0.06);
+}
+.pi-icon-btn:active {
+  background: rgba(255,255,255,0.1);
+}
+.pi-icon-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* ── Body: sidebar + main ── */
+.pi-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#pi-sidebar {
+  width: 248px;
+  min-width: 200px;
+  max-width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #2a2a2a;
+  background: #181818;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#pi-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1e1e1e;
+  position: relative;
+}
+
+/* Hide all original body children; they get re-parented into #pi-main */
+body > *:not(#pi-shell):not(script):not(style):not(link) {
+  display: none !important;
+}
+/* After re-parent, show them again inside #pi-main */
+#pi-main > * {
+  display: revert !important;
+}
+#pi-main > * {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Sidebar header refinement */
+#pi-sidebar .sidebar-header {
+  padding: 10px 12px 8px !important;
+}
+#pi-sidebar .sidebar-header h3 {
+  font-size: 12.5px !important;
+  margin: 0 !important;
+  color: #cccccc !important;
+  font-weight: 500 !important;
+}
+#pi-sidebar .sidebar-collapse-btn {
+  width: 22px !important;
+  height: 22px !important;
+}
+</style>
+`;
+
+function buildChromeHtml(): string {
+  return `
+<div id="pi-shell">
+  <header class="pi-titlebar" id="pi-titlebar">
+    <div class="pi-tb-left">
+      <div class="pi-tb-logo" aria-hidden="true"></div>
+      <span class="pi-tb-app">Pi Standalone</span>
+    </div>
+    <div class="pi-tb-center">
+      <span class="pi-tb-title" id="pi-title-text"></span>
+    </div>
+    <div class="pi-tb-right">
+      <div class="pi-tb-actions">
+        <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)">${svgIcon(ICONS.plus)}</button>
+        <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)">${svgIcon(ICONS.history)}</button>
+        <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)">${svgIcon(ICONS.search)}</button>
+        <button class="pi-icon-btn" id="pi-tb-export" title="导出当前会话">${svgIcon(ICONS.download)}</button>
+        <button class="pi-icon-btn" id="pi-tb-settings" title="设置 (Ctrl+,)">${svgIcon(ICONS.gear)}</button>
+      </div>
+    </div>
+  </header>
+  <div class="pi-body">
+    <div id="pi-sidebar-collapsed" style="
+      display:none;flex-direction:column;align-items:center;padding-top:8px;gap:4px;
+      width:40px;flex-shrink:0;background:#181818;border-right:1px solid #2a2a2a;
+    ">
+      <button id="pi-sidebar-expand" title="展开侧栏" style="
+        background:none;border:none;color:#8a8a8a;cursor:pointer;padding:6px;
+        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+      ">»</button>
+      <div style="width:20px;height:1px;background:#2a2a2a;margin:2px 0;"></div>
+      <button id="pi-new-session-mini" title="新建会话" style="
+        background:none;border:none;color:#8a8a8a;cursor:pointer;font-size:16px;padding:6px;
+        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+      ">+</button>
+      <div style="flex:1;"></div>
+      <button id="pi-open-settings-mini" title="设置" style="
+        background:none;border:none;color:#8a8a8a;cursor:pointer;font-size:14px;padding:6px;
+        border-radius:4px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+        margin-bottom:8px;
+      ">⚙</button>
+    </div>
+    <aside id="pi-sidebar">
+${SIDEBAR_HTML}
+    </aside>
+    <div id="pi-main"></div>
+  </div>
+</div>
+`;
+}
+
+const REPARENT_SCRIPT = `
+<script>
+(function() {
+  function wrap() {
+    var shell = document.getElementById('pi-shell');
+    var main = document.getElementById('pi-main');
+    if (!shell || !main) return;
+    // Move original body children (except shell, scripts, styles, links) into #pi-main
+    var nodes = Array.prototype.slice.call(document.body.childNodes);
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n === shell) continue;
+      if (n.nodeType === 1) {
+        var tag = n.tagName;
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK') continue;
+      }
+      if (n.nodeType === 3 && !n.textContent.trim()) continue;
+      main.appendChild(n);
+    }
+    // Set title from workspace path
+    var titleEl = document.getElementById('pi-title-text');
+    var cfg = window.__PI_STANDALONE_CONFIG__;
+    if (titleEl && cfg) {
+      var ws = cfg.workspaceRoot || '';
+      if (ws) {
+        var parts = ws.split(/[\\\\\\/]/).filter(Boolean);
+        var name = parts[parts.length - 1] || ws;
+        titleEl.textContent = name;
+        document.title = name + ' — Pi Standalone';
+      } else {
+        titleEl.textContent = '';
+        document.title = 'Pi Standalone';
+      }
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wrap);
+  } else {
+    wrap();
+  }
+})();
+</script>
+`;
+
+const TITLEBAR_SCRIPT = `
+<script>
+(function() {
+  function wire() {
+    function $(id) { return document.getElementById(id); }
+    var btnNew = $('pi-tb-new');
+    var btnHistory = $('pi-tb-history');
+    var btnSearch = $('pi-tb-search');
+    var btnExport = $('pi-tb-export');
+    var btnSettings = $('pi-tb-settings');
+    if (btnNew) btnNew.onclick = function() {
+      if (window.pi) window.pi.postMessage({ type: 'newSession' });
+    };
+    if (btnHistory) btnHistory.onclick = function() {
+      var list = $('pi-session-list');
+      if (list) {
+        var first = list.querySelector('.pi-session-item');
+        if (first) first.click();
+      }
+    };
+    if (btnSearch) btnSearch.onclick = function() {
+      var q = $('pi-session-filter');
+      if (q) { q.focus(); q.select(); }
+    };
+    if (btnExport) btnExport.onclick = function() {
+      if (!window.pi) return;
+      window.pi.invoke('pi:export-conversation').then(function(path) {
+        if (path) {
+          var toast = document.getElementById('toast');
+          if (toast) {
+            toast.textContent = '已导出到: ' + path;
+            toast.className = 'toast show success';
+            setTimeout(function() { toast.className = 'toast'; }, 3000);
+          }
+        }
+      });
+    };
+    if (btnSettings) btnSettings.onclick = function() {
+      if (window.pi) window.pi.invoke('pi:open-settings');
+    };
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+        var k = e.key.toLowerCase();
+        if (k === 'n') { e.preventDefault(); if (btnNew) btnNew.click(); }
+        if (k === 'f') { e.preventDefault(); if (btnSearch) btnSearch.click(); }
+        if (k === 'h') { e.preventDefault(); if (btnHistory) btnHistory.click(); }
+        if (k === ',') { e.preventDefault(); if (btnSettings) btnSettings.click(); }
+        if (k === 'b') {
+          e.preventDefault();
+          var t = $('pi-sidebar-toggle');
+          var x = $('pi-sidebar-expand');
+          var sb = $('pi-sidebar');
+          if (sb && sb.style.display === 'none') { if (x) x.click(); }
+          else if (t) t.click();
+        }
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
+</script>
+`;
+
+export function buildChatHtml(appPath: string, config: StandaloneConfig): string | null {
+  const candidates = [
+    join(appPath, "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
+    join(appPath, "vendor", "upstream", "pi-chat", "dist", "index.html"),
+    join(appPath, "app.asar", "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
+    join(appPath, "app.asar", "vendor", "upstream", "pi-chat", "dist", "index.html"),
+  ];
+  let src: string | null = null;
+  for (const p of candidates) {
+    if (existsSync(p)) { src = p; break; }
+  }
+  if (!src) return null;
+
+  let html = readFileSync(src, "utf8");
 
   // Replace placeholders
   const home = homedir();
-  const sep = process.platform === "win32" ? "\\" : "/";
+  const sepChar = process.platform === "win32" ? "\\" : "/";
   const bgDataUrl = resolveBgDataUrl(config.chatBackgroundImage);
 
   html = html.split("PI_HOME_PLACEHOLDER").join(escJs(home));
-  html = html.split("PI_SEP_PLACEHOLDER").join(escJs(sep));
+  html = html.split("PI_SEP_PLACEHOLDER").join(escJs(sepChar));
   html = html.split("PI_WORKSPACE_PLACEHOLDER").join(escJs(config.workspaceRoot || ""));
   html = html.split("PI_FONTSIZE_PLACEHOLDER").join(String(config.chatFontSize || 13));
   html = html.split("PI_LANG_PLACEHOLDER").join(escJs(config.language === "auto" ? "zh-cn" : config.language));
@@ -104,50 +458,56 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   html = html.split("PI_BG_OPACITY_PLACEHOLDER").join(String(config.chatBackgroundOpacity ?? 1));
   html = html.split("PI_SENDSHORTCUT_PLACEHOLDER").join(escJs(config.chatSendShortcut || "enter"));
 
-  // Inject shim before the real </head> tag.
-  // The vite singlefile build has </head> inside JS strings, so we must find
-  // the structural one: a line that is exactly "  </head>" (with whitespace).
+  const configScript = `<script>window.__PI_STANDALONE_CONFIG__ = ${JSON.stringify(config)};</script>`;
+
+  // Inject THEME_CSS + SHIM into <head>
   const lines = html.split("\n");
   let headLineIdx = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
-    const trimmed = lines[i].trim();
-    if (trimmed === "</head>") {
+    if (lines[i].trim() === "</head>") {
       headLineIdx = i;
       break;
     }
   }
   if (headLineIdx !== -1) {
-    lines.splice(headLineIdx, 0, THEME_CSS, SHIM_SCRIPT);
-    html = lines.join("\n");
+    lines.splice(headLineIdx, 0, THEME_CSS, CHROME_CSS, SHIM_SCRIPT, configScript);
   } else {
+    // fallback: inject before last </body>
     const bodyIdx = html.lastIndexOf("</body>");
     if (bodyIdx !== -1) {
-      html = html.slice(0, bodyIdx) + THEME_CSS + SHIM_SCRIPT + html.slice(bodyIdx);
+      html = html.slice(0, bodyIdx) + THEME_CSS + CHROME_CSS + SHIM_SCRIPT + configScript + html.slice(bodyIdx);
     }
   }
+  html = lines.join("\n");
 
-  // Inject sidebar HTML right after structural <body> and script before structural </body>
-  // Use line-level detection to avoid JS string false positives
+  // Inject shell right after structural <body>
   const allLines = html.split("\n");
   let bodyOpenIdx = -1;
   for (let i = 0; i < allLines.length; i++) {
     const t = allLines[i].trim();
-    if (t === "<body>" || t === "<body>" || /^<body\s[^>]*>$/.test(t)) {
+    if (t === "<body>" || /^<body\s[^>]*>$/.test(t)) {
       bodyOpenIdx = i;
       break;
     }
   }
+  const chromeHtml = buildChromeHtml();
   if (bodyOpenIdx !== -1) {
-    allLines.splice(bodyOpenIdx + 1, 0, SIDEBAR_HTML);
+    allLines.splice(bodyOpenIdx + 1, 0, chromeHtml);
+  } else {
+    // fallback: prepend after first <body...> occurrence via regex
+    html = allLines.join("\n");
+    html = html.replace(/<body([^>]*)>/i, `<body$1>\n${chromeHtml}`);
+    allLines.length = 0;
+    allLines.push(...html.split("\n"));
   }
-  // Find structural </body> (search from end)
+
+  // Inject re-parent + sidebar script before structural </body>
   for (let i = allLines.length - 1; i >= 0; i--) {
     if (allLines[i].trim() === "</body>") {
-      allLines.splice(i, 0, SIDEBAR_SCRIPT);
+      allLines.splice(i, 0, REPARENT_SCRIPT, SIDEBAR_SCRIPT, TITLEBAR_SCRIPT);
       break;
     }
   }
-  html = allLines.join("\n");
 
-  return html;
+  return allLines.join("\n");
 }

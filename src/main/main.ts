@@ -89,7 +89,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#1e1e1e",
+      color: "#181818",
       symbolColor: "#cccccc",
       height: 32,
     },

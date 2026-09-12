@@ -200,6 +200,38 @@ app.whenReady().then(async () => {
       JSON.stringify(fontToggle),
     );
 
+    // ── 5. Rewind diff must render in our own window ───────────────────
+    const target = path.join(__dirname, "..", "package.json");
+    await win.webContents.executeJavaScript(
+      `window.pi.postMessage({ type: 'rewindDiff', absPath: ${JSON.stringify(target)}, baselineHash: null, sessionId: '', basename: 'package.json' })`,
+      true,
+    );
+    let diffWin = null;
+    try {
+      diffWin = await waitFor(
+        () => BrowserWindow.getAllWindows().find((w) => w.id !== win.id && !w.isDestroyed()) || null,
+        20_000,
+        "diff window",
+      );
+    } catch {
+      diffWin = null;
+    }
+    check("rewindDiff opens a window instead of the OS default app", !!diffWin);
+    if (diffWin) {
+      await waitFor(() => !diffWin.webContents.isLoading(), 15_000, "diff load");
+      const rows = await diffWin.webContents.executeJavaScript(
+        "document.querySelectorAll('.row.add, .row.del').length",
+        true,
+      );
+      const title = await diffWin.webContents.executeJavaScript(
+        "(document.querySelector('.title') || {}).textContent || ''",
+        true,
+      );
+      check("diff window names the file", /package\.json/.test(String(title)), String(title));
+      check("diff window renders changed lines", rows > 10, `rows=${rows}`);
+      diffWin.destroy();
+    }
+
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);
   } catch (e) {

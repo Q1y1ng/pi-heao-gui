@@ -738,29 +738,37 @@ ipcMain.handle("pi:get-stats", async (e) => {
   return session.statsSnapshot();
 });
 
+/**
+ * Shared diff entry point. pi-chat's rewind widget sends absPath + baselineHash
+ * + sessionId, so the baseline snapshot can be resolved without guessing.
+ */
+async function showDiffFor(
+  sender: Electron.WebContents,
+  msg: { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string } | undefined,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = sessionFor(sender);
+  let sessionId = msg?.sessionId ? String(msg.sessionId) : "";
+  if (!sessionId && session) {
+    try {
+      sessionId = (await session.rpc.getState()).sessionId || "";
+    } catch {
+      // fall through: the diff still renders without a snapshot baseline
+    }
+  }
+  return openDiffWindow({
+    absPath: String(msg?.absPath || ""),
+    baselineHash: msg?.baselineHash ?? null,
+    sessionId,
+    basename: msg?.basename,
+  });
+}
+
 ipcMain.handle(
   "pi:show-diff",
   async (
     e,
     msg: { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string },
-  ) => {
-    const session = sessionFor(e.sender);
-    let sessionId = msg?.sessionId ? String(msg.sessionId) : "";
-    if (!sessionId && session) {
-      try {
-        const st = await session.rpc.getState();
-        sessionId = st.sessionId || "";
-      } catch {
-        // fall through: the diff still renders without a snapshot baseline
-      }
-    }
-    return openDiffWindow({
-      absPath: String(msg?.absPath || ""),
-      baselineHash: msg?.baselineHash ?? null,
-      sessionId,
-      basename: msg?.basename,
-    });
-  },
+  ) => showDiffFor(e.sender, msg),
 );
 
 ipcMain.handle("pi:get-commands", async (e) => {
@@ -1251,11 +1259,19 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
   });
 }
 
-// rewindDiff: open file in system (no VS Code diff available)
-ipcMain.handle(IPC.REWIND_DIFF, async (_e, msg: { absPath?: string }) => {
-  if (!msg?.absPath) return { ok: false, error: "empty path" };
-  return openPathSafely(String(msg.absPath));
-});
+// rewindDiff: render the change in our own diff window (baseline = the rewind
+// snapshot, current = the file on disk). Previously this handed the file to the
+// OS default application, which meant no diff at all.
+ipcMain.handle(
+  IPC.REWIND_DIFF,
+  async (
+    e,
+    msg: { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string },
+  ) => {
+    if (!msg?.absPath) return { ok: false, error: "empty path" };
+    return showDiffFor(e.sender, msg);
+  },
+);
 
 // ─── Boot ─────────────────────────────────────────────────────────────
 

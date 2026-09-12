@@ -180,6 +180,46 @@ async function main() {
     record("sidebar sessions rendered", false, e.message);
   }
 
+  // ── the sidebar must stay interactive ──
+  // Electron swallows every mouse event inside a `-webkit-app-region: drag`
+  // area: the whole sidebar becomes a window-drag handle and clicks stop
+  // working. Walk the ancestors to find the effective region per element.
+  const dragInfo = await js(
+    `(function(){
+       var sels = ['#pi-sidebar', '#pi-session-list', '.pi-session-item', '#pi-session-filter', '#pi-new-session'];
+       var out = [];
+       for (var i = 0; i < sels.length; i++) {
+         var el = document.querySelector(sels[i]);
+         if (!el) { out.push(sels[i] + '=MISSING'); continue; }
+         var node = el, region = 'none';
+         while (node && node !== document.body) {
+           var v = getComputedStyle(node).getPropertyValue('-webkit-app-region');
+           if (v === 'drag') { region = 'DRAG@' + (node.id || node.className); break; }
+           if (v === 'no-drag') { region = 'no-drag'; break; }
+           node = node.parentElement;
+         }
+         out.push(sels[i] + '=' + region);
+       }
+       return out.join(' | ');
+     })()`,
+  );
+  record("sidebar is not a window drag region", !/DRAG@/.test(String(dragInfo)), String(dragInfo));
+  await checkEq(
+    "sidebar header is still draggable",
+    js(
+      "(function(){var h=document.getElementById('pi-sidebar-header');" +
+        "return h?getComputedStyle(h).getPropertyValue('-webkit-app-region'):'MISSING';})()",
+    ),
+    "drag",
+  );
+  await checkTrue(
+    "session items accept clicks (pointer-events + cursor)",
+    js(
+      "(function(){var it=document.querySelector('.pi-session-item');if(!it)return false;" +
+        "var cs=getComputedStyle(it);return cs.pointerEvents==='auto' && cs.cursor==='pointer';})()",
+    ),
+  );
+
   // ── CSP actually enforced ──
   await checkEq(
     "CSP blocks eval",

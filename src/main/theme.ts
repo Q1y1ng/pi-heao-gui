@@ -7,9 +7,24 @@ export const THEME_CSS = `
 /* Electron titleBarStyle: hidden — make existing bars draggable */
 .toolbar { -webkit-app-region: drag; }
 .toolbar button, .toolbar .icon-btn, .toolbar select, .toolbar input { -webkit-app-region: no-drag; }
-/* Sidebar header draggable */
-#pi-sidebar > div:first-child { -webkit-app-region: drag; }
-#pi-sidebar > div:first-child button { -webkit-app-region: no-drag; }
+/* Sidebar header draggable — it must target the header ROW only.
+   Anything inside a -webkit-app-region:drag area stops receiving mouse events,
+   so the old "#pi-sidebar > div:first-child" selector (which matches the whole
+   .pi-sidebar-inner wrapper) made every session row, the filter box and the
+   sidebar buttons unclickable, and dragging anywhere in the sidebar moved the
+   window. */
+#pi-sidebar-header { -webkit-app-region: drag; }
+#pi-sidebar-header button { -webkit-app-region: no-drag; }
+/* Belt and braces: nothing else in the sidebar may become a drag handle. */
+#pi-sidebar,
+#pi-sidebar .pi-sidebar-inner,
+#pi-sidebar-content,
+#pi-session-list,
+#pi-session-list *,
+.pi-session-item,
+#pi-session-filter,
+#pi-sidebar button,
+#pi-sidebar input { -webkit-app-region: no-drag; }
 /* Collapsed sidebar strip draggable */
 #pi-sidebar-collapsed { -webkit-app-region: drag; }
 #pi-sidebar-collapsed button { -webkit-app-region: no-drag; }

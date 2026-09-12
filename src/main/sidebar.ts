@@ -10,7 +10,7 @@ export const SIDEBAR_HTML = `
   font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
   font-size:13px;color:#e0e0e0;
 ">
-  <div style="padding:8px 12px 6px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+  <div id="pi-sidebar-header" style="padding:8px 12px 6px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
     <span style="font-size:14px;color:#cccccc;font-weight:600;">π</span>
     <span style="font-weight:500;flex:1;color:#cccccc;font-size:12px;">会话</span>
     <button id="pi-sidebar-toggle" title="折叠侧栏" style="

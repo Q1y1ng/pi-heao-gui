@@ -97,10 +97,10 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
       raw.uiLanguage === "en" || raw.uiLanguage === "zh-cn" || raw.uiLanguage === "auto"
         ? raw.uiLanguage
         : DEFAULT_CONFIG.uiLanguage,
-    lastOnboardedVersion: str(
-      raw.lastOnboardedVersion,
-      DEFAULT_CONFIG.lastOnboardedVersion,
-    ).slice(0, 40),
+    lastOnboardedVersion: str(raw.lastOnboardedVersion, DEFAULT_CONFIG.lastOnboardedVersion).slice(
+      0,
+      40,
+    ),
     commitLanguage: str(raw.commitLanguage, DEFAULT_CONFIG.commitLanguage).slice(0, 40),
     commitMessagePrompt: str(raw.commitMessagePrompt, DEFAULT_CONFIG.commitMessagePrompt).slice(
       0,

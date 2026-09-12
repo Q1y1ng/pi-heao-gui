@@ -39,8 +39,7 @@ function makePackageTree({ withChangelog = true, name = PI_PACKAGE_NAME, version
  * assertion meaningful without depending on how the OS chooses to spell it.
  */
 function expectSameLocation(actual, expected, label) {
-  const tail = (p) =>
-    path.resolve(String(p)).split(/[\\/]/).slice(-4).join("/").toLowerCase();
+  const tail = (p) => path.resolve(String(p)).split(/[\\/]/).slice(-4).join("/").toLowerCase();
   assert.equal(tail(actual), tail(expected), `${label}: ${actual} vs ${expected}`);
 }
 

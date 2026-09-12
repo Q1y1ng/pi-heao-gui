@@ -109,8 +109,21 @@ npm run build:mcp        # 重建 MCP 扩展 bundle（vendor/upstream/pi-mcp）
   Windows shim 解析器（含 `&` 注入回归）、会话列表缓存/失效、生成 HTML 的 CSP 与注入转义。
 - `npm run smoke` 启动真实主进程并断言安全边界与会话链路（preload 白名单、CSP eval/fetch 拦截、
   openPath 拦截、侧栏会话列表、水印与改名、shim 解析器），失败以非 0 退出。
-  注意：若环境里设了 `ELECTRON_RUN_AS_NODE=1`，Electron 会退化为纯 Node，脚本会直接给出提示。
 - CI：`.github/workflows/ci.yml` —— `lint + typecheck + test` 为阻断作业，`smoke` 为咨询作业（Windows runner）。
+
+### 已知环境陷阱
+
+若当前 shell/父进程设置了 `ELECTRON_RUN_AS_NODE=1`，Electron 会退化为纯 Node.js：
+`npm start`、`npm run smoke`、以及直接启动打包好的 exe 都会**无提示地秒退**（退出码 0，
+且连 userData 目录都不会创建）。启动前清掉它：
+
+```powershell
+$env:ELECTRON_RUN_AS_NODE = ""   # PowerShell
+```
+
+```bash
+unset ELECTRON_RUN_AS_NODE       # bash / git-bash
+```
 
 ## 安全模型
 

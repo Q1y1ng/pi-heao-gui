@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, dialog, shell } from "electron";
+import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
 import { join, resolve, sep, isAbsolute } from "path";
 import { homedir } from "os";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -377,7 +377,62 @@ ipcMain.handle(IPC.REWIND_DIFF, async (_e, msg: { absPath?: string }) => {
 
 // ─── Boot ─────────────────────────────────────────────────────────────
 
+function setupChineseMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: "文件",
+      submenu: [
+        { label: "新建会话", accelerator: "CmdOrCtrl+N", click: () => { mainWindow?.webContents.send("pi:event", { type: "event", event: { type: "newSessionShortcut" } }); } },
+        { type: "separator" },
+        { label: "退出", accelerator: "CmdOrCtrl+Q", click: () => app.quit() },
+      ],
+    },
+    {
+      label: "编辑",
+      submenu: [
+        { role: "undo", label: "撤销" },
+        { role: "redo", label: "重做" },
+        { type: "separator" },
+        { role: "cut", label: "剪切" },
+        { role: "copy", label: "复制" },
+        { role: "paste", label: "粘贴" },
+        { role: "selectAll", label: "全选" },
+      ],
+    },
+    {
+      label: "视图",
+      submenu: [
+        { role: "reload", label: "重新加载" },
+        { role: "forceReload", label: "强制重新加载" },
+        { role: "toggleDevTools", label: "开发者工具" },
+        { type: "separator" },
+        { role: "resetZoom", label: "实际大小" },
+        { role: "zoomIn", label: "放大" },
+        { role: "zoomOut", label: "缩小" },
+        { type: "separator" },
+        { role: "togglefullscreen", label: "全屏" },
+      ],
+    },
+    {
+      label: "窗口",
+      submenu: [
+        { role: "minimize", label: "最小化" },
+        { role: "zoom", label: "缩放" },
+        { role: "close", label: "关闭" },
+      ],
+    },
+    {
+      label: "帮助",
+      submenu: [
+        { label: "设置", accelerator: "CmdOrCtrl+,", click: () => openSettingsWindow() },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(async () => {
+  setupChineseMenu();
   await createWindow();
 
   // Create chat session after window is ready

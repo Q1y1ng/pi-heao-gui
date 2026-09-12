@@ -4,6 +4,14 @@
  *   npm run measure-load
  */
 const { app, BrowserWindow } = require("electron");
+const electron = require("electron");
+if (!electron.app || typeof electron.app.on !== "function") {
+  console.error(
+    "ELECTRON_RUN_AS_NODE is set - unset it first (electron must run as Electron).\n" +
+      "  env -u ELECTRON_RUN_AS_NODE <command>",
+  );
+  process.exit(2);
+}
 const path = require("node:path");
 const fs = require("node:fs");
 

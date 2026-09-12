@@ -10,7 +10,7 @@ const { app, BrowserWindow } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
-if (process.env.ELECTRON_RUN_AS_NODE) {
+if ("ELECTRON_RUN_AS_NODE" in process.env) {
   console.error("ELECTRON_RUN_AS_NODE is set — unset it first (electron must run as Electron).");
   process.exit(3);
 }

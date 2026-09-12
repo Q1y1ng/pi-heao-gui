@@ -32,10 +32,26 @@ function makePackageTree({ withChangelog = true, name = PI_PACKAGE_NAME, version
   return { root, pkgDir, cli };
 }
 
+/**
+ * Windows hands out 8.3 short paths for temp dirs on some runners
+ * (C:\Users\RUNNER~1\...) while realpath() returns the long form
+ * (C:\Users\runneradmin\...), so compare resolved paths instead of raw strings.
+ */
+function samePath(a, b) {
+  const norm = (p) => {
+    try {
+      return fs.realpathSync(p).toLowerCase();
+    } catch {
+      return path.resolve(p).toLowerCase();
+    }
+  };
+  return norm(a) === norm(b);
+}
+
 test("finds the package root by walking up from the binary", async () => {
   const { pkgDir, cli } = makePackageTree();
   const found = await findPackageRoot(path.dirname(cli));
-  assert.equal(found, pkgDir);
+  assert.ok(found && samePath(found, pkgDir), `expected ${pkgDir}, got ${found}`);
 });
 
 test("stops at a package.json with a different name", async () => {
@@ -51,7 +67,7 @@ test("reads the changelog next to the resolved binary", async () => {
   const res = await readPiChangelog(cli);
   assert.equal(res.ok, true);
   assert.match(res.content, /# Changelog/);
-  assert.equal(res.root, pkgDir);
+  assert.ok(res.root && samePath(res.root, pkgDir), `expected ${pkgDir}, got ${res.root}`);
   assert.equal(res.version, "9.9.9");
 });
 

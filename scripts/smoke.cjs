@@ -17,7 +17,7 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("node:path");
 
-if (process.env.ELECTRON_RUN_AS_NODE) {
+if ("ELECTRON_RUN_AS_NODE" in process.env) {
   console.error(
     "ELECTRON_RUN_AS_NODE is set — electron.exe is running as plain Node.js, so no Electron API exists.\n" +
       "Unset it first (PowerShell: $env:ELECTRON_RUN_AS_NODE=''; bash: unset ELECTRON_RUN_AS_NODE) and run again.",

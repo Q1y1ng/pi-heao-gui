@@ -82,5 +82,3 @@ jobs:
 
       - name: Smoke test (preload allowlist, CSP, openPath guard, sidebar)
         run: npm run smoke
-        env:
-          ELECTRON_RUN_AS_NODE: ""

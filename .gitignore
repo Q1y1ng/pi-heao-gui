@@ -7,9 +7,10 @@ vendor/upstream/.git/
 vendor/upstream/node_modules/
 vendor/upstream/pi-chat/node_modules/
 vendor/upstream/pi-chat/dist/
+vendor/upstream/pi-chat/package-lock.json
 vendor/upstream/pi-chat/src/chat-dist.html
 vendor/upstream/pi-chat/src/model-icons-data.ts
-vendor/upstream/pi-settings/node_modules/
-vendor/upstream/pi-settings/dist/
+# artifact of the vendored pi-chat build (upstream VS Code extension copy step)
+vendor/upstream/src/
 src/shared/*.js
 src/shared/*.js.map

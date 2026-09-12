@@ -1,35 +1,42 @@
 {
-  "name": "pi-standalone-gui",
+  "name": "pi-heao-gui",
   "version": "0.1.0",
-  "description": "Standalone Pi coding agent desktop GUI — Electron shell for pi --mode rpc, extracted from Pi Agent Studio",
+  "description": "Pi Heao GUI — standalone desktop client for the pi coding agent (Electron shell for `pi --mode rpc`). made by HEAOZIE",
   "main": "dist/main/main.js",
+  "author": "HEAOZIE",
   "license": "MIT",
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
     "watch": "tsc -w",
     "dev": "npm run build && electron .",
     "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "test": "npm run build && node --test \"test/**/*.test.cjs\"",
+    "smoke": "electron scripts/smoke.cjs",
+    "icon": "electron scripts/make-icon.cjs",
     "build:renderer": "cd vendor/upstream/pi-chat && npm install && npm run build",
+    "build:mcp": "cd vendor/upstream/pi-mcp && npm install && npm run build",
     "dist": "npm run build && electron-builder --win portable"
   },
-  "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.4"
-  },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
     "@types/node": "^22.0.0",
     "electron": "^43.0.0",
     "electron-builder": "^26.0.0",
-    "png-to-ico": "^3.0.2",
     "typescript": "^5.8.0"
   },
   "build": {
-    "appId": "dev.pi.standalone-gui",
-    "productName": "Pi Standalone GUI",
+    "appId": "dev.heao.pi-heao-gui",
+    "productName": "Pi Heao GUI",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "dist/**/*",
+      "build/icon.png",
       "vendor/upstream/pi-chat/dist/**/*",
       "vendor/upstream/bridge/**/*",
       "!vendor/upstream/bridge/pi-vscode-bridge.js",

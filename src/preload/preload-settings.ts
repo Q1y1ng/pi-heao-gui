@@ -15,6 +15,13 @@ const ALLOWED = new Set<string>([
   "pi:toggle-extension",
   "pi:open-settings",
   "pi:diagnostics",
+ "pi:pkg-list",
+ "pi:pkg-install",
+ "pi:pkg-remove",
+ "pi:auth-status",
+ "pi:read-skill",
+ "pi:write-skill",
+ "pi:delete-skill",
 ]);
 
 contextBridge.exposeInMainWorld("pi", {

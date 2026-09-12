@@ -20,7 +20,8 @@
     "build:mcp": "cd vendor/upstream/pi-mcp && npm install && npm run build",
     "dist": "npm run build && electron-builder --win portable",
     "shot": "electron scripts/screenshot.cjs",
-    "verify": "electron scripts/verify-features.cjs"
+    "verify": "electron scripts/verify-features.cjs",
+    "measure-load": "electron scripts/measure-load.cjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

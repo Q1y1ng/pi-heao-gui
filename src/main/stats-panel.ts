@@ -205,7 +205,9 @@ export const STATS_SCRIPT = `
 })();
 </script>`;
 
-/** Panel styling — shares the --pi-* tokens with the rest of the shell. */
+/**
+ * Panel styling — shares the --pi-* tokens with the rest of the shell.
+ */
 export const STATS_CSS = `
 /* ── Telemetry panel ────────────────────────────────────────────────── */
 .pi-modal {

@@ -640,17 +640,33 @@ body {
       <label>默认模型 ID</label>
       <input type="text" id="default-model" placeholder="例如 deepseek-v4-flash">
     </div>
+    <div class="section-title">提供商就绪检查
+      <button class="btn-add" id="btn-auth-check">开始检查</button>
+    </div>
+    <div id="auth-status-list"></div>
+    <div class="hint">通过 pi auth check 检测密钥与登录状态。OAuth 凭据由 pi 自动刷新；需要重新登录时请在 pi CLI 中执行 pi auth。</div>
   </div>
   <!-- Extensions -->
   <div class="panel" id="panel-extensions">
-    <div class="section-title">npm 扩展包（settings.json → packages）</div>
+    <div class="section-title">npm 扩展包（pi install / settings.json → packages）</div>
+    <div class="field" style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1">
+        <label>安装扩展包</label>
+        <input type="text" id="pkg-source" placeholder="npm:@scope/name、git:github.com/user/repo、./本地路径">
+      </div>
+      <button class="primary" id="btn-pkg-install">安装</button>
+      <button id="btn-pkg-refresh">刷新</button>
+    </div>
+    <div class="hint" id="pkg-status"></div>
     <div id="npm-packages"></div>
     <div class="section-title">本地扩展（~/.pi/agent/extensions/）</div>
     <div id="local-extensions"></div>
   </div>
   <!-- Skills -->
   <div class="panel" id="panel-skills">
-    <div class="section-title">已安装技能</div>
+    <div class="section-title">已安装技能
+      <button class="btn-add" id="btn-add-skill">+ 新建技能</button>
+    </div>
     <div id="skills-list"></div>
     <div class="hint" style="color:#666;font-size:12px;margin-top:12px">
       技能目录：~/.pi/agent/skills/（每个子目录含 SKILL.md）
@@ -976,20 +992,138 @@ function renderLocalExtensions(exts) {
   }
 }
 
+// ── Extension packages (pi install / remove / list) ──
+async function loadPackages() {
+  const el = $('npm-packages');
+  el.innerHTML = '<div class="empty-hint">读取中…</div>';
+  try {
+    const res = await window.pi.invoke('pi:pkg-list');
+    renderNpmPackages((res && res.packages) || []);
+    if (res && res.ok === false) setStatus('读取扩展失败: ' + (res.error || ''), false);
+  } catch (err) {
+    el.innerHTML = '';
+    setStatus('读取扩展失败: ' + err.message, false);
+  }
+}
+
 function renderNpmPackages(packages) {
   const el = $('npm-packages');
   el.innerHTML = '';
   if (!packages || !packages.length) {
-    el.innerHTML = '<div class="empty-hint">未安装 npm 扩展包</div>';
+    el.innerHTML = '<div class="empty-hint">未安装扩展包</div>';
     return;
   }
   for (const pkg of packages) {
-    const name = String(pkg).replace(/^npm:/, '');
+    const source = typeof pkg === 'string' ? pkg : pkg.source || '';
+    const path = typeof pkg === 'string' ? '' : pkg.path || '';
+    const scope = typeof pkg === 'string' ? '' : pkg.scope || 'user';
     const item = document.createElement('div');
     item.className = 'list-item';
-    item.innerHTML = '<span class="name">' + esc(name) + '</span><span class="meta">npm</span>';
+    item.innerHTML =
+      '<span class="name" title="' + esc(path || source) + '">' + esc(source.replace(/^npm:/, '')) + '</span>' +
+      '<span class="meta">' + esc(scope === 'project' ? '项目' : '用户') + '</span>' +
+      '<button class="btn-sm danger" data-pkg="' + esc(source) + '">移除</button>';
+    const btn = item.querySelector('button');
+    btn.onclick = async () => {
+      if (!window.confirm('移除扩展 ' + source + '？')) return;
+      btn.disabled = true;
+      setStatus('正在移除 ' + source + '…', true);
+      try {
+        const r = await window.pi.invoke('pi:pkg-remove', source);
+        setStatus(r && r.ok ? '已移除 ' + source : '移除失败: ' + ((r && r.error) || ''), !!(r && r.ok));
+        await loadPackages();
+      } catch (err) {
+        setStatus('移除失败: ' + err.message, false);
+        btn.disabled = false;
+      }
+    };
     el.appendChild(item);
   }
+}
+
+function wirePackages() {
+  const installBtn = $('btn-pkg-install');
+  const input = $('pkg-source');
+  const refresh = $('btn-pkg-refresh');
+  if (refresh) refresh.onclick = () => loadPackages();
+  if (!installBtn || !input) return;
+  installBtn.onclick = async () => {
+    const source = input.value.trim();
+    if (!source) { setStatus('请填写安装源', false); return; }
+    installBtn.disabled = true;
+    setStatus('正在安装 ' + source + '（可能需要几十秒）…', true);
+    try {
+      const r = await window.pi.invoke('pi:pkg-install', source);
+      if (r && r.ok) {
+        setStatus('已安装 ' + source + '，重启会话后生效', true);
+        input.value = '';
+        await loadPackages();
+      } else {
+        setStatus('安装失败: ' + ((r && r.error) || '未知错误'), false);
+      }
+    } catch (err) {
+      setStatus('安装失败: ' + err.message, false);
+    } finally {
+      installBtn.disabled = false;
+    }
+  };
+}
+
+// ── Skills: create / edit / delete ──
+const SKILL_TEMPLATE = [
+  '---',
+  'name: my-skill',
+  'description: 一句话说明这个技能做什么、什么时候用',
+  '---',
+  '',
+  '# My Skill',
+  '',
+  '在这里写指令：pi 会在这份 SKILL.md 被触发时读取它。',
+  '',
+].join('\n');
+
+async function refreshSkills() {
+  const data = await window.pi.invoke('pi:get-env-info');
+  renderSkills((data && data.skills) || []);
+  return data;
+}
+
+function openSkillEditor(skill) {
+  const isNew = !skill;
+  showModal(isNew ? '新建技能' : '编辑技能：' + skill.name, [
+    { key: 'name', label: '技能目录名（字母数字点下划线短横线）', value: isNew ? '' : skill.name, placeholder: 'my-skill' },
+    { key: 'content', label: 'SKILL.md 内容', type: 'textarea', rows: 14, value: isNew ? SKILL_TEMPLATE : '' },
+  ], async (vals) => {
+    const name = (vals.name || '').trim();
+    if (!name) { setStatus('技能名不能为空', false); return; }
+    let content = vals.content || '';
+    if (!isNew && !content.trim()) {
+      const current = await window.pi.invoke('pi:read-skill', skill.name);
+      content = (current && current.content) || '';
+    }
+    try {
+      const r = await window.pi.invoke('pi:write-skill', { name, content, renameFrom: isNew ? undefined : skill.name });
+      if (r && r.ok) {
+        setStatus('已保存技能 ' + name + '（新会话生效）', true);
+        await refreshSkills();
+      } else {
+        setStatus('保存失败: ' + ((r && r.error) || '未知错误'), false);
+      }
+    } catch (err) {
+      setStatus('保存失败: ' + err.message, false);
+    }
+  });
+  if (!isNew) {
+    window.pi.invoke('pi:read-skill', skill.name).then((res) => {
+      const ta = document.getElementById('mf-content');
+      if (ta && res && res.ok) ta.value = res.content || '';
+    });
+  }
+}
+
+function wireSkills() {
+  const add = $('btn-add-skill');
+  if (add) add.onclick = () => openSkillEditor(null);
 }
 
 function renderSkills(skills) {
@@ -1002,7 +1136,28 @@ function renderSkills(skills) {
   for (const s of skills) {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = '<div class="card-title">' + esc(s.name) + '</div><div class="card-desc">' + esc(s.description || '（无描述）') + '</div>';
+    card.innerHTML =
+      '<div class="card-title">' + esc(s.name) + '</div>' +
+      '<div class="card-desc">' + esc(s.description || '（无描述）') + '</div>' +
+      '<div class="card-actions">' +
+      '<button class="btn-sm" data-skill-edit="' + esc(s.name) + '">编辑</button>' +
+      '<button class="btn-sm danger" data-skill-del="' + esc(s.name) + '">删除</button>' +
+      '</div>';
+    const edit = card.querySelector('[data-skill-edit]');
+    const del = card.querySelector('[data-skill-del]');
+    if (edit) edit.onclick = () => openSkillEditor({ name: s.name, description: s.description });
+    if (del) {
+      del.onclick = async () => {
+        if (!window.confirm('删除技能 ' + s.name + '？目录及其 SKILL.md 会被移除。')) return;
+        try {
+          const r = await window.pi.invoke('pi:delete-skill', s.name);
+          setStatus(r && r.ok ? '已删除 ' + s.name : '删除失败: ' + ((r && r.error) || ''), !!(r && r.ok));
+          await refreshSkills();
+        } catch (err) {
+          setStatus('删除失败: ' + err.message, false);
+        }
+      };
+    }
     el.appendChild(card);
   }
 }
@@ -1035,6 +1190,49 @@ function showModal(title, fields, onSubmit) {
   // Focus first field
   const first = modal.querySelector('input,textarea');
   if (first) first.focus();
+}
+
+// ── Provider readiness (pi auth check) ──
+async function checkAuth() {
+  const el = $('auth-status-list');
+  if (!el) return;
+  const providers = new Set();
+  for (const key of Object.keys((modelsJson && modelsJson.providers) || {})) providers.add(key);
+  const authList = Array.isArray(authJson) ? authJson : [];
+  for (const entry of authList) {
+    if (entry && entry.provider) providers.add(String(entry.provider));
+  }
+  if (!providers.size) {
+    el.innerHTML = '<div class="empty-hint">还没有配置任何提供商</div>';
+    return;
+  }
+  el.innerHTML = '<div class="empty-hint">检查中…</div>';
+  try {
+    const res = await window.pi.invoke('pi:auth-status', [...providers]);
+    const rows = (res && res.results) || [];
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty-hint">没有可检查的提供商</div>';
+      return;
+    }
+    el.innerHTML = '';
+    for (const row of rows) {
+      const ready = row.status === 'ready';
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML =
+        '<span class="name">' + esc(row.provider) + '</span>' +
+        '<span class="card-badge ' + (ready ? 'ok' : 'muted') + '">' + esc(ready ? '就绪' : row.status || '未知') + '</span>' +
+        (row.reason ? '<span class="meta">' + esc(row.reason) + '</span>' : '');
+      el.appendChild(item);
+    }
+  } catch (err) {
+    el.innerHTML = '<div class="empty-hint">检查失败: ' + esc(err.message) + '</div>';
+  }
+}
+
+function wireAuthCheck() {
+  const btn = $('btn-auth-check');
+  if (btn) btn.onclick = () => checkAuth();
 }
 
 // ── Model CRUD ──
@@ -1511,11 +1709,14 @@ async function loadAll() {
 
     renderModels();
     renderAuth();
-    renderNpmPackages(settingsJson.packages || []);
+    void loadPackages();
 
     const data = await window.pi.invoke('pi:get-env-info');
     renderLocalExtensions(data.extensions || []);
     renderSkills(data.skills || []);
+    wirePackages();
+    wireSkills();
+    wireAuthCheck();
 
     setStatus('已加载配置');
   } catch (e) {

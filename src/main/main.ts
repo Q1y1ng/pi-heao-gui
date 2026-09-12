@@ -11,12 +11,12 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { readdir as readdirAsync, readFile, writeFile, mkdir } from "node:fs/promises";
+import { readdir as readdirAsync, readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
-import { createChatSession, type ChatSession } from "./chat-session";
+import { createChatSession, type ChatSession, findPiBinary } from "./chat-session";
 import {
   isSessionFile as isSessionFilePath,
   renameSession,
@@ -28,6 +28,13 @@ import {
 import { searchSessions, orderByRecency } from "./search";
 import { createStatsStore, type StatsStore } from "./stats-store";
 import { openDiffWindow } from "./diff-window";
+import {
+  runPiCli,
+  isSafePackageSource,
+  parseInstalledPackages,
+  parseAuthStatus,
+  type AuthStatus,
+} from "./pi-cli";
 import { getRpcLogPath } from "./rpc-client";
 import { buildTokensCss } from "./theme";
 import { refreshTrayMenu, setRecentSessions, setUnreadCount, getUnreadCount } from "./tray";
@@ -338,6 +345,14 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
           postToRenderer: (msg) => postToWindow(win, msg),
           saveStats: (sessionFile, data) => getStatsStore().save(sessionFile, data as never),
           loadStats: (sessionFile) => getStatsStore().load(sessionFile),
+          toggleFavorite: (provider, modelId) => {
+            const key = `${provider}/${modelId}`;
+            const current = config.favoriteModels || [];
+            const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+            saveConfig({ ...config, favoriteModels: next });
+            return next;
+          },
+          getFavorites: () => config.favoriteModels || [],
         },
       })) ?? null;
   } catch (e) {
@@ -377,13 +392,38 @@ function sessionHost(win: BrowserWindow): {
   postToRenderer: (msg: unknown) => void;
   saveStats: (sessionFile: string | undefined, data: unknown) => void;
   loadStats: (sessionFile: string) => unknown;
+  toggleFavorite: (provider: string, modelId: string) => string[];
+  getFavorites: () => string[];
 } {
   return {
-    postToRenderer: (msg) => postToWindow(win, msg),
+    postToRenderer: (msg) => {
+      // Desktop notification + unread counter when a turn finishes while the
+      // window is not focused (the window may be hidden in the tray).
+      const m = msg as { type?: string; event?: { type?: string } };
+      if (
+        m?.type === "event" &&
+        m.event?.type === "agent_settled" &&
+        !win.isDestroyed() &&
+        !win.isFocused()
+      ) {
+        showNotification("Pi Heao GUI", "Agent 已完成回复");
+        setUnreadCount(getUnreadCount() + 1);
+        win.flashFrame(true);
+      }
+      postToWindow(win, msg);
+    },
     saveStats: (sessionFile, data) => {
       getStatsStore().save(sessionFile, data as never);
     },
     loadStats: (sessionFile) => getStatsStore().load(sessionFile),
+    toggleFavorite: (provider, modelId) => {
+      const key = `${provider}/${modelId}`;
+      const current = config.favoriteModels || [];
+      const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+      saveConfig({ ...config, favoriteModels: next });
+      return next;
+    },
+    getFavorites: () => config.favoriteModels || [],
   };
 }
 
@@ -739,6 +779,142 @@ ipcMain.handle("pi:set-theme", async (_e, theme: string) => {
   const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "dark";
   saveConfig({ ...config, theme: next });
   return { ok: true, theme: next, css: buildTokensCss(next, config.accent) };
+});
+
+// ─── IPC: extension packages + provider auth (pi CLI one-shots) ───────
+
+/** Resolved pi executable for CLI subcommands (same lookup the RPC client uses). */
+function piCliPath(): string {
+  return findPiBinary(config.piPath || undefined);
+}
+
+ipcMain.handle("pi:pkg-list", async () => {
+  const res = await runPiCli(piCliPath(), ["list"], {
+    timeoutMs: 30_000,
+    cwd: config.workspaceRoot || undefined,
+  });
+  const packages = parseInstalledPackages(res.stdout);
+  if (!res.ok && packages.length === 0) {
+    return { ok: false, error: res.error || res.stderr || "pi list 执行失败", packages: [] };
+  }
+  return { ok: true, packages, raw: res.stdout.trim() };
+});
+
+ipcMain.handle("pi:pkg-install", async (_e, source: string) => {
+  const src = String(source || "").trim();
+  if (!isSafePackageSource(src)) {
+    return { ok: false, error: "安装源无效。示例：npm:@scope/pkg、git:github.com/user/repo、https://…" };
+  }
+  const res = await runPiCli(piCliPath(), ["install", src], {
+    timeoutMs: 300_000,
+    cwd: config.workspaceRoot || undefined,
+  });
+  return {
+    ok: res.ok,
+    error: res.ok ? undefined : res.error || res.stderr || `安装失败（exit ${res.code}）`,
+    output: `${res.stdout}\n${res.stderr}`.trim().slice(0, 4000),
+  };
+});
+
+ipcMain.handle("pi:pkg-remove", async (_e, source: string) => {
+  const src = String(source || "").trim();
+  if (!isSafePackageSource(src)) return { ok: false, error: "扩展源无效" };
+  const res = await runPiCli(piCliPath(), ["remove", src], {
+    timeoutMs: 120_000,
+    cwd: config.workspaceRoot || undefined,
+  });
+  return {
+    ok: res.ok,
+    error: res.ok ? undefined : res.error || res.stderr || `移除失败（exit ${res.code}）`,
+    output: `${res.stdout}\n${res.stderr}`.trim().slice(0, 4000),
+  };
+});
+
+/**
+ * Provider readiness via `pi auth check --json`. This is read-only: new OAuth
+ * logins still have to happen in the pi CLI (the RPC protocol has no login),
+ * but pi refreshes expired credentials itself, so this is the honest status.
+ */
+ipcMain.handle("pi:auth-status", async (_e, providers: string[]) => {
+  const list = Array.isArray(providers)
+    ? providers.filter((p) => typeof p === "string" && /^[a-z0-9._-]{1,40}$/i.test(p)).slice(0, 12)
+    : [];
+  const results: AuthStatus[] = [];
+  for (const provider of list) {
+    const res = await runPiCli(piCliPath(), ["auth", "check", "--provider", provider, "--json"], {
+      timeoutMs: 30_000,
+      cwd: config.workspaceRoot || undefined,
+    });
+    const parsed = parseAuthStatus(res.stdout);
+    results.push(
+      parsed ?? {
+        provider,
+        status: res.ok ? "unknown" : "error",
+        reason: (res.error || res.stderr || "").trim().slice(0, 200) || undefined,
+      },
+    );
+  }
+  return { ok: true, results };
+});
+
+// ─── IPC: skills (read / create / edit SKILL.md) ──────────────────────
+
+const SKILLS_DIR = join(PI_AGENT_DIR, "skills");
+
+/** Skill directory names are used as path segments — nothing else is allowed. */
+function safeSkillName(name: string): string | null {
+  const n = String(name || "").trim();
+  if (!n || n.length > 64) return null;
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(n)) return null;
+  if (n === "." || n === "..") return null;
+  return n;
+}
+
+ipcMain.handle("pi:read-skill", async (_e, name: string) => {
+  const safe = safeSkillName(name);
+  if (!safe) return { ok: false, error: "技能名无效" };
+  try {
+    const content = await readFile(join(SKILLS_DIR, safe, "SKILL.md"), "utf8");
+    return { ok: true, content };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+});
+
+ipcMain.handle(
+  "pi:write-skill",
+  async (_e, msg: { name?: string; content?: string; renameFrom?: string }) => {
+    const safe = safeSkillName(String(msg?.name || ""));
+    if (!safe) return { ok: false, error: "技能名只能包含字母、数字、点、下划线和短横线" };
+    const content = String(msg?.content ?? "");
+    if (content.length > 512 * 1024) return { ok: false, error: "内容过大（上限 512 KB）" };
+    const dir = join(SKILLS_DIR, safe);
+    try {
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "SKILL.md"), content, "utf8");
+      // Optional rename of an existing skill directory (edit-in-place keeps the name)
+      const from = msg?.renameFrom ? safeSkillName(String(msg.renameFrom)) : null;
+      if (from && from !== safe) {
+        await rename(join(SKILLS_DIR, from), join(SKILLS_DIR, safe)).catch((e: unknown) =>
+          log.warn("skill rename:", errText(e)),
+        );
+      }
+      return { ok: true, path: join(dir, "SKILL.md") };
+    } catch (e) {
+      return { ok: false, error: errText(e) };
+    }
+  },
+);
+
+ipcMain.handle("pi:delete-skill", async (_e, name: string) => {
+  const safe = safeSkillName(name);
+  if (!safe) return { ok: false, error: "技能名无效" };
+  try {
+    await rm(join(SKILLS_DIR, safe), { recursive: true, force: true });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
 });
 
 // ─── IPC: diagnostics ────────────────────────────────────────────────
@@ -1237,20 +1413,7 @@ app.whenReady().then(async () => {
         (await createChatSession({
           appPath: app.getAppPath(),
           config,
-          host: {
-            postToRenderer: (msg) => {
-              // Desktop notification when agent finishes
-              const m = msg as any;
-              if (m?.type === "event" && m.event?.type === "agent_settled") {
-                if (!win.isDestroyed() && !win.isFocused()) {
-                  showNotification("Pi Heao GUI", "Agent 已完成回复");
-                  setUnreadCount(getUnreadCount() + 1);
-                  win.flashFrame(true);
-                }
-              }
-              postToWindow(win, msg);
-            },
-          },
+          host: sessionHost(win),
         })) ?? null;
       if (chatSession && mainWindowId >= 0) windowSessions.set(mainWindowId, chatSession);
       log.info("chat session created");

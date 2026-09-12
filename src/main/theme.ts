@@ -246,10 +246,19 @@ body,
 body * {
   font-family: var(--pi-font-ui);
 }
+
+/* Long sessions: skip style/layout/paint for messages outside the viewport.
+   Measured on a 4.8 MB session: ~140 blocks, renderer side ~1.5 s of the 12 s
+   load (pi's own parse + transfer is the rest), so this is a modest but free
+   win, and it keeps very long chats scrollable. */
+.msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+.msg.pi-hit-flash { content-visibility: visible; }
 html,
 body {
-  background: var(--pi-bg) !important;
-  color: var(--pi-text) !important;
+  background: var(--pi-bg) !important;  color: var(--pi-text) !important;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   letter-spacing: 0.005em;

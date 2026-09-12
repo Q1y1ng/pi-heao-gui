@@ -32,8 +32,13 @@ test("every control id the script uses exists in the document", () => {
   const ids = [
     ...new Set([...html.matchAll(/getElementById\(['"]([\w-]+)['"]\)/g)].map((m) => m[1])),
   ];
-  const orphans = ids.filter((id) => !html.includes(`id="${id}"`));
+  const orphans = ids.filter((id) => !id.startsWith("mf-") && !html.includes(`id="${id}"`));
   assert.deepEqual(orphans, [], `script references missing elements: ${orphans.join(", ")}`);
+  // `mf-*` ids are generated at runtime by showModal() from the field key, so
+  // they only exist while a modal is open — assert the factory instead.
+  if (ids.some((id) => id.startsWith("mf-"))) {
+    assert.match(html, /'mf-'\s*\+\s*f\.key/, "modal fields must build mf-<key> ids");
+  }
 });
 
 test("appearance panel wires theme, accent and font size", () => {
@@ -69,6 +74,24 @@ test("config fields promised by the new panels are referenced", () => {
     "recentWorkspaces",
   ]) {
     assert.ok(html.includes(key), `config field ${key} is not surfaced in the UI`);
+  }
+});
+
+test("extension packages and skills are manageable from the settings window", () => {
+  for (const id of ["pkg-source", "btn-pkg-install", "btn-pkg-refresh", "pkg-status"]) {
+    assert.ok(html.includes(`id="${id}"`), `missing ${id}`);
+  }
+  assert.ok(html.includes("id=\"btn-add-skill\""), "missing skill creation button");
+  for (const channel of [
+    "pi:pkg-list",
+    "pi:pkg-install",
+    "pi:pkg-remove",
+    "pi:read-skill",
+    "pi:write-skill",
+    "pi:delete-skill",
+    "pi:auth-status",
+  ]) {
+    assert.ok(html.includes(channel), `channel ${channel} is never used`);
   }
 });
 

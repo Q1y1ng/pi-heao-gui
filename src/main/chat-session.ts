@@ -100,7 +100,7 @@ function warnBestEffort(what: string, e: unknown): void {
 
 // ─── Find pi binary ───────────────────────────────────────────────────
 
-function findPiBinary(customPath?: string): string {
+export function findPiBinary(customPath?: string): string {
   if (customPath && existsSync(customPath)) return customPath;
   // npm global install location (Windows default)
   const isWin = process.platform === "win32";
@@ -174,6 +174,10 @@ export interface ChatSessionHost {
   /** Persist per-session telemetry (turns + per-day spend). */
   saveStats?(sessionFile: string | undefined, data: unknown): void;
   loadStats?(sessionFile: string): unknown;
+  /** Toggle a favourite model; returns the updated list as "provider/modelId". */
+  toggleFavorite?(provider: string, modelId: string): string[];
+  /** Favourite models, used to seed the model picker after a restart. */
+  getFavorites?(): string[];
 }
 
 export interface ChatSession {
@@ -347,6 +351,9 @@ export async function createChatSession(opts: {
       post({ type: "state", state: st });
       post({ type: "permissionMode", mode: opts.config.permissionMode });
       post({ type: "models", models });
+      // Restore the starred models from config (pi-chat keeps them in UI state).
+      const favourites = opts.host.getFavorites?.() ?? [];
+      post({ type: "enabledModels", keys: favourites.map((k) => k.toLowerCase()) });
       post({ type: "thinkingLevels", levels });
       post({ type: "commands", commands: mergeBuiltinCommands(cmds) });
       await sendSessionInfo();
@@ -714,8 +721,13 @@ export async function createChatSession(opts: {
         rpc.respondExtensionUi(String(msg.id ?? ""), { confirmed: true });
         break;
       case "toggleFavorite":
-        // Re-fetch models so UI updates; actual persistence is in settings
+        // pi-chat owns the starred keys in its own UI state; persist them here so
+        // the stars survive a restart (see the enabledModels post in hydrate).
         try {
+          const provider = String(msg.provider ?? "");
+          const modelId = String(msg.modelId ?? "");
+          const keys = opts.host.toggleFavorite?.(provider, modelId);
+          if (keys) post({ type: "enabledModels", keys: keys.map((k) => k.toLowerCase()) });
           const models = await rpc.getAvailableModels();
           post({ type: "models", models });
         } catch (e) {

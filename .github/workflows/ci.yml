@@ -1,0 +1,69 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint + typecheck + unit tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (biome)
+        run: npm run lint
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Unit tests (node:test, runs against dist/)
+        run: npm test
+
+  smoke:
+    name: runtime smoke test (advisory)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    # Boots a real Electron window; kept advisory so a headless-runner hiccup
+    # never blocks a merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install the pi CLI (the app spawns it)
+        run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+      - name: Build the vendored chat UI
+        run: npm run build:renderer
+
+      - name: Build the app
+        run: npm run build
+
+      - name: Smoke test (preload allowlist, CSP, openPath guard, sidebar)
+        run: npm run smoke
+        env:
+          ELECTRON_RUN_AS_NODE: ""

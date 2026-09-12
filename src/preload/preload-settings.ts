@@ -19,6 +19,8 @@ const ALLOWED = new Set<string>([
   "pi:pkg-install",
   "pi:pkg-remove",
   "pi:auth-status",
+ "pi:login-provider",
+ "pi:changelog",
   "pi:read-skill",
   "pi:write-skill",
   "pi:delete-skill",

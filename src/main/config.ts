@@ -93,6 +93,10 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     openAtLogin: bool(raw.openAtLogin, DEFAULT_CONFIG.openAtLogin),
     showArchived: bool(raw.showArchived, DEFAULT_CONFIG.showArchived),
     recentWorkspaces: strArray(raw.recentWorkspaces).slice(0, 8),
+    uiLanguage:
+      raw.uiLanguage === "en" || raw.uiLanguage === "zh-cn" || raw.uiLanguage === "auto"
+        ? raw.uiLanguage
+        : DEFAULT_CONFIG.uiLanguage,
     commitLanguage: str(raw.commitLanguage, DEFAULT_CONFIG.commitLanguage).slice(0, 40),
     commitMessagePrompt: str(raw.commitMessagePrompt, DEFAULT_CONFIG.commitMessagePrompt).slice(
       0,

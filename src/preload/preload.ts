@@ -172,6 +172,10 @@ contextBridge.exposeInMainWorld("pi", {
   onTermExit(fn: (msg: { code?: number }) => void) {
     ipcRenderer.on("pi:term-exit", (_e, data) => fn(data));
   },
+  /** Settings asks the chat window to start a provider login in its terminal. */
+  onLoginRequest(fn: (msg: { provider?: string }) => void) {
+    ipcRenderer.on("pi:login-request", (_e, data) => fn(data));
+  },
   invoke(channel: string, ...args: unknown[]): Promise<unknown> {
     if (!INVOKE_ALLOWED.has(channel)) {
       console.error("[pi-preload] blocked channel:", channel);

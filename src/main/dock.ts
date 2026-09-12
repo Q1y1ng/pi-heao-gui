@@ -427,5 +427,23 @@ export const DOCK_SCRIPT = `
 
   // keep the terminal sized with the window
   window.addEventListener('resize', fitTerm);
+
+  // ── provider login: settings asks us to run pi's /login in this terminal ──
+  if (window.pi.onLoginRequest) {
+    window.pi.onLoginRequest(async function (m) {
+      var provider = (m && m.provider) || '';
+      show('term');
+      await ensureTerm();
+      if (!term) {
+        meta.textContent = '终端不可用，无法启动登录';
+        return;
+      }
+      // give the TUI a moment to draw its composer before typing
+      setTimeout(function () {
+        window.pi.invoke('pi:term-input', '/login ' + provider + '\\r');
+        meta.textContent = '已发送 /login ' + provider + ' —— 请在终端里完成授权';
+      }, 1200);
+    });
+  }
 })();
 </script>`;

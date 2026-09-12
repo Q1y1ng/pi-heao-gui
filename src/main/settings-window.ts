@@ -1,4 +1,5 @@
 import { TOKENS_CSS } from "./theme";
+import { t, type UiLang } from "./i18n";
 
 /**
  * Settings window for Pi Heao GUI.
@@ -8,7 +9,7 @@ import { TOKENS_CSS } from "./theme";
  * Styling: the legacy rules above are kept for layout, and a design layer that
  * consumes the shared --pi-* tokens is appended last so it wins.
  */
-export function buildSettingsHtml(): string {
+export function buildSettingsHtml(lang: UiLang = "zh-cn"): string {
   return `<!DOCTYPE html>
 <!-- Pi Heao GUI V0.1 · made by HEAOZIE -->
 <html lang="zh-CN">
@@ -612,13 +613,14 @@ body {
   <button id="btn-save" class="primary">保存更改</button>
 </div>
 <div class="tabs">
-  <div class="tab active" data-tab="models">模型配置</div>
-  <div class="tab" data-tab="extensions">扩展插件</div>
-  <div class="tab" data-tab="skills">技能</div>
-  <div class="tab" data-tab="sysprompt">系统提示词</div>
-  <div class="tab" data-tab="appearance">外观</div>
-  <div class="tab" data-tab="diagnostics">诊断</div>
-  <div class="tab" data-tab="general">常规</div>
+  <div class="tab active" data-tab="models">${t("settings.tab.models", lang)}</div>
+  <div class="tab" data-tab="extensions">${t("settings.tab.extensions", lang)}</div>
+  <div class="tab" data-tab="skills">${t("settings.tab.skills", lang)}</div>
+  <div class="tab" data-tab="sysprompt">${t("settings.tab.sysprompt", lang)}</div>
+  <div class="tab" data-tab="appearance">${t("settings.tab.appearance", lang)}</div>
+  <div class="tab" data-tab="diagnostics">${t("settings.tab.diagnostics", lang)}</div>
+  <div class="tab" data-tab="changelog">${t("settings.tab.changelog", lang)}</div>
+  <div class="tab" data-tab="general">${t("settings.tab.general", lang)}</div>
 </div>
 <div class="content">
   <!-- Models -->
@@ -742,8 +744,27 @@ body {
     <pre class="diag-pre" id="diag-log">尚未读取，点击「刷新日志」查看。</pre>
     <div class="hint">诊断包会隐去 API 密钥等敏感字段，但包含完整配置与日志末尾；生成后会自动打开所在目录。</div>
   </div>
+  <!-- Changelog (upstream pi-changelog.ts) -->
+  <div class="panel" id="panel-changelog">
+    <div class="section-title">pi 更新日志
+      <button class="btn-add" id="btn-changelog-refresh">刷新</button>
+    </div>
+    <div class="hint" id="changelog-meta"></div>
+    <pre class="diag-pre" id="changelog-body">尚未读取，点击「刷新」查看。</pre>
+    <div class="hint">内容来自已安装 pi 包内的 CHANGELOG.md（超过 20000 字符会截断），与 VS Code 插件的更新日志面板一致。</div>
+  </div>
   <!-- General -->
   <div class="panel" id="panel-general">
+    <div class="section-title">${t("settings.language", lang)}</div>
+    <div class="field">
+      <label>${t("settings.language", lang)}</label>
+      <select id="ui-language">
+        <option value="auto">${t("settings.language.auto", lang)}</option>
+        <option value="zh-cn">${t("settings.language.zh", lang)}</option>
+        <option value="en">${t("settings.language.en", lang)}</option>
+      </select>
+      <div class="hint">控制本应用自有文案（设置窗、侧栏、终端面板等）。上游聊天 UI 的语言由 pi-chat 自身的 locales 控制。</div>
+    </div>
     <div class="field">
       <label>pi 可执行文件路径（留空自动检测）</label>
       <input type="text" id="cfg-piPath" placeholder="例如 C:\\\\Users\\\\...\\\\npm\\\\pi.cmd">
@@ -1222,8 +1243,25 @@ async function checkAuth() {
       item.innerHTML =
         '<span class="name">' + esc(row.provider) + '</span>' +
         '<span class="card-badge ' + (ready ? 'ok' : 'muted') + '">' + esc(ready ? '就绪' : row.status || '未知') + '</span>' +
-        (row.reason ? '<span class="meta">' + esc(row.reason) + '</span>' : '');
+        (row.reason ? '<span class="meta">' + esc(row.reason) + '</span>' : '') +
+        '<button class="btn-sm" data-login="' + esc(row.provider) + '">登录</button>';
       el.appendChild(item);
+      const loginBtn = item.querySelector('[data-login]');
+      if (loginBtn) {
+        loginBtn.onclick = async () => {
+          try {
+            const r = await window.pi.invoke('pi:login-provider', row.provider);
+            setStatus(
+              r && r.ok
+                ? '已在内置终端里运行 /login ' + row.provider + '，请在那里完成授权'
+                : '登录失败: ' + ((r && r.error) || ''),
+              !!(r && r.ok),
+            );
+          } catch (err) {
+            setStatus('登录失败: ' + err.message, false);
+          }
+        };
+      }
     }
   } catch (err) {
     el.innerHTML = '<div class="empty-hint">检查失败: ' + esc(err.message) + '</div>';
@@ -1233,6 +1271,53 @@ async function checkAuth() {
 function wireAuthCheck() {
   const btn = $('btn-auth-check');
   if (btn) btn.onclick = () => checkAuth();
+}
+
+// ── UI language (this app's own strings) ──
+async function wireUiLanguage() {
+  const sel = $('ui-language');
+  if (!sel) return;
+  try {
+    const cfg = await window.pi.invoke('pi:get-config');
+    if (cfg && cfg.uiLanguage) sel.value = cfg.uiLanguage;
+  } catch (err) {
+    // default stays "auto"
+  }
+  sel.onchange = async () => {
+    try {
+      await window.pi.invoke('pi:set-config', { uiLanguage: sel.value });
+      setStatus('界面语言已更新，设置窗会重新打开', true);
+    } catch (err) {
+      setStatus('切换失败: ' + err.message, false);
+    }
+  };
+}
+
+// ── pi changelog ──
+async function loadChangelog() {
+  const body = $('changelog-body');
+  const meta = $('changelog-meta');
+  if (!body) return;
+  body.textContent = '读取中…';
+  try {
+    const res = await window.pi.invoke('pi:changelog');
+    if (res && res.ok) {
+      body.textContent = res.content || '';
+      if (meta) meta.textContent = 'pi ' + (res.version || '') + ' · ' + (res.root || '');
+    } else {
+      body.textContent = '';
+      if (meta) meta.textContent = '';
+      setStatus('读取更新日志失败: ' + ((res && res.error) || '未知错误'), false);
+    }
+  } catch (err) {
+    body.textContent = '';
+    setStatus('读取更新日志失败: ' + err.message, false);
+  }
+}
+
+function wireChangelog() {
+  const btn = $('btn-changelog-refresh');
+  if (btn) btn.onclick = () => loadChangelog();
 }
 
 // ── Model CRUD ──
@@ -1717,6 +1802,8 @@ async function loadAll() {
     wirePackages();
     wireSkills();
     wireAuthCheck();
+    wireChangelog();
+    void wireUiLanguage();
 
     setStatus('已加载配置');
   } catch (e) {

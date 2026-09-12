@@ -33,6 +33,8 @@ export interface StandaloneConfig {
   showArchived: boolean;
   /** Most-recently used workspaces (per-window workspace switcher). */
   recentWorkspaces: string[];
+  /** Language of the app's own UI (chat UI has its own upstream locales). */
+  uiLanguage: "auto" | "zh-cn" | "en";
   /** Language for generated commit messages (upstream: pi-agent-studio.commitLanguage). */
   commitLanguage: string;
   /** Override for the commit-message system prompt (empty = upstream default). */
@@ -65,6 +67,7 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   openAtLogin: false,
   showArchived: false,
   recentWorkspaces: [],
+  uiLanguage: "auto",
   commitLanguage: "English",
   commitMessagePrompt: "",
 };

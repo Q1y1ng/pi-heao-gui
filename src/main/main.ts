@@ -33,6 +33,8 @@ import {
 } from "./chat-session";
 import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
 import { generateCommitMessage, git } from "./git";
+import { readPiChangelog } from "./changelog";
+import { resolveUiLang } from "./i18n";
 import {
   isSessionFile as isSessionFilePath,
   renameSession,
@@ -258,7 +260,10 @@ function openSettingsWindow(): void {
       sandbox: true,
     },
   });
-  const tmp = writeTempHtml("pi-heao-settings", buildSettingsHtml());
+  const tmp = writeTempHtml(
+    "pi-heao-settings",
+    buildSettingsHtml(resolveUiLang(config.uiLanguage)),
+  );
   settingsWindow.loadFile(tmp);
   settingsWindow.on("closed", () => {
     settingsWindow = null;
@@ -464,6 +469,12 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   saveConfig({ ...config, ...partial });
   applyConfigSideEffects();
   if (partial.theme !== undefined || partial.accent !== undefined) broadcastTheme();
+  // The settings document is generated per language; rebuild it on switch.
+  if (partial.uiLanguage !== undefined && settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+    settingsWindow = null;
+    openSettingsWindow();
+  }
   return config;
 });
 
@@ -1149,6 +1160,35 @@ ipcMain.handle(
     });
   },
 );
+
+// ─── IPC: pi changelog (port of upstream pi-changelog.ts) ─────────────
+
+ipcMain.handle("pi:changelog", async () => {
+  const res = await readPiChangelog(findPiBinary(config.piPath || undefined));
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, content: res.content, root: res.root, version: res.version };
+});
+
+// ─── IPC: provider login (drives pi's own /login in the built-in terminal) ──
+
+/**
+ * OAuth belongs to pi: its TUI has `/login <provider>` and the SDK's
+ * ModelRuntime writes the credentials to auth.json. Rather than re-implement the
+ * OAuth dance (upstream drove the pi SDK's login() from its webview), the app
+ * opens its own PTY terminal on the pi TUI and types the command, then the
+ * readiness check reports the result.
+ */
+ipcMain.handle("pi:login-provider", (_e, provider: string) => {
+  const id = String(provider || "").trim();
+  if (!/^[a-z0-9._-]{1,40}$/i.test(id)) return { ok: false, error: "提供商无效" };
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return { ok: false, error: "主窗口不可用" };
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  win.webContents.send("pi:login-request", { provider: id });
+  return { ok: true, provider: id };
+});
 
 // ─── IPC: diagnostics ────────────────────────────────────────────────
 

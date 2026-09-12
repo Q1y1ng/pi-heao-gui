@@ -20,11 +20,11 @@ Windows 桌面客户端，把 VSCode 扩展 **Pi Agent Studio** 的聊天界面�
 安装包与便携版**都没有代码签名**，首次运行 Windows SmartScreen 会提示
 “Windows 已保护你的电脑”。点 **更多信息 → 仍要运行** 即可。
 
-请比对校验和（本页底部）：
+请比对校验和：
 
 ```
-SHA256  Pi Heao GUI Setup 1.0.0.exe      = <见下方>
-SHA256  Pi Heao GUI 1.0.0 Portable.exe   = <见下方>
+SHA256  Pi Heao GUI Setup 1.0.0.exe    = 452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208
+SHA256  Pi Heao GUI 1.0.0 Portable.exe = 866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b
 ```
 
 ## 前置要求
@@ -63,7 +63,12 @@ SHA256  Pi Heao GUI 1.0.0 Portable.exe   = <见下方>
 
 ## 校验和
 
-完整 SHA256 也在 Release 附件的说明中给出；下载后可用：
+```
+452ae062c953879cd5cb6fe3e17e58ebe0be39b3e7786655e7ec052b0b647208  Pi Heao GUI Setup 1.0.0.exe
+866aa4a49b141e942aa38f4df4222dcb4ab198a3f16c78c9f8581e5b19ec2e6b  Pi Heao GUI 1.0.0 Portable.exe
+```
+
+下载后可用：
 
 ```powershell
 certutil -hashfile "Pi Heao GUI Setup 1.0.0.exe" SHA256

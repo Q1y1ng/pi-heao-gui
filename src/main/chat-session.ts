@@ -2,18 +2,36 @@
  * Chat session controller for Electron.
  * Ported from upstream src/chat/chat-session.ts — VS Code deps replaced with Electron equivalents.
  */
-import { existsSync } from "fs";
-import { homedir } from "os";
-import { join, resolve, isAbsolute, relative, sep } from "path";
-import { createRpcClient, type RpcClient, type RpcEvent, type ExtensionUiRequest, type RpcImage, type RpcState, type RpcModel } from "./rpc-client";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, sep } from "node:path";
+import {
+  createRpcClient,
+  type RpcClient,
+  type ExtensionUiRequest,
+  type RpcImage,
+} from "./rpc-client";
 import type { StandaloneConfig } from "../shared/types";
 import { getRealBridgeDir } from "./bridge-extract";
+import { log, errText } from "./log";
 
 // ─── Builtin commands (from upstream builtin-commands.ts) ─────────────
 
-const BUILTIN_CMDS: Array<{ name: string; description: string; source: "builtin" }> = [
-  { name: "compact", description: "Compact the conversation", source: "builtin" },
-  { name: "autocompact", description: "Toggle auto-compaction", source: "builtin" },
+const BUILTIN_CMDS: Array<{
+  name: string;
+  description: string;
+  source: "builtin";
+}> = [
+  {
+    name: "compact",
+    description: "Compact the conversation",
+    source: "builtin",
+  },
+  {
+    name: "autocompact",
+    description: "Toggle auto-compaction",
+    source: "builtin",
+  },
   { name: "session", description: "Show session stats", source: "builtin" },
   { name: "name", description: "Rename session", source: "builtin" },
   { name: "clear", description: "Start new session", source: "builtin" },
@@ -33,7 +51,7 @@ function parseBuiltin(message: string): { name: string; args: string } | null {
   const spaceIdx = message.indexOf(" ");
   const name = spaceIdx === -1 ? message.slice(1) : message.slice(1, spaceIdx);
   const args = spaceIdx === -1 ? "" : message.slice(spaceIdx + 1).trim();
-  const known = BUILTIN_CMDS.find(c => c.name === name);
+  const known = BUILTIN_CMDS.find((c) => c.name === name);
   return known ? { name, args } : null;
 }
 
@@ -45,7 +63,12 @@ function messageText(content: unknown): string {
   let t = "";
   for (const block of content) {
     if (typeof block === "string") t += block;
-    else if (block && typeof block === "object" && (block as any).type === "text" && typeof (block as any).text === "string")
+    else if (
+      block &&
+      typeof block === "object" &&
+      (block as any).type === "text" &&
+      typeof (block as any).text === "string"
+    )
       t += (t ? "\n" : "") + (block as any).text;
   }
   return t;
@@ -53,18 +76,46 @@ function messageText(content: unknown): string {
 
 function shortenHome(p: string): string {
   const home = homedir();
-  if (home && (p === home || p.startsWith(home + sep))) return "~" + p.slice(home.length);
+  if (home && (p === home || p.startsWith(home + sep))) return `~${p.slice(home.length)}`;
   return p;
+}
+
+/** First-token latency / throughput / cost for the last finished turn. */
+interface TokenMetrics {
+  firstTokenMs?: number;
+  durationMs?: number;
+  tokensPerSec?: number;
+  outputTokens?: number;
+  cost?: number;
+}
+
+/**
+ * Best-effort calls must never surface as a hard failure, but they must not
+ * disappear either — a silent catch here is how "the UI just does nothing" bugs start.
+ */
+function warnBestEffort(what: string, e: unknown): void {
+  log.warn(`chat-session ${what} failed:`, errText(e));
 }
 
 // ─── Find pi binary ───────────────────────────────────────────────────
 
 function findPiBinary(customPath?: string): string {
   if (customPath && existsSync(customPath)) return customPath;
-  // Try common locations
-  const npmGlobal = join(process.env.APPDATA || "", "npm", "pi.cmd");
-  if (process.platform === "win32" && existsSync(npmGlobal)) return npmGlobal;
-  // Fallback to PATH
+  // npm global install location (Windows default)
+  const isWin = process.platform === "win32";
+  const npmGlobal = join(process.env.APPDATA || "", "npm", isWin ? "pi.cmd" : "pi");
+  if (process.env.APPDATA && existsSync(npmGlobal)) return npmGlobal;
+  // Search PATH ourselves: on Windows CreateProcess does not expand PATHEXT, so
+  // spawning a bare "pi" only works when a real pi.exe exists.
+  const exts = isWin ? [".exe", ".cmd", ".bat", ".ps1", ""] : [""];
+  const dirs = (process.env.PATH || "").split(isWin ? ";" : ":");
+  for (const dir of dirs) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const candidate = join(dir, `pi${ext}`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
   return "pi";
 }
 
@@ -104,7 +155,10 @@ function buildEnv(config: StandaloneConfig, appPath: string): Record<string, str
   const env: Record<string, string> = {
     PI_VSCODE_STATUS_BAR: "0",
     PI_VSCODE_DISABLED_TOOLS: JSON.stringify(config.disabledTools || []),
-    PI_VSCODE_PERMISSION: JSON.stringify({ mode: config.permissionMode, patterns: config.dangerousPatterns || [] }),
+    PI_VSCODE_PERMISSION: JSON.stringify({
+      mode: config.permissionMode,
+      patterns: config.dangerousPatterns || [],
+    }),
     PI_VSCODE_MCP_IDLE_TIMEOUT: String(config.mcpIdleTimeout ?? 10),
     PI_VSCODE_BUILTIN_AGENTS_DIR: join(bridgeDir, "agents"),
     // No bridge — extensions that need it will no-op
@@ -151,9 +205,11 @@ export async function createChatSession(opts: {
   // Token metrics tracking
   let promptSentAt = 0;
   let firstTokenAt = 0;
-  let lastMetrics: { firstTokenMs?: number; durationMs?: number; tokensPerSec?: number; outputTokens?: number; cost?: number } | {};
+  let lastMetrics: TokenMetrics = {};
 
-  const post = (msg: unknown) => { if (!sessionDisposed) opts.host.postToRenderer(msg); };
+  const post = (msg: unknown) => {
+    if (!sessionDisposed) opts.host.postToRenderer(msg);
+  };
 
   function updateStreaming(running: boolean) {
     streaming = running;
@@ -165,11 +221,21 @@ export async function createChatSession(opts: {
     try {
       const stats = await rpc.getSessionStatsFull();
       if (!sessionDisposed) {
-        post({ type: "contextUsage", usage: stats.contextUsage ?? null, cost: stats.cost });
+        post({
+          type: "contextUsage",
+          usage: stats.contextUsage ?? null,
+          cost: stats.cost,
+        });
         // Also send token totals
-        post({ type: "tokenStats", tokens: stats.tokens ?? null, cost: stats.cost ?? null });
+        post({
+          type: "tokenStats",
+          tokens: stats.tokens ?? null,
+          cost: stats.cost ?? null,
+        });
       }
-    } catch {}
+    } catch (e) {
+      warnBestEffort("context usage", e);
+    }
   }
 
   function sendTokenMetrics() {
@@ -213,22 +279,36 @@ export async function createChatSession(opts: {
       }
       void sendContextUsage();
     } catch (e) {
-      post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      post({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
   function handleExtUiRequest(req: ExtensionUiRequest) {
-    if (req.method === "select" || req.method === "confirm" || req.method === "input" || req.method === "editor") {
+    if (
+      req.method === "select" ||
+      req.method === "confirm" ||
+      req.method === "input" ||
+      req.method === "editor"
+    ) {
       post({ type: "dialog", request: req });
     } else if (req.method === "setWidget") {
-      post({ type: "widget", widgetKey: req.widgetKey, widgetLines: req.widgetLines });
+      post({
+        type: "widget",
+        widgetKey: req.widgetKey,
+        widgetLines: req.widgetLines,
+      });
     } else if (req.method === "notify") {
       const message = String(req.message ?? "");
       if (message.startsWith("__mcp_status__")) {
         try {
           const servers = JSON.parse(message.slice("__mcp_status__".length));
           post({ type: "mcpStatus", servers });
-        } catch {}
+        } catch (e) {
+          warnBestEffort("mcp status parse", e);
+        }
         return;
       }
       const t = req.notifyType as string | undefined;
@@ -251,9 +331,15 @@ export async function createChatSession(opts: {
           let enabled: boolean;
           if (a === "on") enabled = true;
           else if (a === "off") enabled = false;
-          else { const st = await rpc.getState(); enabled = !st.autoCompactionEnabled; }
+          else {
+            const st = await rpc.getState();
+            enabled = !st.autoCompactionEnabled;
+          }
           await rpc.setAutoCompaction(enabled);
-          post({ type: "toast", text: enabled ? "Auto-compaction enabled." : "Auto-compaction disabled." });
+          post({
+            type: "toast",
+            text: enabled ? "Auto-compaction enabled." : "Auto-compaction disabled.",
+          });
           break;
         }
         case "session": {
@@ -263,31 +349,50 @@ export async function createChatSession(opts: {
           if (stats.sessionFile) lines.push(`| Session file | \`${stats.sessionFile}\` |`);
           lines.push(`| Messages | ${stats.totalMessages ?? 0} |`);
           if (stats.cost != null) lines.push(`| Cost | $${stats.cost.toFixed(4)} |`);
-          post({ type: "infoPanel", title: "Session stats", markdown: lines.join("\n") });
+          post({
+            type: "infoPanel",
+            title: "Session stats",
+            markdown: lines.join("\n"),
+          });
           break;
         }
-        case "name":
-          if (!args) { post({ type: "toast", text: "Usage: /name <name>" }); break; }
+        case "name": {
+          if (!args) {
+            post({ type: "toast", text: "Usage: /name <name>" });
+            break;
+          }
           await rpc.setSessionName(args);
           sessionName = args;
           const st = await rpc.getState();
           sessionFile = st.sessionFile;
           post({ type: "state", state: st });
           await sendSessionInfo();
-          post({ type: "toast", text: `Session name set: ${args}`, kind: "success" });
+          post({
+            type: "toast",
+            text: `Session name set: ${args}`,
+            kind: "success",
+          });
           break;
+        }
         case "clear":
         case "new":
           await rpc.newSession();
           await hydrate();
-          post({ type: "toast", text: "Started new session.", kind: "success" });
+          post({
+            type: "toast",
+            text: "Started new session.",
+            kind: "success",
+          });
           break;
         case "reload":
           await reloadSession();
           break;
       }
     } catch (e) {
-      post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      post({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
     return true;
   }
@@ -295,7 +400,11 @@ export async function createChatSession(opts: {
   async function reloadSession() {
     if (streaming) return;
     if (!sessionFile && rpcAlive) {
-      post({ type: "toast", text: "This session has not been saved yet.", kind: "error" });
+      post({
+        type: "toast",
+        text: "This session has not been saved yet.",
+        kind: "error",
+      });
       return;
     }
     try {
@@ -306,11 +415,14 @@ export async function createChatSession(opts: {
       await hydrate();
       post({ type: "toast", text: "Session reloaded", kind: "success" });
     } catch (e) {
-      post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      post({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
-  async function handleMessage(msg: { type: string; [k: string]: unknown }) {
+  async function dispatchMessage(msg: { type: string; [k: string]: unknown }) {
     if (sessionDisposed) return;
     switch (msg.type) {
       case "webviewReady":
@@ -327,17 +439,29 @@ export async function createChatSession(opts: {
             msg.images as RpcImage[] | undefined,
           );
         } catch (e) {
-          post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+          post({
+            type: "error",
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
         break;
       case "abort":
-        try { await rpc.abort(); } catch {}
+        try {
+          await rpc.abort();
+        } catch (e) {
+          warnBestEffort("abort", e);
+        }
         break;
       case "clearQueue":
         try {
           await rpc.clearQueue();
-          post({ type: "event", event: { type: "queue_update", steering: [], followUp: [] } });
-        } catch {}
+          post({
+            type: "event",
+            event: { type: "queue_update", steering: [], followUp: [] },
+          });
+        } catch (e) {
+          warnBestEffort("clear queue", e);
+        }
         break;
       case "setModel":
         try {
@@ -348,7 +472,10 @@ export async function createChatSession(opts: {
           post({ type: "thinkingLevels", levels });
           void sendContextUsage();
         } catch (e) {
-          post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+          post({
+            type: "error",
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
         break;
       case "setThinking":
@@ -356,7 +483,9 @@ export async function createChatSession(opts: {
           await rpc.setThinkingLevel(String(msg.level ?? ""));
           const st = await rpc.getState();
           post({ type: "state", state: st });
-        } catch {}
+        } catch (e) {
+          warnBestEffort("set thinking level", e);
+        }
         break;
       case "setSessionName":
         try {
@@ -367,36 +496,87 @@ export async function createChatSession(opts: {
           sessionFile = st.sessionFile;
           post({ type: "state", state: st });
           await sendSessionInfo();
-          post({ type: "toast", text: `Session name set: ${name}`, kind: "success" });
+          post({
+            type: "toast",
+            text: `Session name set: ${name}`,
+            kind: "success",
+          });
         } catch (e) {
-          post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+          post({
+            type: "error",
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
         break;
       case "fork":
         try {
-          if (streaming) { post({ type: "toast", text: "Stop the agent before forking.", kind: "error" }); break; }
+          if (streaming) {
+            post({
+              type: "toast",
+              text: "Stop the agent before forking.",
+              kind: "error",
+            });
+            break;
+          }
           const entriesData = await rpc.getEntries();
-          const entry = entriesData.entries.find(e => e.type === "message" && e.message?.role === "user" && e.message?.timestamp === msg.ts);
-          if (!entry) { post({ type: "toast", text: "Could not locate that message to fork from.", kind: "error" }); break; }
+          const entry = entriesData.entries.find(
+            (e) =>
+              e.type === "message" && e.message?.role === "user" && e.message?.timestamp === msg.ts,
+          );
+          if (!entry) {
+            post({
+              type: "toast",
+              text: "Could not locate that message to fork from.",
+              kind: "error",
+            });
+            break;
+          }
           const forkResult = await rpc.fork(entry.id);
-          if (forkResult.cancelled) { post({ type: "toast", text: "Fork cancelled." }); break; }
+          if (forkResult.cancelled) {
+            post({ type: "toast", text: "Fork cancelled." });
+            break;
+          }
           const rSt = await rpc.getState();
           sessionFile = rSt.sessionFile;
           post({ type: "state", state: rSt });
           const rMsgs = await rpc.getMessages();
           post({ type: "messages", messages: rMsgs });
           void sendContextUsage();
-          post({ type: "toast", text: "Forked from selected message.", kind: "success" });
+          post({
+            type: "toast",
+            text: "Forked from selected message.",
+            kind: "success",
+          });
         } catch (e) {
-          post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+          post({
+            type: "error",
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
         break;
       case "revert":
         try {
-          if (streaming) { post({ type: "toast", text: "Stop the agent before reverting.", kind: "error" }); break; }
+          if (streaming) {
+            post({
+              type: "toast",
+              text: "Stop the agent before reverting.",
+              kind: "error",
+            });
+            break;
+          }
           const revEntries = await rpc.getEntries();
-          const revEntry = revEntries.entries.find(e => e.type === "message" && e.message?.role === "user" && e.message?.timestamp === msg.ts);
-          if (!revEntry) { post({ type: "toast", text: "Could not locate that message to revert to.", kind: "error" }); break; }
+          const revEntry = revEntries.entries.find(
+            (e) =>
+              e.type === "message" && e.message?.role === "user" && e.message?.timestamp === msg.ts,
+          );
+          if (!revEntry) {
+            post({
+              type: "toast",
+              text: "Could not locate that message to revert to.",
+              kind: "error",
+            });
+            break;
+          }
           const revText = messageText(revEntry.message?.content);
           const beforeLeaf = revEntries.leafId;
           await rpc.prompt(`/pi-vscode-tree ${revEntry.id}`);
@@ -409,9 +589,16 @@ export async function createChatSession(opts: {
           post({ type: "messages", messages: revMsgs });
           if (revText) post({ type: "prefillInput", text: revText });
           void sendContextUsage();
-          post({ type: "toast", text: "Reverted to selected message.", kind: "success" });
+          post({
+            type: "toast",
+            text: "Reverted to selected message.",
+            kind: "success",
+          });
         } catch (e) {
-          post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+          post({
+            type: "error",
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
         break;
       case "dialogResponse":
@@ -433,11 +620,15 @@ export async function createChatSession(opts: {
       case "mcpAction": {
         const action = String(msg.action ?? "status");
         const server = String(msg.server ?? "");
-        void rpc.prompt(`/mcp ${action}${server ? " " + server : ""}`, streaming ? "steer" : undefined).catch(() => {});
+        void rpc
+          .prompt(`/mcp ${action}${server ? ` ${server}` : ""}`, streaming ? "steer" : undefined)
+          .catch(() => {});
         break;
       }
       case "setPermission":
-        void rpc.prompt(`/permission ${String(msg.mode ?? "")}`, streaming ? "steer" : undefined).catch(() => {});
+        void rpc
+          .prompt(`/permission ${String(msg.mode ?? "")}`, streaming ? "steer" : undefined)
+          .catch(() => {});
         break;
       case "btwAbort":
         rpc.respondExtensionUi(String(msg.id ?? ""), { confirmed: true });
@@ -447,7 +638,9 @@ export async function createChatSession(opts: {
         try {
           const models = await rpc.getAvailableModels();
           post({ type: "models", models });
-        } catch {}
+        } catch (e) {
+          warnBestEffort("refresh models", e);
+        }
         break;
       case "rewindAccept":
         if (!streaming) void rpc.prompt("/rewind-accept").catch(() => {});
@@ -466,7 +659,14 @@ export async function createChatSession(opts: {
   }
 
   async function switchTo(file: string) {
-    if (streaming) { post({ type: "toast", text: "Stop the agent before switching sessions.", kind: "error" }); return; }
+    if (streaming) {
+      post({
+        type: "toast",
+        text: "Stop the agent before switching sessions.",
+        kind: "error",
+      });
+      return;
+    }
     try {
       await rpc.switchSession(file);
       const st = await rpc.getState();
@@ -476,18 +676,31 @@ export async function createChatSession(opts: {
       post({ type: "messages", messages });
       void sendContextUsage();
     } catch (e) {
-      post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      post({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
   async function newSession() {
-    if (streaming) { post({ type: "toast", text: "Stop the agent before starting a new session.", kind: "error" }); return; }
+    if (streaming) {
+      post({
+        type: "toast",
+        text: "Stop the agent before starting a new session.",
+        kind: "error",
+      });
+      return;
+    }
     try {
       await rpc.newSession();
       await hydrate();
       post({ type: "toast", text: "Started new session.", kind: "success" });
     } catch (e) {
-      post({ type: "error", message: e instanceof Error ? e.message : String(e) });
+      post({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -498,7 +711,8 @@ export async function createChatSession(opts: {
     const gen = ++rpcGeneration;
     const args = [
       ...extArgs,
-      "--mode", "rpc",
+      "--mode",
+      "rpc",
       ...(sessionFileForSpawn ? ["--session", sessionFileForSpawn] : []),
       ...(opts.config.args || []),
     ];
@@ -521,17 +735,23 @@ export async function createChatSession(opts: {
             if (promptSentAt) {
               const firstMs = firstTokenAt ? firstTokenAt - promptSentAt : undefined;
               const durMs = settledAt - (firstTokenAt || promptSentAt);
-              lastMetrics = { firstTokenMs: firstMs, durationMs: settledAt - promptSentAt };
+              lastMetrics = {
+                firstTokenMs: firstMs,
+                durationMs: settledAt - promptSentAt,
+              };
               // Fetch token counts for t/s
-              void rpc.getSessionStatsFull().then(stats => {
-                const out = stats.tokens?.output ?? stats.tokens?.total ?? 0;
-                if (out > 0 && durMs > 0) {
-                  (lastMetrics as any).tokensPerSec = Math.round((out / (durMs / 1000)) * 10) / 10;
-                  (lastMetrics as any).outputTokens = out;
-                }
-                (lastMetrics as any).cost = stats.cost;
-                sendTokenMetrics();
-              }).catch(() => sendTokenMetrics());
+              void rpc
+                .getSessionStatsFull()
+                .then((stats) => {
+                  const out = stats.tokens?.output ?? stats.tokens?.total ?? 0;
+                  if (out > 0 && durMs > 0) {
+                    lastMetrics.tokensPerSec = Math.round((out / (durMs / 1000)) * 10) / 10;
+                    lastMetrics.outputTokens = out;
+                  }
+                  lastMetrics.cost = stats.cost;
+                  sendTokenMetrics();
+                })
+                .catch(() => sendTokenMetrics());
             }
             promptSentAt = 0;
             firstTokenAt = 0;
@@ -546,15 +766,24 @@ export async function createChatSession(opts: {
           post({ type: "event", event });
           if (event.type === "agent_settled") {
             if (!sessionFile) {
-              void rpc.getState().then(s => {
-                sessionFile = s.sessionFile;
-                sessionName = s.sessionName;
-                void sendSessionInfo();
-              }).catch(() => {});
+              void rpc
+                .getState()
+                .then((s) => {
+                  sessionFile = s.sessionFile;
+                  sessionName = s.sessionName;
+                  void sendSessionInfo();
+                })
+                .catch(() => {});
             }
-            void rpc.getCommands().then(cmds => {
-              post({ type: "commands", commands: mergeBuiltinCommands(cmds) });
-            }).catch(() => {});
+            void rpc
+              .getCommands()
+              .then((cmds) => {
+                post({
+                  type: "commands",
+                  commands: mergeBuiltinCommands(cmds),
+                });
+              })
+              .catch(() => {});
             void sendContextUsage();
           } else if (event.type === "message_end") {
             void sendContextUsage();
@@ -569,7 +798,13 @@ export async function createChatSession(opts: {
           updateStreaming(false);
           rpcAlive = false;
           // Do NOT set sessionDisposed — allow reload/recovery
-          post({ type: "error", message: "Pi process exited" + (code != null ? ` (code ${code})` : "") + ". Click reload or send a message to restart." });
+          post({
+            type: "error",
+            message:
+              "Pi process exited" +
+              (code != null ? ` (code ${code})` : "") +
+              ". Click reload or send a message to restart.",
+          });
         },
         onError: (err) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
@@ -586,15 +821,21 @@ export async function createChatSession(opts: {
   void hydrate();
 
   return {
-    get rpc() { return rpc; },
-    get sessionFile() { return sessionFile; },
-    get streaming() { return streaming; },
+    get rpc() {
+      return rpc;
+    },
+    get sessionFile() {
+      return sessionFile;
+    },
+    get streaming() {
+      return streaming;
+    },
     handleMessage: async (msg) => {
       // Auto-reload if process died and user tries to interact
       if (!rpcAlive && !sessionDisposed && msg.type !== "webviewReady") {
         await reloadSession();
       }
-      await handleMessage(msg);
+      await dispatchMessage(msg);
     },
     switchTo,
     newSession,

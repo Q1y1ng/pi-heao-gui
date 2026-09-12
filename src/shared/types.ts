@@ -106,4 +106,5 @@ export const IPC = {
   FILES: "pi:files",
   SESSIONS_LIST: "pi:sessions-list",
   STREAMING: "pi:streaming",
+  MCP_STATUS: "pi:mcp-status",
 } as const;

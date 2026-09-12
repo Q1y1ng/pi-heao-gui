@@ -1,0 +1,27 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+/**
+ * Preload bridge for the SETTINGS window.
+ * Narrow surface on purpose: this window is the only one allowed to read/write
+ * ~/.pi/agent/{auth,settings,models}.json, SYSTEM.md and APPEND_SYSTEM.md.
+ * The chat window gets preload.ts, which cannot reach these channels at all.
+ */
+const ALLOWED = new Set<string>([
+ "pi:get-config",
+ "pi:set-config",
+ "pi:read-agent-files",
+ "pi:write-agent-files",
+ "pi:get-env-info",
+ "pi:toggle-extension",
+ "pi:open-settings",
+]);
+
+contextBridge.exposeInMainWorld("pi", {
+ invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+  if (!ALLOWED.has(channel)) {
+   console.error("[pi-preload-settings] blocked channel:", channel);
+   return Promise.reject(new Error(`blocked channel: ${channel}`));
+  }
+  return ipcRenderer.invoke(channel, ...args);
+ },
+});

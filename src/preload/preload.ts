@@ -1,14 +1,20 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 /**
- * Preload bridge for pi-standalone.
+ * Preload bridge for pi-standalone (CHAT window).
  * Exposes window.pi with:
  * - postMessage(msg): renderer -> main (maps msg.type to IPC channel)
  * - onMessage(fn): main -> renderer (single listener, receives all messages)
- * - invoke(channel, ...args): direct IPC invoke for non-chat operations
+ * - invoke(channel, ...args): direct IPC invoke, restricted to INVOKE_ALLOWED
+ * - getPathForFile(file): Electron >=32 dropped File.path; use webUtils instead
+ *
+ * SECURITY: this preload is loaded into the window that renders untrusted
+ * agent/tool output. It must never expose the settings-only channels
+ * (pi:read-agent-files / pi:write-agent-files / pi:set-config / pi:get-config).
+ * Those live in preload-settings.ts.
  */
 
-// Renderer -> main: map message type to IPC channel
+// Renderer -> main: message types allowed over postMessage
 const typeToChannel: Record<string, string> = {
   webviewReady: "pi:webview-ready",
   prompt: "pi:prompt",
@@ -24,6 +30,7 @@ const typeToChannel: Record<string, string> = {
   copy: "pi:copy",
   openFile: "pi:open-file",
   searchFiles: "pi:search-files",
+  appendInput: "pi:append-input",
   fork: "pi:fork",
   revert: "pi:revert",
   reload: "pi:reload",
@@ -42,14 +49,55 @@ const typeToChannel: Record<string, string> = {
   listSessions: "pi:list-sessions",
 };
 
+/**
+ * Channels the chat renderer may call through window.pi.invoke().
+ * Everything else is rejected — no settings/auth/config access from here.
+ */
+const INVOKE_ALLOWED = new Set<string>([
+  "pi:copy",
+  "pi:open-file",
+  "pi:pick-resource",
+  "pi:search-files",
+  "pi:append-input",
+  "pi:rewind-diff",
+  "pi:open-settings",
+  "pi:list-sessions",
+  "pi:switch-session",
+  "pi:toggle-pin",
+  "pi:open-session-window",
+  "pi:pick-workspace",
+  "pi:set-workspace",
+  "pi:export-conversation",
+]);
+
 // Main -> renderer channels that should be forwarded as MessageEvents
 const forwardChannels = [
-  "pi:state", "pi:models", "pi:enabled-models", "pi:thinking-levels",
-  "pi:commands", "pi:messages", "pi:event", "pi:dialog", "pi:picked-resources",
-  "pi:context-usage", "pi:widget", "pi:toast", "pi:info-panel", "pi:btw-abort-ready",
-  "pi:error", "pi:prefill-input", "pi:append-input", "pi:session-info",
-  "pi:permission-mode", "pi:files", "pi:sessions-list", "pi:streaming",
-  "pi:token-stats", "pi:token-metrics", "pi:first-token",
+  "pi:state",
+  "pi:models",
+  "pi:enabled-models",
+  "pi:thinking-levels",
+  "pi:commands",
+  "pi:messages",
+  "pi:event",
+  "pi:dialog",
+  "pi:picked-resources",
+  "pi:context-usage",
+  "pi:widget",
+  "pi:toast",
+  "pi:info-panel",
+  "pi:btw-abort-ready",
+  "pi:error",
+  "pi:prefill-input",
+  "pi:append-input",
+  "pi:session-info",
+  "pi:permission-mode",
+  "pi:files",
+  "pi:sessions-list",
+  "pi:streaming",
+  "pi:token-stats",
+  "pi:token-metrics",
+  "pi:first-token",
+  "pi:mcp-status",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;
@@ -61,19 +109,40 @@ for (const ch of forwardChannels) {
   });
 }
 
+/** Electron >= 32 removed File.path; the only supported way is webUtils in preload. */
+function getPathForFile(file: unknown): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { webUtils } = require("electron");
+    if (webUtils && typeof webUtils.getPathForFile === "function") {
+      const p = webUtils.getPathForFile(file as File);
+      if (p) return p;
+    }
+  } catch {
+    /* webUtils unavailable — fall through */
+  }
+  const legacy = (file as { path?: string } | null)?.path;
+  return typeof legacy === "string" ? legacy : "";
+}
+
 contextBridge.exposeInMainWorld("pi", {
   postMessage(msg: { type: string; [k: string]: unknown }) {
-    const channel = typeToChannel[msg.type];
+    const channel = typeToChannel[msg?.type];
     if (channel) {
       ipcRenderer.invoke(channel, msg);
     } else {
-      console.warn("[pi-preload] unknown message type:", msg.type);
+      console.warn("[pi-preload] unknown message type:", msg?.type);
     }
   },
   onMessage(fn: (msg: unknown) => void) {
     messageListener = fn;
   },
   invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+    if (!INVOKE_ALLOWED.has(channel)) {
+      console.error("[pi-preload] blocked channel:", channel);
+      return Promise.reject(new Error(`blocked channel: ${channel}`));
+    }
     return ipcRenderer.invoke(channel, ...args);
   },
+  getPathForFile,
 });

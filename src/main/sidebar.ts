@@ -269,6 +269,8 @@ export const SIDEBAR_SCRIPT = `
           if (r && r.ok === false) {
             showToast('切换失败: ' + (r.error || '未知错误'));
             item.classList.remove('active');
+          } else {
+            requestSessions();
           }
         })
         .catch(function(err) {
@@ -355,7 +357,26 @@ export const SIDEBAR_SCRIPT = `
     }
   }
   requestSessions();
-  setInterval(requestSessions, 5000);
+  // Session list refresh: cheap now that main caches parsed metadata, but still
+  // no reason to do it every 5s — plus an immediate refresh when the window wakes up.
+  setInterval(requestSessions, 15000);
+  window.addEventListener('focus', requestSessions);
+
+  function dragAndDropFiles(files) {
+    // Electron >= 32 removed File.path in the renderer — the path can only be
+    // resolved through webUtils, which lives in the preload.
+    var paths = [];
+    for (var i = 0; i < files.length; i++) {
+      var p = '';
+      try { p = window.pi && window.pi.getPathForFile ? window.pi.getPathForFile(files[i]) : ''; } catch (e) { p = ''; }
+      if (p) paths.push(p);
+    }
+    if (paths.length && window.pi) {
+      window.pi.postMessage({ type: 'appendInput', text: paths.join('\\n') });
+    } else if (files.length) {
+      showToast('无法解析拖入文件的路径');
+    }
+  }
 
   // Drag & drop files
   document.addEventListener('dragover', function(e) { e.preventDefault(); });
@@ -363,13 +384,7 @@ export const SIDEBAR_SCRIPT = `
     e.preventDefault();
     var files = e.dataTransfer && e.dataTransfer.files;
     if (!files || !files.length) return;
-    var paths = [];
-    for (var i = 0; i < files.length; i++) {
-      if (files[i].path) paths.push(files[i].path);
-    }
-    if (paths.length && window.pi) {
-      window.pi.postMessage({ type: 'appendInput', text: paths.join('\\n') });
-    }
+    dragAndDropFiles(files);
   });
 })();
 </script>

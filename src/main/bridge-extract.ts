@@ -3,8 +3,8 @@
  * pi child process cannot read Electron asar archives.
  */
 import { app } from "electron";
-import { join, dirname } from "path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { join, } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 
 let extractedBridgeDir: string | null = null;
 

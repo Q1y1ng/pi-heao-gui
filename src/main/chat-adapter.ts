@@ -3,9 +3,9 @@
  * Reads the built single-file HTML, injects acquireVsCodeApi shim + config globals.
  * Also injects a full-window shell: custom title bar + sidebar + main content area.
  */
-import { readFileSync, existsSync, statSync } from "fs";
-import { join, extname, isAbsolute } from "path";
-import { homedir } from "os";
+import { readFileSync, existsSync, statSync } from "node:fs";
+import { join, extname, isAbsolute } from "node:path";
+import { homedir } from "node:os";
 import type { StandaloneConfig } from "../shared/types";
 import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
 import { THEME_CSS } from "./theme";
@@ -19,14 +19,34 @@ const BG_MIME: Record<string, string> = {
   ".bmp": "image/bmp",
 };
 
-function escJs(s: string): string {
-  return s
+/** Escape for embedding inside a double-quoted JS string in the generated HTML. */
+function escJs(value: unknown): string {
+  return String(value ?? "")
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\n/g, "\\n")
     .replace(/\r/g, "\\r")
     .replace(/</g, "\\u003c");
 }
+
+/**
+ * JSON that is safe to embed inside a <script> block: JSON.stringify does not
+ * escape `<`, so a config value containing `</script>` would close the block.
+ */
+function safeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/**
+ * CSP for the generated chat document.
+ * The UI is a single inline module (vite single-file build), so 'unsafe-inline'
+ * is required for script/style; everything else is pinned to this document plus
+ * data:/blob: assets. No remote script, and no remote exfiltration channel.
+ */
+const CSP_META = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; form-action 'none'; base-uri 'none'; frame-src 'none';">`;
 
 function resolveBgDataUrl(path?: string): string {
   if (!path || !isAbsolute(path)) return "";
@@ -93,7 +113,6 @@ const ICONS = {
 
 const CHROME_CSS = `
 <style id="pi-standalone-chrome">
-${"" /* THEME_CSS is injected separately in head */}
 html, body {
   overflow: hidden !important;
   height: 100vh !important;
@@ -133,11 +152,32 @@ html, body {
   width: auto;
 }
 .pi-tb-logo {
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  background: linear-gradient(135deg, #0e639c 0%, #1177bb 100%);
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: #0b0b0b;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding-bottom: 1px;
+  box-sizing: border-box;
   flex-shrink: 0;
+}
+
+/* Author mark: present but deliberately quiet. */
+.pi-tb-brand {
+  font-size: 9.5px;
+  color: #4a4a4a;
+  letter-spacing: 0.35px;
+  margin-left: 3px;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .pi-tb-app {
   font-size: 12px;
@@ -339,8 +379,9 @@ function buildChromeHtml(): string {
 <div id="pi-shell">
   <header class="pi-titlebar" id="pi-titlebar">
     <div class="pi-tb-left">
-      <div class="pi-tb-logo" aria-hidden="true"></div>
-      <span class="pi-tb-app">Pi Standalone</span>
+      <div class="pi-tb-logo" aria-hidden="true">π</div>
+      <span class="pi-tb-app">Pi Heao GUI</span>
+      <span class="pi-tb-brand" title="Pi Heao GUI V0.1 — made by HEAOZIE">made by HEAOZIE</span>
     </div>
     <div class="pi-tb-center">
       <span class="pi-tb-title" id="pi-title-text"></span>
@@ -414,7 +455,7 @@ const REPARENT_SCRIPT = `
     // Keep title center clean — workspace path lives in sidebar only
     var titleEl = document.getElementById('pi-title-text');
     if (titleEl) titleEl.textContent = '';
-    document.title = 'Pi Standalone';
+    document.title = 'Pi Heao GUI';
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', wrap);
@@ -583,12 +624,24 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   const candidates = [
     join(appPath, "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
     join(appPath, "vendor", "upstream", "pi-chat", "dist", "index.html"),
-    join(appPath, "app.asar", "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
+    join(
+      appPath,
+      "app.asar",
+      "vendor",
+      "upstream",
+      "packages",
+      "pi-chat",
+      "dist",
+      "pi-chat-0.0.0.html",
+    ),
     join(appPath, "app.asar", "vendor", "upstream", "pi-chat", "dist", "index.html"),
   ];
   let src: string | null = null;
   for (const p of candidates) {
-    if (existsSync(p)) { src = p; break; }
+    if (existsSync(p)) {
+      src = p;
+      break;
+    }
   }
   if (!src) return null;
 
@@ -603,13 +656,17 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   html = html.split("PI_SEP_PLACEHOLDER").join(escJs(sepChar));
   html = html.split("PI_WORKSPACE_PLACEHOLDER").join(escJs(config.workspaceRoot || ""));
   html = html.split("PI_FONTSIZE_PLACEHOLDER").join(String(config.chatFontSize || 13));
-  html = html.split("PI_LANG_PLACEHOLDER").join(escJs(config.language === "auto" ? "zh-cn" : config.language));
-  html = html.split("PI_MERMAID_THEME_PLACEHOLDER").join(escJs(config.chatMermaidTheme || "default"));
+  html = html
+    .split("PI_LANG_PLACEHOLDER")
+    .join(escJs(config.language === "auto" ? "zh-cn" : config.language));
+  html = html
+    .split("PI_MERMAID_THEME_PLACEHOLDER")
+    .join(escJs(config.chatMermaidTheme || "default"));
   html = html.split("PI_BG_IMAGE_PLACEHOLDER").join(escJs(bgDataUrl));
   html = html.split("PI_BG_OPACITY_PLACEHOLDER").join(String(config.chatBackgroundOpacity ?? 1));
   html = html.split("PI_SENDSHORTCUT_PLACEHOLDER").join(escJs(config.chatSendShortcut || "enter"));
 
-  const configScript = `<script>window.__PI_STANDALONE_CONFIG__ = ${JSON.stringify(config)}; window.__PI_HOME__ = ${JSON.stringify(home)};</script>`;
+  const configScript = `<script>window.__PI_HEAO_CONFIG__ = ${safeJson(config)}; window.__PI_STANDALONE_CONFIG__ = window.__PI_HEAO_CONFIG__; window.__PI_HOME__ = ${safeJson(home)};</script>`;
 
   // Inject THEME_CSS + SHIM into <head>
   const lines = html.split("\n");
@@ -626,10 +683,33 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     // fallback: inject before last </body>
     const bodyIdx = html.lastIndexOf("</body>");
     if (bodyIdx !== -1) {
-      html = html.slice(0, bodyIdx) + THEME_CSS + CHROME_CSS + SHIM_SCRIPT + configScript + html.slice(bodyIdx);
+      html =
+        html.slice(0, bodyIdx) +
+        THEME_CSS +
+        CHROME_CSS +
+        SHIM_SCRIPT +
+        configScript +
+        html.slice(bodyIdx);
     }
   }
   html = lines.join("\n");
+
+  // CSP must be the first element inside <head> — a policy declared after the
+  // bundled module script would not apply to it.
+  const headLines = html.split("\n");
+  let headOpenIdx = -1;
+  for (let i = 0; i < headLines.length; i++) {
+    if (/^<head(\s|>|$)/i.test(headLines[i].trim())) {
+      headOpenIdx = i;
+      break;
+    }
+  }
+  if (headOpenIdx !== -1) {
+    headLines.splice(headOpenIdx + 1, 0, CSP_META);
+    html = headLines.join("\n");
+  } else {
+    html = `${CSP_META}\n${html}`;
+  }
 
   // Inject shell right after structural <body>
   const allLines = html.split("\n");
@@ -660,5 +740,5 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
 
-  return allLines.join("\n");
+  return `<!-- Pi Heao GUI V0.1 · made by HEAOZIE -->\n${allLines.join("\n")}`;
 }

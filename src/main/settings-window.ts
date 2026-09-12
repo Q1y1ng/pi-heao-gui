@@ -5,11 +5,13 @@
  */
 export function buildSettingsHtml(): string {
   return `<!DOCTYPE html>
+<!-- Pi Heao GUI V0.1 · made by HEAOZIE -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pi Standalone 设置</title>
+<title>Pi Heao GUI 设置</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
@@ -52,6 +54,7 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 .json-editor{width:100%;min-height:200px;padding:10px;border-radius:5px;border:1px solid #454545;
   background:#1a1a1a;color:#d4d4d4;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical}
 .status{padding:6px 16px;border-top:1px solid #3c3c3c;font-size:11px;color:#888;background:#252526}
+.brand{padding:0 16px 6px;font-size:9.5px;color:#4a4a4a;letter-spacing:0.35px;background:#252526;text-align:right;user-select:none;-webkit-user-select:none}
 .status.ok{color:#4ec9b0}
 .status.err{color:#f44747}
 .checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -84,7 +87,7 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 </head>
 <body>
 <div class="toolbar">
-  <h1>⚙ Pi Standalone 设置</h1>
+  <h1>⚙ Pi Heao GUI 设置</h1>
   <button id="btn-reload">重新加载</button>
   <button id="btn-save" class="primary">保存更改</button>
 </div>
@@ -220,12 +223,13 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
       <textarea class="json-editor" id="agent-models-raw" rows="6"></textarea>
     </div>
     <div class="field">
-      <label>auth.json（~/.pi/agent/auth.json）— 原始编辑</label>
+      <label>auth.json（~/.pi/agent/auth.json）— 原始编辑（密钥以 •••• 掩码显示；不动掩码即保持原值）</label>
       <textarea class="json-editor" id="agent-auth-raw" rows="4"></textarea>
     </div>
   </div>
 </div>
 <div class="status" id="status">就绪</div>
+<div class="brand" title="Pi Heao GUI V0.1 — made by HEAOZIE">made by HEAOZIE</div>
 <script>
 const $ = id => document.getElementById(id);
 const status = $('status');
@@ -252,6 +256,8 @@ let settingsJson = {};
 
 function maskKey(k) {
   if (!k) return '（未设置）';
+  // main already masks secrets before they reach this window — don't mask twice
+  if (k.indexOf('\u2022') !== -1) return k;
   if (k.length <= 8) return '••••••••';
   return k.slice(0, 4) + '••••••••' + k.slice(-4);
 }

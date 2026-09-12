@@ -138,8 +138,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
   if (bodyOpenIdx !== -1) {
-    const titlebar = `<div class="pi-titlebar"><span>Pi Standalone GUI</span></div>`;
-    allLines.splice(bodyOpenIdx + 1, 0, titlebar, SIDEBAR_HTML);
+    allLines.splice(bodyOpenIdx + 1, 0, SIDEBAR_HTML);
   }
   // Find structural </body> (search from end)
   for (let i = allLines.length - 1; i >= 0; i--) {

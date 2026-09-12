@@ -7,6 +7,7 @@ import { homedir } from "os";
 import { join, resolve, isAbsolute, relative, sep } from "path";
 import { createRpcClient, type RpcClient, type RpcEvent, type ExtensionUiRequest, type RpcImage, type RpcState, type RpcModel } from "./rpc-client";
 import type { StandaloneConfig } from "../shared/types";
+import { getRealBridgeDir } from "./bridge-extract";
 
 // ─── Builtin commands (from upstream builtin-commands.ts) ─────────────
 
@@ -68,7 +69,7 @@ function findPiBinary(customPath?: string): string {
 }
 
 function buildExtensionArgs(appPath: string, config: StandaloneConfig): string[] {
-  const bridgeDir = join(appPath, "vendor", "upstream", "bridge");
+  const bridgeDir = getRealBridgeDir(appPath);
   const extensions = [
     "todo.ts",
     "questionnaire.ts",
@@ -99,7 +100,7 @@ function buildExtensionArgs(appPath: string, config: StandaloneConfig): string[]
 }
 
 function buildEnv(config: StandaloneConfig, appPath: string): Record<string, string> {
-  const bridgeDir = join(appPath, "vendor", "upstream", "bridge");
+  const bridgeDir = getRealBridgeDir(appPath);
   const env: Record<string, string> = {
     PI_VSCODE_STATUS_BAR: "0",
     PI_VSCODE_DISABLED_TOOLS: JSON.stringify(config.disabledTools || []),

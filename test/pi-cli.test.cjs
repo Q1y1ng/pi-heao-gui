@@ -35,11 +35,13 @@ test("parses user and project packages with their install paths", () => {
   );
 });
 
-test("tolerates CRLF, blank lines and an empty list", () => {
+test("tolerates CRLF, blank lines, notices and an empty list", () => {
   assert.equal(parseInstalledPackages(REAL_LIST.replace(/\n/g, "\r\n")).length, 4);
   assert.deepEqual(parseInstalledPackages(""), []);
   assert.deepEqual(parseInstalledPackages("User packages:\n"), []);
+  // unindented chatter must never turn into a package entry
   assert.deepEqual(parseInstalledPackages("no packages here"), []);
+  assert.deepEqual(parseInstalledPackages("User packages:\nno packages installed"), []);
 });
 
 test("parses the auth check JSON line", () => {

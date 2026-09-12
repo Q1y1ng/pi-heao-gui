@@ -135,8 +135,11 @@ export function parseInstalledPackages(stdout: string): InstalledPackage[] {
     }
     const indent = line.length - line.trimStart().length;
     const text = line.trim();
+    // Only the indented body of a section carries entries: package sources sit at
+    // two spaces, their install path deeper. Anything else (headers we do not
+    // know, "no packages" notices) must not become a fake package.
+    if (indent < 2) continue;
     if (indent <= 2) {
-      // a new source entry
       pending = { source: text, path: "", scope };
       out.push(pending);
       continue;

@@ -19,6 +19,7 @@
     "@types/node": "^22.0.0",
     "electron": "^43.0.0",
     "electron-builder": "^26.0.0",
+    "png-to-ico": "^3.0.2",
     "typescript": "^5.8.0"
   },
   "build": {

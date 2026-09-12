@@ -258,6 +258,19 @@ html, body {
   min-width: 0;
 }
 
+/* Hide pi-chat's own toolbar — our title bar replaces it.
+   Elements stay in DOM so JS handlers (refresh/mcp/settings) keep working. */
+#pi-main .toolbar {
+  display: none !important;
+}
+
+/* Center pi-chat .app nicely in main area */
+#pi-main .app {
+  max-width: 920px !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+}
+
 /* Sidebar header refinement */
 #pi-sidebar .sidebar-header {
   padding: 10px 12px 8px !important;
@@ -297,6 +310,7 @@ function buildChromeHtml(): string {
         <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)">${svgIcon(ICONS.plus)}</button>
         <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)">${svgIcon(ICONS.history)}</button>
         <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)">${svgIcon(ICONS.search)}</button>
+        <button class="pi-icon-btn" id="pi-tb-refresh" title="重新加载会话">${svgIcon(ICONS.history)}</button>
         <button class="pi-icon-btn" id="pi-tb-export" title="导出当前会话">${svgIcon(ICONS.download)}</button>
         <button class="pi-icon-btn" id="pi-tb-settings" title="设置 (Ctrl+,)">${svgIcon(ICONS.gear)}</button>
       </div>
@@ -351,18 +365,21 @@ const REPARENT_SCRIPT = `
       if (n.nodeType === 3 && !n.textContent.trim()) continue;
       main.appendChild(n);
     }
-    // Set title from workspace path
+    // Set title from workspace path — show full path with ~ for home
     var titleEl = document.getElementById('pi-title-text');
     var cfg = window.__PI_STANDALONE_CONFIG__;
     if (titleEl && cfg) {
       var ws = cfg.workspaceRoot || '';
       if (ws) {
-        var parts = ws.split(/[\\\\\\/]/).filter(Boolean);
-        var name = parts[parts.length - 1] || ws;
-        titleEl.textContent = name;
-        document.title = name + ' — Pi Standalone';
+        var home = (window.__PI_HOME__ || '').replace(/\\\\/g, '/');
+        var norm = String(ws).replace(/\\\\/g, '/');
+        var display = ws;
+        if (home && norm.indexOf(home) === 0) display = '~' + norm.slice(home.length);
+        titleEl.textContent = display;
+        titleEl.title = ws;
+        document.title = display + ' — Pi Standalone';
       } else {
-        titleEl.textContent = '';
+        titleEl.textContent = '未选择工作区';
         document.title = 'Pi Standalone';
       }
     }
@@ -384,10 +401,17 @@ const TITLEBAR_SCRIPT = `
     var btnNew = $('pi-tb-new');
     var btnHistory = $('pi-tb-history');
     var btnSearch = $('pi-tb-search');
+    var btnRefresh = $('pi-tb-refresh');
     var btnExport = $('pi-tb-export');
     var btnSettings = $('pi-tb-settings');
     if (btnNew) btnNew.onclick = function() {
       if (window.pi) window.pi.postMessage({ type: 'newSession' });
+    };
+    if (btnRefresh) btnRefresh.onclick = function() {
+      // Click pi-chat's hidden refresh button
+      var rb = document.getElementById('refresh-btn');
+      if (rb) rb.click();
+      else if (window.pi) window.pi.postMessage({ type: 'reload' });
     };
     if (btnHistory) btnHistory.onclick = function() {
       var list = $('pi-session-list');
@@ -553,7 +577,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   html = html.split("PI_BG_OPACITY_PLACEHOLDER").join(String(config.chatBackgroundOpacity ?? 1));
   html = html.split("PI_SENDSHORTCUT_PLACEHOLDER").join(escJs(config.chatSendShortcut || "enter"));
 
-  const configScript = `<script>window.__PI_STANDALONE_CONFIG__ = ${JSON.stringify(config)};</script>`;
+  const configScript = `<script>window.__PI_STANDALONE_CONFIG__ = ${JSON.stringify(config)}; window.__PI_HOME__ = ${JSON.stringify(home)};</script>`;
 
   // Inject THEME_CSS + SHIM into <head>
   const lines = html.split("\n");

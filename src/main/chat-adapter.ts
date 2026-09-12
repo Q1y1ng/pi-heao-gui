@@ -163,6 +163,24 @@ html, body {
   text-overflow: ellipsis;
   text-align: center;
 }
+.pi-tb-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.pi-stat {
+  font-size: 10.5px;
+  color: #7a7a7a;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+}
+.pi-stat.pi-stat-active { color: #4ec9b0; }
+.pi-stat.pi-stat-warn { color: #cca700; }
+.pi-stat.pi-stat-err { color: #f44747; }
 .pi-tb-right {
   display: flex;
   align-items: stretch;
@@ -274,6 +292,12 @@ function buildChromeHtml(): string {
     </div>
     <div class="pi-tb-center">
       <span class="pi-tb-title" id="pi-title-text"></span>
+    </div>
+    <div class="pi-tb-stats" id="pi-token-stats" title="Token 用量">
+      <span class="pi-stat" id="pi-stat-ctx" title="上下文占用"></span>
+      <span class="pi-stat" id="pi-stat-ft" title="首 token 延迟"></span>
+      <span class="pi-stat" id="pi-stat-tps" title="输出速度"></span>
+      <span class="pi-stat" id="pi-stat-cost" title="本次会话花费"></span>
     </div>
     <div class="pi-tb-right">
       <div class="pi-tb-actions">
@@ -428,6 +452,84 @@ const TITLEBAR_SCRIPT = `
 </script>
 `;
 
+const TOKENS_SCRIPT = `
+<script>
+(function() {
+  function fmtMs(ms) {
+    if (ms == null) return '';
+    if (ms < 1000) return Math.round(ms) + 'ms';
+    return (ms / 1000).toFixed(1) + 's';
+  }
+  function fmtNum(n) {
+    if (n == null) return '';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function setStat(id, text, cls) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'pi-stat' + (cls ? ' ' + cls : '');
+  }
+  function onMsg(data) {
+    if (!data) return;
+    if (data.type === 'contextUsage' && data.usage) {
+      var u = data.usage;
+      var pct = u.percent != null ? Math.round(u.percent) : null;
+      var tok = u.tokens != null ? fmtNum(u.tokens) : null;
+      var ctxText = '';
+      if (pct != null) ctxText = pct + '%';
+      else if (tok) ctxText = tok;
+      if (ctxText) {
+        var cls = pct != null && pct > 80 ? 'pi-stat-warn' : '';
+        setStat('pi-stat-ctx', ctxText, cls);
+      }
+    }
+    if (data.type === 'tokenStats' && data.tokens) {
+      var t = data.tokens;
+      var total = t.total || ((t.input || 0) + (t.output || 0));
+      if (total) setStat('pi-stat-ctx', fmtNum(total) + ' tok', '');
+      if (data.cost != null) setStat('pi-stat-cost', '$' + Number(data.cost).toFixed(3), '');
+    }
+    if (data.type === 'firstToken' && data.ms != null) {
+      setStat('pi-stat-ft', '⏱ ' + fmtMs(data.ms), 'pi-stat-active');
+    }
+    if (data.type === 'tokenMetrics' && data.metrics) {
+      var m = data.metrics;
+      if (m.firstTokenMs != null) setStat('pi-stat-ft', '⏱ ' + fmtMs(m.firstTokenMs), '');
+      if (m.tokensPerSec != null) setStat('pi-stat-tps', m.tokensPerSec + ' t/s', 'pi-stat-active');
+      if (m.cost != null) setStat('pi-stat-cost', '$' + Number(m.cost).toFixed(3), '');
+      // Fade active highlight after 3s
+      setTimeout(function() {
+        var ft = document.getElementById('pi-stat-ft');
+        var tps = document.getElementById('pi-stat-tps');
+        if (ft) ft.classList.remove('pi-stat-active');
+        if (tps) tps.classList.remove('pi-stat-active');
+      }, 3000);
+    }
+    if (data.type === 'streaming' && data.running) {
+      setStat('pi-stat-ft', '…', 'pi-stat-active');
+      setStat('pi-stat-tps', '', '');
+    }
+  }
+  function setup() {
+    if (window.pi && window.pi.onMessage) {
+      // Chain with existing listener
+      var prev = null;
+      // The shim already registered a listener; we piggyback via window message events
+      window.addEventListener('message', function(e) { onMsg(e.data); });
+      // Also try direct onMessage if available (won't override shim since shim already set)
+    } else {
+      setTimeout(setup, 100);
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+  else setup();
+})();
+</script>
+`;
+
 export function buildChatHtml(appPath: string, config: StandaloneConfig): string | null {
   const candidates = [
     join(appPath, "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
@@ -504,7 +606,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   // Inject re-parent + sidebar script before structural </body>
   for (let i = allLines.length - 1; i >= 0; i--) {
     if (allLines[i].trim() === "</body>") {
-      allLines.splice(i, 0, REPARENT_SCRIPT, SIDEBAR_SCRIPT, TITLEBAR_SCRIPT);
+      allLines.splice(i, 0, REPARENT_SCRIPT, SIDEBAR_SCRIPT, TITLEBAR_SCRIPT, TOKENS_SCRIPT);
       break;
     }
   }

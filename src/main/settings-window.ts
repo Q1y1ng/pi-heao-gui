@@ -1,6 +1,7 @@
 /**
  * Settings window for Pi Standalone GUI.
  * Tabs: 模型配置 | 扩展插件 | 技能 | 系统提示词 | 常规
+ * Models/auth/extensions are fully editable.
  */
 export function buildSettingsHtml(): string {
   return `<!DOCTYPE html>
@@ -43,11 +44,12 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 .card-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#0e639c;color:#fff}
 .card-badge.warn{background:#8b5a00}
 .card-badge.muted{background:#555}
+.card-badge.ok{background:#2e7d32}
 .list-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:5px;margin:3px 0;background:#2a2a2a}
 .list-item:hover{background:#303030}
 .list-item .name{flex:1;font-size:12px;color:#d4d4d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list-item .meta{font-size:11px;color:#888;flex-shrink:0}
-.json-editor{width:100%;min-height:250px;padding:10px;border-radius:5px;border:1px solid #454545;
+.json-editor{width:100%;min-height:200px;padding:10px;border-radius:5px;border:1px solid #454545;
   background:#1a1a1a;color:#d4d4d4;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical}
 .status{padding:6px 16px;border-top:1px solid #3c3c3c;font-size:11px;color:#888;background:#252526}
 .status.ok{color:#4ec9b0}
@@ -56,9 +58,28 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 .checkbox-row input[type=checkbox]{width:auto;accent-color:#0e639c}
 .checkbox-row label{margin:0;color:#d4d4d4}
 .empty-hint{text-align:center;padding:30px;color:#666;font-size:12px}
-.section-title{font-size:13px;font-weight:600;color:#e0e0e0;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #333}
+.section-title{font-size:13px;font-weight:600;color:#e0e0e0;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #333;display:flex;align-items:center;gap:8px}
 .section-title:first-child{margin-top:0}
+.section-title .btn-add{margin-left:auto;padding:3px 10px;border-radius:4px;border:1px solid #0e639c;background:transparent;color:#0e639c;cursor:pointer;font-size:11px}
+.section-title .btn-add:hover{background:#0e639c;color:#fff}
 .masked{font-family:monospace;letter-spacing:1px}
+.btn-sm{padding:3px 8px;border-radius:4px;border:1px solid #555;background:transparent;color:#aaa;cursor:pointer;font-size:11px;white-space:nowrap}
+.btn-sm:hover{background:#333;color:#fff}
+.btn-sm.danger{border-color:#8b3a3a;color:#f44747}
+.btn-sm.danger:hover{background:#5a1a1a}
+.btn-sm.ok{border-color:#2e7d32;color:#4ec9b0}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{background:#252526;border:1px solid #454545;border-radius:8px;padding:20px;width:480px;max-height:80vh;overflow-y:auto}
+.modal h3{font-size:14px;margin-bottom:14px;color:#e8e8e8}
+.modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal .actions button{padding:6px 16px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:12px}
+.modal .actions button.primary{background:#0e639c;border-color:#0e639c;color:#fff}
+.switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;cursor:pointer;inset:0;background:#555;border-radius:10px;transition:.2s}
+.switch .slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:#0e639c}
+.switch input:checked + .slider:before{transform:translateX(16px)}
 </style>
 </head>
 <body>
@@ -77,9 +98,13 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 <div class="content">
   <!-- Models -->
   <div class="panel active" id="panel-models">
-    <div class="section-title">已配置的模型提供商</div>
+    <div class="section-title">模型提供商
+      <button class="btn-add" id="btn-add-provider">+ 添加提供商</button>
+    </div>
     <div id="models-list"></div>
-    <div class="section-title">API 密钥</div>
+    <div class="section-title">API 密钥
+      <button class="btn-add" id="btn-add-auth">+ 添加密钥</button>
+    </div>
     <div id="auth-list"></div>
     <div class="section-title">默认模型</div>
     <div class="field">
@@ -121,11 +146,11 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
   <div class="panel" id="panel-general">
     <div class="field">
       <label>pi 可执行文件路径（留空自动检测）</label>
-      <input type="text" id="cfg-piPath" placeholder="例如 C:\\Users\\...\\npm\\pi.cmd">
+      <input type="text" id="cfg-piPath" placeholder="例如 C:\\\\Users\\\\...\\\\npm\\\\pi.cmd">
     </div>
     <div class="field">
       <label>默认工作目录</label>
-      <input type="text" id="cfg-workspaceRoot" placeholder="例如 E:\\AI\\my-project">
+      <input type="text" id="cfg-workspaceRoot" placeholder="例如 E:\\\\AI\\\\my-project">
       <div class="hint">@file 搜索与文件对话框的根目录</div>
     </div>
     <div class="field">
@@ -187,8 +212,16 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
       <input type="text" id="cfg-disabledTools" placeholder="todo, subagent, questionnaire">
     </div>
     <div class="field">
-      <label>settings.json（~/.pi/agent/settings.json）</label>
+      <label>settings.json（~/.pi/agent/settings.json）— 原始编辑</label>
       <textarea class="json-editor" id="agent-settings" rows="6"></textarea>
+    </div>
+    <div class="field">
+      <label>models.json（~/.pi/agent/models.json）— 原始编辑</label>
+      <textarea class="json-editor" id="agent-models-raw" rows="6"></textarea>
+    </div>
+    <div class="field">
+      <label>auth.json（~/.pi/agent/auth.json）— 原始编辑</label>
+      <textarea class="json-editor" id="agent-auth-raw" rows="4"></textarea>
     </div>
   </div>
 </div>
@@ -212,48 +245,118 @@ document.querySelectorAll('.tab').forEach(t => {
   };
 });
 
+// ── State ──
+let modelsJson = {};
+let authJson = {};
+let settingsJson = {};
+
 function maskKey(k) {
   if (!k) return '（未设置）';
   if (k.length <= 8) return '••••••••';
   return k.slice(0, 4) + '••••••••' + k.slice(-4);
 }
 
-function renderModels(providers) {
+// ── Models rendering ──
+function renderModels() {
   const el = $('models-list');
   const sel = $('default-provider');
   el.innerHTML = '';
   sel.innerHTML = '<option value="">（无）</option>';
-  if (!providers || !Object.keys(providers).length) {
-    el.innerHTML = '<div class="empty-hint">未配置模型提供商。请编辑 ~/.pi/agent/models.json</div>';
-    return;
+  const providers = modelsJson.providers || {};
+  const ids = Object.keys(providers);
+  if (!ids.length) {
+    el.innerHTML = '<div class="empty-hint">未配置模型提供商。点击上方「添加提供商」或编辑 models.json</div>';
   }
-  for (const [id, p] of Object.entries(providers)) {
+  for (const id of ids) {
+    const p = providers[id];
     const opt = document.createElement('option');
     opt.value = id; opt.textContent = p.name || id;
     sel.appendChild(opt);
-    const models = p.models || {};
-    const modelIds = Object.keys(models);
+    const modelIds = Object.keys(p.models || {});
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-title">' + esc(p.name || id) + ' <span class="card-badge">' + esc(id) + '</span></div>' +
-      '<div class="card-desc">Base URL: ' + esc(p.baseUrl || '（默认）') + '<br>' +
-      '模型 (' + modelIds.length + '): ' + esc(modelIds.slice(0, 5).join(', ') || '无') + (modelIds.length > 5 ? '…' : '') + '</div>';
+      '<div class="card-title">' + esc(p.name || id) +
+        ' <span class="card-badge">' + esc(id) + '</span>' +
+        '<span style="margin-left:auto;display:flex;gap:4px">' +
+          '<button class="btn-sm" data-act="edit-provider" data-id="' + esc(id) + '">编辑</button>' +
+          '<button class="btn-sm" data-act="add-model" data-id="' + esc(id) + '">+ 模型</button>' +
+          '<button class="btn-sm danger" data-act="del-provider" data-id="' + esc(id) + '">删除</button>' +
+        '</span>' +
+      '</div>' +
+      '<div class="card-desc">Base URL: ' + esc(p.baseUrl || '（默认）') + '</div>';
+    // Model list
+    const mlist = document.createElement('div');
+    mlist.style.cssText = 'margin-top:8px';
+    for (const mid of modelIds) {
+      const m = p.models[mid];
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      row.innerHTML =
+        '<span class="name">' + esc(mid) + (m.name ? ' <span style="color:#888">(' + esc(m.name) + ')</span>' : '') + '</span>' +
+        '<button class="btn-sm" data-act="edit-model" data-pid="' + esc(id) + '" data-mid="' + esc(mid) + '">编辑</button>' +
+        '<button class="btn-sm danger" data-act="del-model" data-pid="' + esc(id) + '" data-mid="' + esc(mid) + '">删除</button>';
+      mlist.appendChild(row);
+    }
+    if (!modelIds.length) mlist.innerHTML = '<div style="color:#666;font-size:11px;padding:4px 0">无模型，点击「+ 模型」添加</div>';
+    card.appendChild(mlist);
     el.appendChild(card);
   }
 }
 
-function renderAuth(auth) {
+// ── Auth rendering ──
+function renderAuth() {
   const el = $('auth-list');
   el.innerHTML = '';
-  if (!auth || !Object.keys(auth).length) {
-    el.innerHTML = '<div class="empty-hint">未配置 API 密钥。请编辑 ~/.pi/agent/auth.json</div>';
+  const keys = Object.keys(authJson);
+  if (!keys.length) {
+    el.innerHTML = '<div class="empty-hint">未配置 API 密钥。点击上方「添加密钥」</div>';
     return;
   }
-  for (const [provider, key] of Object.entries(auth)) {
+  for (const provider of keys) {
+    const raw = authJson[provider];
+    const key = typeof raw === 'string' ? raw : (raw && raw.apiKey) || '';
     const item = document.createElement('div');
     item.className = 'list-item';
-    item.innerHTML = '<span class="name">' + esc(provider) + '</span><span class="meta masked">' + esc(maskKey(typeof key === 'string' ? key : key.apiKey)) + '</span>';
+    item.innerHTML =
+      '<span class="name">' + esc(provider) + '</span>' +
+      '<span class="meta masked">' + esc(maskKey(key)) + '</span>' +
+      '<button class="btn-sm" data-act="edit-auth" data-id="' + esc(provider) + '">编辑</button>' +
+      '<button class="btn-sm danger" data-act="del-auth" data-id="' + esc(provider) + '">删除</button>';
+    el.appendChild(item);
+  }
+}
+
+// ── Extensions rendering ──
+function renderLocalExtensions(exts) {
+  const el = $('local-extensions');
+  el.innerHTML = '';
+  if (!exts || !exts.length) {
+    el.innerHTML = '<div class="empty-hint">无本地扩展</div>';
+    return;
+  }
+  for (const e of exts) {
+    const disabled = e.endsWith('.disabled') || e.endsWith('.disabled-vscode');
+    const base = e.replace(/\\.disabled(-vscode)?$/, '');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML =
+      '<span class="name">' + esc(base) + '</span>' +
+      (disabled ? '<span class="card-badge muted">已禁用</span>' : '<span class="card-badge ok">已启用</span>') +
+      '<label class="switch"><input type="checkbox" ' + (disabled ? '' : 'checked') + ' data-ext="' + esc(base) + '"><span class="slider"></span></label>';
+    const cb = item.querySelector('input');
+    cb.onchange = async () => {
+      try {
+        const r = await window.pi.invoke('pi:toggle-extension', base, cb.checked);
+        if (r && r.ok === false) throw new Error(r.error || '操作失败');
+        setStatus(cb.checked ? '已启用 ' + base : '已禁用 ' + base, true);
+        const data = await window.pi.invoke('pi:get-env-info');
+        renderLocalExtensions(data.extensions || []);
+      } catch (err) {
+        setStatus('操作失败: ' + err.message, false);
+        cb.checked = !cb.checked;
+      }
+    };
     el.appendChild(item);
   }
 }
@@ -274,22 +377,6 @@ function renderNpmPackages(packages) {
   }
 }
 
-function renderLocalExtensions(exts) {
-  const el = $('local-extensions');
-  el.innerHTML = '';
-  if (!exts || !exts.length) {
-    el.innerHTML = '<div class="empty-hint">无本地扩展</div>';
-    return;
-  }
-  for (const e of exts) {
-    const item = document.createElement('div');
-    item.className = 'list-item';
-    const badge = e.endsWith('.disabled') || e.endsWith('.disabled-vscode') ? '<span class="card-badge muted">已禁用</span>' : '';
-    item.innerHTML = '<span class="name">' + esc(e) + '</span>' + badge;
-    el.appendChild(item);
-  }
-}
-
 function renderSkills(skills) {
   const el = $('skills-list');
   el.innerHTML = '';
@@ -305,6 +392,153 @@ function renderSkills(skills) {
   }
 }
 
+// ── Modal helpers ──
+function showModal(title, fields, onSubmit) {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  let html = '<h3>' + esc(title) + '</h3>';
+  for (const f of fields) {
+    html += '<div class="field"><label>' + esc(f.label) + '</label>';
+    if (f.type === 'textarea') html += '<textarea id="mf-' + f.key + '" rows="' + (f.rows || 4) + '" placeholder="' + esc(f.placeholder || '') + '">' + esc(f.value || '') + '</textarea>';
+    else html += '<input type="text" id="mf-' + f.key + '" value="' + esc(f.value || '') + '" placeholder="' + esc(f.placeholder || '') + '">';
+    if (f.hint) html += '<div class="hint">' + esc(f.hint) + '</div>';
+    html += '</div>';
+  }
+  html += '<div class="actions"><button id="mf-cancel">取消</button><button id="mf-ok" class="primary">确定</button></div>';
+  modal.innerHTML = html;
+  bg.appendChild(modal);
+  document.body.appendChild(bg);
+  $('mf-cancel').onclick = () => bg.remove();
+  $('mf-ok').onclick = () => {
+    const vals = {};
+    for (const f of fields) vals[f.key] = $('mf-' + f.key).value;
+    bg.remove();
+    onSubmit(vals);
+  };
+  // Focus first field
+  const first = modal.querySelector('input,textarea');
+  if (first) first.focus();
+}
+
+// ── Model CRUD ──
+$('btn-add-provider').onclick = () => {
+  showModal('添加模型提供商', [
+    { key: 'id', label: '提供商 ID（小写英文）', placeholder: 'my-provider' },
+    { key: 'name', label: '显示名称', placeholder: 'My Provider' },
+    { key: 'baseUrl', label: 'Base URL', placeholder: 'https://api.example.com/v1' },
+  ], v => {
+    if (!v.id.trim()) { setStatus('提供商 ID 不能为空', false); return; }
+    modelsJson.providers = modelsJson.providers || {};
+    modelsJson.providers[v.id.trim()] = { name: v.name || v.id, baseUrl: v.baseUrl || '', models: {} };
+    renderModels();
+    setStatus('已添加提供商 ' + v.id + '（记得保存）', true);
+  });
+};
+
+$('btn-add-auth').onclick = () => {
+  showModal('添加 API 密钥', [
+    { key: 'provider', label: '提供商 ID', placeholder: 'openai / deepseek / ...' },
+    { key: 'key', label: 'API Key', placeholder: 'sk-...' },
+  ], v => {
+    if (!v.provider.trim() || !v.key.trim()) { setStatus('提供商和密钥不能为空', false); return; }
+    authJson[v.provider.trim()] = v.key.trim();
+    renderAuth();
+    setStatus('已添加密钥（记得保存）', true);
+  });
+};
+
+// Delegated click for model cards
+$('models-list').onclick = (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const id = btn.dataset.id;
+  const pid = btn.dataset.pid;
+  const mid = btn.dataset.mid;
+
+  if (act === 'edit-provider') {
+    const p = modelsJson.providers[id] || {};
+    showModal('编辑提供商: ' + id, [
+      { key: 'name', label: '显示名称', value: p.name || '' },
+      { key: 'baseUrl', label: 'Base URL', value: p.baseUrl || '' },
+    ], v => {
+      modelsJson.providers[id].name = v.name || id;
+      modelsJson.providers[id].baseUrl = v.baseUrl || '';
+      renderModels();
+      setStatus('已更新（记得保存）', true);
+    });
+  }
+  if (act === 'del-provider') {
+    if (confirm('确定删除提供商 "' + id + '" 及其所有模型？')) {
+      delete modelsJson.providers[id];
+      renderModels();
+      setStatus('已删除（记得保存）', true);
+    }
+  }
+  if (act === 'add-model') {
+    showModal('添加模型到 ' + id, [
+      { key: 'modelId', label: '模型 ID', placeholder: 'gpt-4o / deepseek-chat' },
+      { key: 'name', label: '显示名称（可选）', placeholder: 'GPT-4o' },
+      { key: 'contextWindow', label: '上下文窗口（可选）', placeholder: '128000' },
+    ], v => {
+      if (!v.modelId.trim()) { setStatus('模型 ID 不能为空', false); return; }
+      modelsJson.providers[id].models = modelsJson.providers[id].models || {};
+      const m = {};
+      if (v.name) m.name = v.name;
+      if (v.contextWindow) m.contextWindow = Number(v.contextWindow) || undefined;
+      modelsJson.providers[id].models[v.modelId.trim()] = m;
+      renderModels();
+      setStatus('已添加模型（记得保存）', true);
+    });
+  }
+  if (act === 'edit-model') {
+    const m = (modelsJson.providers[pid].models || {})[mid] || {};
+    showModal('编辑模型: ' + mid, [
+      { key: 'name', label: '显示名称', value: m.name || '' },
+      { key: 'contextWindow', label: '上下文窗口', value: m.contextWindow || '' },
+    ], v => {
+      modelsJson.providers[pid].models[mid] = { ...m, name: v.name || undefined, contextWindow: Number(v.contextWindow) || undefined };
+      renderModels();
+      setStatus('已更新（记得保存）', true);
+    });
+  }
+  if (act === 'del-model') {
+    if (confirm('删除模型 "' + mid + '"？')) {
+      delete modelsJson.providers[pid].models[mid];
+      renderModels();
+      setStatus('已删除（记得保存）', true);
+    }
+  }
+};
+
+$('auth-list').onclick = (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const id = btn.dataset.id;
+  if (act === 'edit-auth') {
+    const raw = authJson[id];
+    const key = typeof raw === 'string' ? raw : (raw && raw.apiKey) || '';
+    showModal('编辑密钥: ' + id, [
+      { key: 'key', label: 'API Key', value: key },
+    ], v => {
+      authJson[id] = v.key.trim();
+      renderAuth();
+      setStatus('已更新（记得保存）', true);
+    });
+  }
+  if (act === 'del-auth') {
+    if (confirm('删除 "' + id + '" 的密钥？')) {
+      delete authJson[id];
+      renderAuth();
+      setStatus('已删除（记得保存）', true);
+    }
+  }
+};
+
+// ── Load / Save ──
 let currentConfig = {};
 
 async function loadAll() {
@@ -327,15 +561,15 @@ async function loadAll() {
     $('agent-append').value = agent.append || '';
     $('agent-override').value = agent.override || '';
     $('agent-settings').value = agent.settings || '{}';
+    $('agent-models-raw').value = agent.models || '{}';
+    $('agent-auth-raw').value = agent.auth || '{}';
 
-    // Parse models/auth/settings
-    let modelsJson = {}, authJson = {}, settingsJson = {};
-    try { modelsJson = JSON.parse(agent.models || '{}'); } catch {}
-    try { authJson = JSON.parse(agent.auth || '{}'); } catch {}
-    try { settingsJson = JSON.parse(agent.settings || '{}'); } catch {}
+    try { modelsJson = JSON.parse(agent.models || '{}'); } catch { modelsJson = {}; }
+    try { authJson = JSON.parse(agent.auth || '{}'); } catch { authJson = {}; }
+    try { settingsJson = JSON.parse(agent.settings || '{}'); } catch { settingsJson = {}; }
 
-    renderModels(modelsJson.providers || {});
-    renderAuth(authJson);
+    renderModels();
+    renderAuth();
     renderNpmPackages(settingsJson.packages || []);
 
     const data = await window.pi.invoke('pi:get-env-info');
@@ -368,10 +602,17 @@ async function saveAll() {
       disabledTools,
     };
     await window.pi.invoke('pi:set-config', partial);
+
+    // Sync raw textareas with structured state
+    $('agent-models-raw').value = JSON.stringify(modelsJson, null, 2);
+    $('agent-auth-raw').value = JSON.stringify(authJson, null, 2);
+
     const result = await window.pi.invoke('pi:write-agent-files', {
       append: $('agent-append').value,
       override: $('agent-override').value,
       settings: $('agent-settings').value,
+      models: $('agent-models-raw').value,
+      auth: $('agent-auth-raw').value,
     });
     if (result && result.ok === false) throw new Error(result.error || '保存失败');
     currentConfig = await window.pi.invoke('pi:get-config');

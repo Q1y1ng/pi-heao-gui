@@ -148,6 +148,11 @@ export async function createChatSession(opts: {
   let rpcAlive = false;
   let rpc: RpcClient;
 
+  // Token metrics tracking
+  let promptSentAt = 0;
+  let firstTokenAt = 0;
+  let lastMetrics: { firstTokenMs?: number; durationMs?: number; tokensPerSec?: number; outputTokens?: number; cost?: number } | {};
+
   const post = (msg: unknown) => { if (!sessionDisposed) opts.host.postToRenderer(msg); };
 
   function updateStreaming(running: boolean) {
@@ -159,8 +164,17 @@ export async function createChatSession(opts: {
     if (sessionDisposed) return;
     try {
       const stats = await rpc.getSessionStatsFull();
-      if (!sessionDisposed) post({ type: "contextUsage", usage: stats.contextUsage ?? null, cost: stats.cost });
+      if (!sessionDisposed) {
+        post({ type: "contextUsage", usage: stats.contextUsage ?? null, cost: stats.cost });
+        // Also send token totals
+        post({ type: "tokenStats", tokens: stats.tokens ?? null, cost: stats.cost ?? null });
+      }
     } catch {}
+  }
+
+  function sendTokenMetrics() {
+    if (sessionDisposed) return;
+    post({ type: "tokenMetrics", metrics: lastMetrics });
   }
 
   async function sendSessionInfo() {
@@ -305,6 +319,8 @@ export async function createChatSession(opts: {
       case "prompt":
         try {
           if (await handleBuiltin(String(msg.message ?? ""))) break;
+          promptSentAt = Date.now();
+          firstTokenAt = 0;
           await rpc.prompt(
             String(msg.message ?? ""),
             msg.streamingBehavior as "steer" | "followUp" | undefined,
@@ -494,8 +510,39 @@ export async function createChatSession(opts: {
       handlers: {
         onEvent: (event) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
-          if (event.type === "agent_start") updateStreaming(true);
-          else if (event.type === "agent_settled") updateStreaming(false);
+          if (event.type === "agent_start") {
+            updateStreaming(true);
+            // first token = first event after agent_start if not already set
+            if (!firstTokenAt && promptSentAt) firstTokenAt = Date.now();
+          } else if (event.type === "agent_settled") {
+            updateStreaming(false);
+            // Compute metrics
+            const settledAt = Date.now();
+            if (promptSentAt) {
+              const firstMs = firstTokenAt ? firstTokenAt - promptSentAt : undefined;
+              const durMs = settledAt - (firstTokenAt || promptSentAt);
+              lastMetrics = { firstTokenMs: firstMs, durationMs: settledAt - promptSentAt };
+              // Fetch token counts for t/s
+              void rpc.getSessionStatsFull().then(stats => {
+                const out = stats.tokens?.output ?? stats.tokens?.total ?? 0;
+                if (out > 0 && durMs > 0) {
+                  (lastMetrics as any).tokensPerSec = Math.round((out / (durMs / 1000)) * 10) / 10;
+                  (lastMetrics as any).outputTokens = out;
+                }
+                (lastMetrics as any).cost = stats.cost;
+                sendTokenMetrics();
+              }).catch(() => sendTokenMetrics());
+            }
+            promptSentAt = 0;
+            firstTokenAt = 0;
+          } else if (event.type === "message_start" || event.type === "message_update") {
+            // Track first token latency from streaming events
+            if (!firstTokenAt && promptSentAt) {
+              firstTokenAt = Date.now();
+              const firstMs = firstTokenAt - promptSentAt;
+              post({ type: "firstToken", ms: firstMs });
+            }
+          }
           post({ type: "event", event });
           if (event.type === "agent_settled") {
             if (!sessionFile) {

@@ -17,6 +17,7 @@ export interface StandaloneConfig {
   chatBackgroundOpacity: number;
   rpcTrace: boolean;
   workspaceRoot: string;
+  pinnedSessions: string[];
 }
 
 export const DEFAULT_CONFIG: StandaloneConfig = {
@@ -36,6 +37,7 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   chatBackgroundOpacity: 1,
   rpcTrace: false,
   workspaceRoot: "",
+  pinnedSessions: [],
 };
 
 /** ChatHost abstraction — replaces vscode.Disposable with a plain unsubscribe fn. */

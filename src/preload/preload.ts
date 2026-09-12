@@ -49,6 +49,7 @@ const forwardChannels = [
   "pi:context-usage", "pi:widget", "pi:toast", "pi:info-panel", "pi:btw-abort-ready",
   "pi:error", "pi:prefill-input", "pi:append-input", "pi:session-info",
   "pi:permission-mode", "pi:files", "pi:sessions-list", "pi:streaming",
+  "pi:token-stats", "pi:token-metrics", "pi:first-token",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;

@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
-import { join, resolve, sep, isAbsolute } from "path";
-import { homedir } from "os";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join, resolve, sep, isAbsolute, basename } from "path";
+import { homedir, tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, statSync } from "fs";
+import { randomUUID } from "crypto";
 import { StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
 import { createChatSession, type ChatSession } from "./chat-session";
@@ -11,6 +12,7 @@ import { createTray, showNotification, destroyTray } from "./tray";
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let chatSession: ChatSession | null = null;
+const childWindows = new Set<BrowserWindow>();
 
 // ─── Config ───────────────────────────────────────────────────────────
 
@@ -101,15 +103,13 @@ async function createWindow(): Promise<void> {
     },
   });
 
-  // Try to load pi-chat with shim + config injection
+  // Unique temp file per launch — avoids stale-cache when old instance holds the file
   const chatHtml = buildChatHtml(app.getAppPath(), config);
   if (chatHtml) {
-    // Write to a temp file and load it (loadURL with data: has CSP issues)
-    const tmpHtml = join(app.getPath("temp"), "pi-standalone-chat.html");
+    const tmpHtml = join(tmpdir(), `pi-standalone-chat-${randomUUID().slice(0, 8)}.html`);
     writeFileSync(tmpHtml, chatHtml, "utf8");
     await mainWindow.loadFile(tmpHtml);
   } else {
-    // Fallback placeholder — try dist first (packaged), then src (dev)
     const candidates = [
       join(app.getAppPath(), "dist", "renderer", "index.html"),
       join(app.getAppPath(), "src", "renderer", "index.html"),
@@ -127,6 +127,81 @@ async function createWindow(): Promise<void> {
     }
   });
 }
+
+// ─── Multi-window: open session in new window ─────────────────────────
+
+async function openSessionWindow(sessionFile: string): Promise<void> {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 720,
+    minWidth: 700,
+    minHeight: 450,
+    title: `Pi — ${basename(sessionFile, ".jsonl")}`,
+    backgroundColor: "#1e1e1e",
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#181818", symbolColor: "#cccccc", height: 32 },
+    webPreferences: {
+      preload: join(__dirname, "..", "preload", "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  childWindows.add(win);
+
+  // Each child window gets a cloned config with the target session
+  const childConfig: StandaloneConfig = { ...config };
+  const chatHtml = buildChatHtml(app.getAppPath(), childConfig);
+  if (chatHtml) {
+    const tmpHtml = join(tmpdir(), `pi-standalone-child-${randomUUID().slice(0, 8)}.html`);
+    writeFileSync(tmpHtml, chatHtml, "utf8");
+    await win.loadFile(tmpHtml);
+  }
+
+  // Create a dedicated chat session for this window
+  let childSession: ChatSession | null = null;
+  try {
+    childSession = (await createChatSession({
+      appPath: app.getAppPath(),
+      config: childConfig,
+      sessionFile,
+      cwd: config.workspaceRoot || homedir(),
+      host: {
+        postToRenderer: (msg) => {
+          if (!win.isDestroyed()) {
+            const m = msg as any;
+            const typeToChannel: Record<string, string> = {
+              state: IPC.STATE, models: IPC.MODELS, thinkingLevels: IPC.THINKING_LEVELS,
+              commands: IPC.COMMANDS, messages: IPC.MESSAGES, event: IPC.EVENT,
+              dialog: IPC.DIALOG, contextUsage: IPC.CONTEXT_USAGE, widget: IPC.WIDGET,
+              toast: IPC.TOAST, infoPanel: IPC.INFO_PANEL, error: IPC.ERROR,
+              prefillInput: IPC.PREFILL_INPUT, appendInput: IPC.APPEND_INPUT,
+              sessionInfo: IPC.SESSION_INFO, permissionMode: IPC.PERMISSION_MODE,
+              streaming: IPC.STREAMING, tokenStats: "pi:token-stats",
+              tokenMetrics: "pi:token-metrics", firstToken: "pi:first-token",
+            };
+            const ch = typeToChannel[m?.type];
+            if (ch) win.webContents.send(ch, msg);
+          }
+        },
+      },
+    })) ?? null;
+  } catch (e) {
+    console.error("[main] child session failed:", e);
+  }
+
+  win.on("closed", () => {
+    childWindows.delete(win);
+    if (childSession) { childSession.dispose(); childSession = null; }
+  });
+}
+
+ipcMain.handle("pi:open-session-window", async (_e, sessionFile: string) => {
+  const f = String(sessionFile || "");
+  if (!f || !existsSync(f)) return { ok: false, error: "会话文件不存在" };
+  await openSessionWindow(f);
+  return { ok: true };
+});
 
 // ─── IPC: Config ──────────────────────────────────────────────────────
 
@@ -152,7 +227,7 @@ ipcMain.handle("pi:read-agent-files", () => {
   };
 });
 
-ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: string; settings?: string }) => {
+ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: string; settings?: string; models?: string; auth?: string }) => {
   if (data.append !== undefined) writePiFile("APPEND_SYSTEM.md", data.append);
   if (data.override !== undefined) writePiFile("SYSTEM.md", data.override);
   if (data.settings !== undefined) {
@@ -164,7 +239,70 @@ ipcMain.handle("pi:write-agent-files", (_e, data: { append?: string; override?: 
     }
     writePiFile("settings.json", data.settings);
   }
+  if (data.models !== undefined) {
+    const s = data.models.trim();
+    if (s) {
+      try { JSON.parse(s); } catch (e) {
+        return { ok: false, error: "models.json 不是有效 JSON: " + (e instanceof Error ? e.message : String(e)) };
+      }
+    }
+    writePiFile("models.json", data.models);
+  }
+  if (data.auth !== undefined) {
+    const s = data.auth.trim();
+    if (s) {
+      try { JSON.parse(s); } catch (e) {
+        return { ok: false, error: "auth.json 不是有效 JSON: " + (e instanceof Error ? e.message : String(e)) };
+      }
+    }
+    writePiFile("auth.json", data.auth);
+  }
   return { ok: true };
+});
+
+// ─── IPC: Session pin / favorite ──────────────────────────────────────
+
+ipcMain.handle("pi:toggle-pin", (_e, sessionFile: string) => {
+  const f = String(sessionFile || "");
+  if (!f) return { ok: false };
+  const pins = new Set(config.pinnedSessions || []);
+  if (pins.has(f)) pins.delete(f); else pins.add(f);
+  config.pinnedSessions = [...pins];
+  saveConfig(config);
+  return { ok: true, pinned: pins.has(f), pinnedSessions: config.pinnedSessions };
+});
+
+ipcMain.handle("pi:get-pins", () => config.pinnedSessions || []);
+
+// ─── IPC: Extension enable / disable ──────────────────────────────────
+
+ipcMain.handle("pi:toggle-extension", (_e, name: string, enable: boolean) => {
+  const extDir = join(PI_AGENT_DIR, "extensions");
+  if (!existsSync(extDir)) return { ok: false, error: "扩展目录不存在" };
+  const n = String(name || "");
+  // Find the file regardless of current disabled state
+  const candidates = enable
+    ? [n.replace(/\.disabled(-vscode)?$/, ""), n]
+    : [n, n + ".disabled"];
+  let found: string | null = null;
+  for (const f of readdirSync(extDir)) {
+    if (f === n || f === n + ".disabled" || f === n + ".disabled-vscode" ||
+        f.replace(/\.disabled(-vscode)?$/, "") === n.replace(/\.disabled(-vscode)?$/, "")) {
+      found = f;
+      break;
+    }
+  }
+  if (!found) return { ok: false, error: "未找到扩展: " + n };
+  const base = found.replace(/\.disabled(-vscode)?$/, "");
+  const from = join(extDir, found);
+  const to = enable ? join(extDir, base) : join(extDir, base + ".disabled");
+  if (from === to) return { ok: true };
+  try {
+    renameSync(from, to);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 });
 
 ipcMain.handle("pi:pick-workspace", async () => {
@@ -319,8 +457,8 @@ ipcMain.handle(IPC.SEARCH_FILES, async (_e, query: string) => {
 ipcMain.handle(IPC.LIST_SESSIONS, async () => {
   const sessionsDir = join(homedir(), ".pi", "agent", "sessions");
   if (!existsSync(sessionsDir)) return [];
-  const { readdirSync, readFileSync: rf, statSync } = await import("fs");
-  const sessions: Array<{ file: string; name: string; mtime: number; sessionId: string }> = [];
+  const sessions: Array<{ file: string; name: string; mtime: number; sessionId: string; pinned: boolean }> = [];
+  const pinnedSet = new Set(config.pinnedSessions || []);
 
   function scanDir(dir: string): void {
     let entries: string[];
@@ -332,11 +470,10 @@ ipcMain.handle(IPC.LIST_SESSIONS, async () => {
       if (st.isDirectory()) { scanDir(full); continue; }
       if (!entry.endsWith(".jsonl")) continue;
       try {
-        const content = rf(full, "utf8");
+        const content = readFileSync(full, "utf8");
         const lines = content.split("\n").filter(Boolean);
         let name = "";
         let sessionId = "";
-        // 1) Look for session_info (usually last line)
         for (let i = lines.length - 1; i >= Math.max(0, lines.length - 30); i--) {
           try {
             const obj = JSON.parse(lines[i]);
@@ -348,7 +485,6 @@ ipcMain.handle(IPC.LIST_SESSIONS, async () => {
             if (obj.type === "session" && obj.id && !sessionId) sessionId = String(obj.id);
           } catch {}
         }
-        // 2) Fallback: first user message as preview
         if (!name) {
           for (let i = 0; i < Math.min(lines.length, 40); i++) {
             try {
@@ -374,17 +510,20 @@ ipcMain.handle(IPC.LIST_SESSIONS, async () => {
             } catch {}
           }
         }
-        // 3) Last resort: friendly timestamp
         if (!name) {
           const ts = entry.replace(/\.jsonl$/, "").split("_")[0];
           name = ts.replace(/T/, " ").replace(/-\d+Z$/, "").slice(0, 16) || "未命名会话";
         }
-        sessions.push({ file: full, name, mtime: st.mtimeMs, sessionId });
+        sessions.push({ file: full, name, mtime: st.mtimeMs, sessionId, pinned: pinnedSet.has(full) });
       } catch {}
     }
   }
   scanDir(sessionsDir);
-  sessions.sort((a, b) => b.mtime - a.mtime);
+  // Pinned first, then by mtime
+  sessions.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return b.mtime - a.mtime;
+  });
   return sessions;
 });
 
@@ -545,6 +684,9 @@ app.whenReady().then(async () => {
                 files: IPC.FILES,
                 sessionsList: IPC.SESSIONS_LIST,
                 streaming: IPC.STREAMING,
+                tokenStats: "pi:token-stats",
+                tokenMetrics: "pi:token-metrics",
+                firstToken: "pi:first-token",
               };
               const channel = typeToChannel[(msg as any).type];
               if (channel) {

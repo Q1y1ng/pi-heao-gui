@@ -64,16 +64,25 @@ export const SIDEBAR_HTML = `
   }
   #pi-sidebar .pi-session-item:hover { background:#2a2d2e; }
   #pi-sidebar .pi-session-item.active { background:#094771; }
+  #pi-sidebar .pi-session-item.pinned { border-left:2px solid #cca700; }
   #pi-sidebar .pi-session-item .pi-session-name {
     font-size:12px;color:#e0e0e0;line-height:1.4;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;
   }
   #pi-sidebar .pi-session-item .pi-session-time { font-size:10px;color:#6a6a6a;margin-top:2px; }
   #pi-sidebar .pi-session-item .pi-session-status {
     display:inline-block;width:6px;height:6px;border-radius:50%;
-    background:#555;margin-right:6px;vertical-align:middle;flex-shrink:0;
+    background:#555;vertical-align:middle;flex-shrink:0;
   }
   #pi-sidebar .pi-session-item .pi-session-status.running { background:#4ec9b0; }
+  #pi-sidebar .pi-pin-btn {
+    background:none;border:none;color:#666;cursor:pointer;font-size:12px;
+    padding:0 2px;opacity:0;transition:opacity .15s,color .15s;flex-shrink:0;
+    line-height:1;
+  }
+  #pi-sidebar .pi-session-item:hover .pi-pin-btn { opacity:1; }
+  #pi-sidebar .pi-session-item.pinned .pi-pin-btn { opacity:1;color:#cca700; }
+  #pi-sidebar .pi-pin-btn:hover { color:#ffcc00 !important; }
   #pi-sidebar .pi-session-empty { padding:20px 10px;text-align:center;color:#555;font-size:12px; }
   #pi-session-list::-webkit-scrollbar { width:5px; }
   #pi-session-list::-webkit-scrollbar-track { background:transparent; }
@@ -206,24 +215,80 @@ export const SIDEBAR_SCRIPT = `
     }
     filtered.forEach(function(s) {
       var item = document.createElement('div');
-      item.className = 'pi-session-item';
+      item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '');
       item.setAttribute('data-session-id', s.sessionId || '');
       item.setAttribute('data-file', s.file || '');
       var statusCls = s.running ? 'running' : '';
+      var pinIcon = s.pinned ? '★' : '☆';
       item.innerHTML =
-        '<div style="display:flex;align-items:center;">' +
+        '<div style="display:flex;align-items:center;gap:4px;">' +
           '<span class="pi-session-status ' + statusCls + '"></span>' +
           '<span class="pi-session-name">' + esc(s.name || s.sessionId || '未命名') + '</span>' +
+          '<button class="pi-pin-btn" title="' + (s.pinned ? '取消置顶' : '置顶') + '">' + pinIcon + '</button>' +
         '</div>' +
         '<div class="pi-session-time">' + esc(fmtTime(s.mtime)) + '</div>';
-      item.onclick = function() {
+      item.onclick = function(e) {
+        if (e.target.classList && e.target.classList.contains('pi-pin-btn')) {
+          e.stopPropagation();
+          if (window.pi) {
+            window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
+          }
+          return;
+        }
         if (window.pi && s.file) {
           window.pi.postMessage({ type: 'switchSession', sessionFile: s.file });
         }
       };
+      item.oncontextmenu = function(e) {
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY, s);
+      };
       listEl.appendChild(item);
     });
   }
+
+  // Context menu
+  var ctxMenu = null;
+  function hideContextMenu() {
+    if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
+  }
+  function showContextMenu(x, y, s) {
+    hideContextMenu();
+    ctxMenu = document.createElement('div');
+    ctxMenu.style.cssText = 'position:fixed;z-index:10000;background:#2a2a2a;border:1px solid #444;border-radius:6px;padding:4px 0;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-size:12px;color:#d4d4d4;';
+    var items = [
+      { label: s.pinned ? '☆ 取消置顶' : '★ 置顶', action: function() {
+        if (window.pi) window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
+      }},
+      { label: '⧉ 在新窗口打开', action: function() {
+        if (window.pi) window.pi.invoke('pi:open-session-window', s.file);
+      }},
+      { label: '⎘ 复制会话路径', action: function() {
+        if (window.pi) window.pi.invoke('pi:copy', s.file);
+      }},
+    ];
+    items.forEach(function(it) {
+      var el = document.createElement('div');
+      el.textContent = it.label;
+      el.style.cssText = 'padding:6px 14px;cursor:pointer;';
+      el.onmouseenter = function() { el.style.background = '#094771'; };
+      el.onmouseleave = function() { el.style.background = ''; };
+      el.onclick = function() { hideContextMenu(); it.action(); };
+      ctxMenu.appendChild(el);
+    });
+    document.body.appendChild(ctxMenu);
+    // Position, keep in viewport
+    var mw = 170, mh = items.length * 30 + 8;
+    if (x + mw > window.innerWidth) x = window.innerWidth - mw - 4;
+    if (y + mh > window.innerHeight) y = window.innerHeight - mh - 4;
+    ctxMenu.style.left = x + 'px';
+    ctxMenu.style.top = y + 'px';
+  }
+  document.addEventListener('click', hideContextMenu);
+  document.addEventListener('contextmenu', function(e) {
+    // Don't hide if right-clicking on a session item (handled above)
+    if (!e.target.closest || !e.target.closest('.pi-session-item')) hideContextMenu();
+  });
 
   // Listen for session list updates from main
   window.addEventListener('message', function(e) {

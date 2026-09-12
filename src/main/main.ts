@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
-import { join, sep, basename, isAbsolute, relative } from "node:path";
+import { join, sep, basename, dirname } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
   existsSync,
@@ -11,12 +11,26 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { readdir as readdirAsync } from "node:fs/promises";
+import { readdir as readdirAsync, readFile, writeFile, mkdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
 import { createChatSession, type ChatSession } from "./chat-session";
+import {
+  isSessionFile as isSessionFilePath,
+  renameSession,
+  deleteSession,
+  archiveSession,
+  restoreSession,
+  listArchived,
+} from "./session-ops";
+import { searchSessions, orderByRecency } from "./search";
+import { createStatsStore, type StatsStore } from "./stats-store";
+import { openDiffWindow } from "./diff-window";
+import { getRpcLogPath } from "./rpc-client";
+import { buildTokensCss } from "./theme";
+import { refreshTrayMenu, setRecentSessions, setUnreadCount, getUnreadCount } from "./tray";
 import { createSessionLister, type SessionLister } from "./sessions";
 import {
   authToPublic,
@@ -71,6 +85,11 @@ const MSG_TYPE_TO_CHANNEL: Record<string, string> = {
   tokenStats: "pi:token-stats",
   tokenMetrics: "pi:token-metrics",
   firstToken: "pi:first-token",
+  // Telemetry stream: the panel polls pi:get-stats, these keep the data flowing
+  // for any other consumer instead of logging an unknown-message-type warning.
+  liveStats: "pi:live-stats",
+  turnStats: "pi:turn-stats",
+  stats: "pi:stats",
 };
 
 function postToWindow(win: BrowserWindow, msg: unknown): void {
@@ -317,6 +336,8 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
         cwd: config.workspaceRoot || homedir(),
         host: {
           postToRenderer: (msg) => postToWindow(win, msg),
+          saveStats: (sessionFile, data) => getStatsStore().save(sessionFile, data as never),
+          loadStats: (sessionFile) => getStatsStore().load(sessionFile),
         },
       })) ?? null;
   } catch (e) {
@@ -337,11 +358,33 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
 
 /** Sessions may only be opened from the pi sessions directory. */
 function isSessionFile(p: string): boolean {
-  if (!p || !isAbsolute(p) || p.startsWith("\\\\") || p.startsWith("//")) return false;
-  if (!p.toLowerCase().endsWith(".jsonl")) return false;
-  const root = join(PI_AGENT_DIR, "sessions");
-  const rel = relative(root, p);
-  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  return isSessionFilePath(p, join(PI_AGENT_DIR, "sessions"));
+}
+
+/**
+ * Per-session telemetry store. Primed once before the first chat session is
+ * created, then read synchronously so a session can show its history instantly.
+ */
+let statsStore: StatsStore | null = null;
+function getStatsStore(): StatsStore {
+  if (!statsStore)
+    statsStore = createStatsStore(join(app.getPath("userData"), "session-stats.json"));
+  return statsStore;
+}
+
+/** Host callbacks shared by every chat session (telemetry persistence). */
+function sessionHost(win: BrowserWindow): {
+  postToRenderer: (msg: unknown) => void;
+  saveStats: (sessionFile: string | undefined, data: unknown) => void;
+  loadStats: (sessionFile: string) => unknown;
+} {
+  return {
+    postToRenderer: (msg) => postToWindow(win, msg),
+    saveStats: (sessionFile, data) => {
+      getStatsStore().save(sessionFile, data as never);
+    },
+    loadStats: (sessionFile) => getStatsStore().load(sessionFile),
+  };
 }
 
 ipcMain.handle("pi:open-session-window", async (_e, sessionFile: string) => {
@@ -358,8 +401,33 @@ ipcMain.handle(IPC.GET_CONFIG, () => config);
 
 ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   saveConfig({ ...config, ...partial });
+  applyConfigSideEffects();
+  if (partial.theme !== undefined || partial.accent !== undefined) broadcastTheme();
   return config;
 });
+
+/** Push the current token CSS to every chat window (live theme switching). */
+function broadcastTheme(): void {
+  const css = buildTokensCss(config.theme, config.accent);
+  const payload = { type: "theme", css, theme: config.theme, accent: config.accent };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send("pi:theme", payload);
+  }
+}
+
+/** Windows login item + tray refresh whenever config changes. */
+function applyConfigSideEffects(): void {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!config.openAtLogin,
+      path: process.execPath,
+      args: [],
+    });
+  } catch (e) {
+    log.warn("setLoginItemSettings:", errText(e));
+  }
+  refreshTrayMenu();
+}
 
 ipcMain.handle("pi:open-settings", () => {
   openSettingsWindow();
@@ -503,9 +571,230 @@ ipcMain.handle("pi:pick-workspace", async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("pi:set-workspace", (_e, dir: string) => {
-  saveConfig({ ...config, workspaceRoot: String(dir || "") });
+ipcMain.handle("pi:set-workspace", async (e, dir: string) => {
+  const target = String(dir || "");
+  if (!target || !existsSync(target)) return config;
+  // Remember it, and make it the default for new windows
+  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(
+    0,
+    8,
+  );
+  saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
+  // Per-window workspace: the pi child is spawned with cwd, so the window bound
+  // to this renderer has to be re-created with the new working directory.
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const session = sessionFor(e.sender);
+  if (win && session && win.id === mainWindowId) {
+    await rebindMainSession(target);
+  }
   return config;
+});
+
+/** Recreate the main window's chat session in a new working directory. */
+async function rebindMainSession(cwd: string): Promise<void> {
+  if (!mainWindow) return;
+  const win = mainWindow;
+  const previous = chatSession;
+  chatSession =
+    (await createChatSession({
+      appPath: app.getAppPath(),
+      config,
+      cwd,
+      host: sessionHost(win),
+    })) ?? null;
+  if (chatSession && mainWindowId >= 0) windowSessions.set(mainWindowId, chatSession);
+  previous?.dispose();
+  postToWindow(win, { type: "toast", text: `工作目录已切换：${cwd}`, kind: "success" });
+}
+
+// ─── IPC: session management (rename / delete / archive) ───────────────
+
+ipcMain.handle(
+  "pi:session-op",
+  async (
+    e,
+    msg: { op?: string; file?: string; name?: string; silent?: boolean },
+  ): Promise<{ ok: boolean; error?: string; path?: string }> => {
+    const dir = join(PI_AGENT_DIR, "sessions");
+    const op = String(msg?.op || "");
+    const file = String(msg?.file || "");
+    if (op !== "restore" && !isSessionFile(file)) return { ok: false, error: "会话文件无效" };
+
+    let result: { ok: boolean; error?: string; path?: string } = { ok: false, error: "未知操作" };
+    if (op === "rename") {
+      const name = String(msg?.name || "");
+      // The open session is renamed through pi so its own state follows along.
+      const session = sessionFor(e.sender);
+      if (session && session.sessionFile === file) {
+        result = await session.renameCurrent(name);
+      } else {
+        result = await renameSession(file, name);
+      }
+    } else if (op === "delete") {
+      const session = sessionFor(e.sender);
+      if (session && session.sessionFile === file) {
+        return { ok: false, error: "该会话正在使用中，请先切换到其它会话" };
+      }
+      result = await deleteSession(file);
+      if (result.ok) getStatsStore().forget(file);
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IPC.SESSIONS_LIST, { type: "sessionsList" });
+      }
+    } else if (op === "archive") {
+      result = await archiveSession(file, dir);
+    } else if (op === "restore") {
+      // Archived paths are the only ones accepted here.
+      result = await restoreSession(file, dir);
+    }
+
+    if (result.ok && op !== "rename" && !msg?.silent) {
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send(IPC.SESSIONS_LIST, { type: "sessionsList" });
+      }
+    }
+    return result;
+  },
+);
+
+ipcMain.handle("pi:list-archived", async () => {
+  const dir = join(PI_AGENT_DIR, "sessions");
+  const files = await listArchived(dir);
+  const lister = getSessionLister();
+  const items = await lister.list();
+  const names = new Map(items.map((i) => [i.file, i.name]));
+  const ordered = await orderByRecency(files);
+  return ordered.map((file) => ({
+    file,
+    name: names.get(file) || basename(file, ".jsonl"),
+    archived: true,
+  }));
+});
+
+// ─── IPC: full-text search across sessions ────────────────────────────
+
+ipcMain.handle("pi:search-sessions", async (e, query: string) => {
+  const q = String(query || "");
+  const items = await getSessionLister().list();
+  const files = await orderByRecency(items.map((i) => i.file));
+  const names = new Map(items.map((i) => [i.file, i.name]));
+  const hits = await searchSessions({
+    files,
+    query: q,
+    nameOf: (file) => names.get(file) || basename(file, ".jsonl"),
+    limit: 120,
+    onProgress: (p) => {
+      if (!e.sender.isDestroyed())
+        e.sender.send("pi:search-progress", { type: "searchProgress", ...p });
+    },
+  });
+  return { ok: true, query: q, hits };
+});
+
+// ─── IPC: telemetry + diff viewer ────────────────────────────────────
+
+ipcMain.handle("pi:get-stats", async (e) => {
+  const session = sessionFor(e.sender);
+  if (!session) return null;
+  return session.statsSnapshot();
+});
+
+ipcMain.handle(
+  "pi:show-diff",
+  async (
+    e,
+    msg: { absPath?: string; baselineHash?: string | null; sessionId?: string; basename?: string },
+  ) => {
+    const session = sessionFor(e.sender);
+    let sessionId = msg?.sessionId ? String(msg.sessionId) : "";
+    if (!sessionId && session) {
+      try {
+        const st = await session.rpc.getState();
+        sessionId = st.sessionId || "";
+      } catch {
+        // fall through: the diff still renders without a snapshot baseline
+      }
+    }
+    return openDiffWindow({
+      absPath: String(msg?.absPath || ""),
+      baselineHash: msg?.baselineHash ?? null,
+      sessionId,
+      basename: msg?.basename,
+    });
+  },
+);
+
+ipcMain.handle("pi:get-commands", async (e) => {
+  const session = sessionFor(e.sender);
+  if (!session) return [];
+  try {
+    return await session.rpc.getCommands();
+  } catch (e2) {
+    log.warn("get-commands:", errText(e2));
+    return [];
+  }
+});
+
+/** Theme toggle from the chat window (palette / shortcut). Returns the new token CSS. */
+ipcMain.handle("pi:set-theme", async (_e, theme: string) => {
+  const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "dark";
+  saveConfig({ ...config, theme: next });
+  return { ok: true, theme: next, css: buildTokensCss(next, config.accent) };
+});
+
+// ─── IPC: diagnostics ────────────────────────────────────────────────
+
+function diagnosticsInfo(): string {
+  const masked = {
+    ...config,
+    env: Object.fromEntries(Object.keys(config.env || {}).map((k) => [k, "••••"])),
+  };
+  return [
+    `Pi Heao GUI ${app.getVersion()}`,
+    `electron ${process.versions.electron}  chrome ${process.versions.chrome}  node ${process.versions.node}`,
+    `platform ${process.platform} ${process.arch}`,
+    `userData ${app.getPath("userData")}`,
+    `pi agent dir ${PI_AGENT_DIR}`,
+    `workspace ${config.workspaceRoot || "(home)"}`,
+    `theme ${config.theme} accent ${config.accent}`,
+    `rpc log ${getRpcLogPath()}`,
+    "",
+    "config:",
+    JSON.stringify(masked, null, 2),
+  ].join("\n");
+}
+
+async function tailLog(lines = 200): Promise<string> {
+  try {
+    const raw = await readFile(getRpcLogPath(), "utf8");
+    return raw.split("\n").slice(-lines).join("\n");
+  } catch (e) {
+    return `（无法读取日志：${errText(e)}）`;
+  }
+}
+
+ipcMain.handle("pi:diagnostics", async (_e, op: string) => {
+  const action = String(op || "info");
+  if (action === "info") return { ok: true, info: diagnosticsInfo() };
+  if (action === "log") return { ok: true, info: await tailLog() };
+  if (action === "copy") return { ok: true, info: diagnosticsInfo() };
+  if (action === "open-logs") {
+    void shell.openPath(dirname(getRpcLogPath()));
+    return { ok: true };
+  }
+  if (action === "open-userdata") {
+    void shell.openPath(app.getPath("userData"));
+    return { ok: true };
+  }
+  if (action === "report") {
+    const dir = join(app.getPath("userData"), "diagnostics");
+    await mkdir(dir, { recursive: true });
+    const file = join(dir, `diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
+    const body = `${diagnosticsInfo()}\n\n===== rpc log (tail 400) =====\n${await tailLog(400)}\n`;
+    await writeFile(file, body, "utf8");
+    void shell.openPath(dir);
+    return { ok: true, path: file };
+  }
+  return { ok: false, error: "未知操作" };
 });
 
 ipcMain.handle("pi:export-conversation", async (e) => {
@@ -713,7 +1002,12 @@ function getSessionLister(): SessionLister {
   return sessionLister;
 }
 
-ipcMain.handle(IPC.LIST_SESSIONS, async () => getSessionLister().list());
+ipcMain.handle(IPC.LIST_SESSIONS, async () => {
+  const items = await getSessionLister().list();
+  // Keep the tray's "recent sessions" submenu in step with the sidebar.
+  setRecentSessions(items.slice(0, 8).map((i) => ({ label: i.name, file: i.file })));
+  return items;
+});
 
 // ─── IPC: Chat session wiring ─────────────────────────────────────────
 
@@ -903,7 +1197,27 @@ app.whenReady().then(async () => {
   sweepStaleTempFiles();
   setupChineseMenu();
   await createWindow();
-  const trayReady = createTray(() => mainWindow);
+  const trayReady = createTray({
+    getMainWindow: () => mainWindow,
+    openSession: (file) => {
+      if (!isSessionFile(file)) return;
+      void openSessionWindow(file);
+    },
+    newSession: () => {
+      const win = mainWindow;
+      if (!win) return;
+      win.show();
+      win.focus();
+      postToWindow(win, { type: "newSession" });
+    },
+    openSettings: () => openSettingsWindow(),
+  });
+
+  // Unread counter: clearing happens whenever the window regains focus.
+  mainWindow?.on("focus", () => {
+    setUnreadCount(0);
+    mainWindow?.flashFrame(false);
+  });
 
   // Minimize to tray instead of quit — only while there is a visible tray icon
   // to restore the window from; otherwise closing must really close.
@@ -930,6 +1244,8 @@ app.whenReady().then(async () => {
               if (m?.type === "event" && m.event?.type === "agent_settled") {
                 if (!win.isDestroyed() && !win.isFocused()) {
                   showNotification("Pi Heao GUI", "Agent 已完成回复");
+                  setUnreadCount(getUnreadCount() + 1);
+                  win.flashFrame(true);
                 }
               }
               postToWindow(win, msg);

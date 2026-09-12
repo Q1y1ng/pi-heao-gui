@@ -19,7 +19,8 @@
     "build:renderer": "cd vendor/upstream/pi-chat && npm install && npm run build",
     "build:mcp": "cd vendor/upstream/pi-mcp && npm install && npm run build",
     "dist": "npm run build && electron-builder --win portable",
-    "shot": "electron scripts/screenshot.cjs"
+    "shot": "electron scripts/screenshot.cjs",
+    "verify": "electron scripts/verify-features.cjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

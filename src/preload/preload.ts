@@ -68,6 +68,14 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:pick-workspace",
   "pi:set-workspace",
   "pi:export-conversation",
+  "pi:session-op",
+  "pi:list-archived",
+  "pi:search-sessions",
+  "pi:get-stats",
+  "pi:get-commands",
+  "pi:show-diff",
+  "pi:diagnostics",
+  "pi:set-theme",
 ]);
 
 // Main -> renderer channels that should be forwarded as MessageEvents
@@ -97,7 +105,12 @@ const forwardChannels = [
   "pi:token-stats",
   "pi:token-metrics",
   "pi:first-token",
+  "pi:live-stats",
+  "pi:turn-stats",
+  "pi:stats",
   "pi:mcp-status",
+  "pi:theme",
+  "pi:search-progress",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;

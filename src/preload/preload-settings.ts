@@ -7,21 +7,22 @@ import { contextBridge, ipcRenderer } from "electron";
  * The chat window gets preload.ts, which cannot reach these channels at all.
  */
 const ALLOWED = new Set<string>([
- "pi:get-config",
- "pi:set-config",
- "pi:read-agent-files",
- "pi:write-agent-files",
- "pi:get-env-info",
- "pi:toggle-extension",
- "pi:open-settings",
+  "pi:get-config",
+  "pi:set-config",
+  "pi:read-agent-files",
+  "pi:write-agent-files",
+  "pi:get-env-info",
+  "pi:toggle-extension",
+  "pi:open-settings",
+  "pi:diagnostics",
 ]);
 
 contextBridge.exposeInMainWorld("pi", {
- invoke(channel: string, ...args: unknown[]): Promise<unknown> {
-  if (!ALLOWED.has(channel)) {
-   console.error("[pi-preload-settings] blocked channel:", channel);
-   return Promise.reject(new Error(`blocked channel: ${channel}`));
-  }
-  return ipcRenderer.invoke(channel, ...args);
- },
+  invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+    if (!ALLOWED.has(channel)) {
+      console.error("[pi-preload-settings] blocked channel:", channel);
+      return Promise.reject(new Error(`blocked channel: ${channel}`));
+    }
+    return ipcRenderer.invoke(channel, ...args);
+  },
 });

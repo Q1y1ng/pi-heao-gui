@@ -1,5 +1,10 @@
 /**
  * System tray + desktop notifications for Pi Heao GUI.
+ *
+ * The tray is the only way back into a hidden window, so it also exposes the
+ * two things a user wants without restoring the app: a new session and the
+ * recent sessions. It doubles as the unread indicator, because the window is
+ * usually hidden while a long agent turn finishes.
  */
 import {
   Tray,
@@ -8,6 +13,7 @@ import {
   dialog,
   Notification,
   type BrowserWindow,
+  type MenuItemConstructorOptions,
   nativeImage,
   type NativeImage,
 } from "electron";
@@ -65,76 +71,122 @@ function loadTrayIcon(): NativeImage {
   return nativeImage.createFromDataURL(FALLBACK_ICON_DATA_URL);
 }
 
+export interface TrayHooks {
+  getMainWindow: () => BrowserWindow | null;
+  /** Open (or focus) a session in a window. */
+  openSession?: (file: string) => void;
+  newSession?: () => void;
+  openSettings?: () => void;
+}
+
+let hooks: TrayHooks | null = null;
+let recent: Array<{ label: string; file: string }> = [];
+let unread = 0;
+
+const BASE_TOOLTIP = "Pi Heao GUI V0.1 — made by HEAOZIE";
+
+function showMain(): void {
+  const win = hooks?.getMainWindow();
+  if (win) {
+    win.show();
+    win.focus();
+  }
+}
+
+function aboutDialog(): void {
+  const detail = [
+    "Pi Heao GUI V0.1",
+    "made by HEAOZIE",
+    "",
+    "Electron shell for `pi --mode rpc` (JSONL over stdio).",
+    "Chat UI: vendored pi-chat (MIT, JohnnyZ93/pi-agent-studio).",
+  ].join("\n");
+  const win = hooks?.getMainWindow();
+  const options = {
+    type: "info" as const,
+    title: "关于",
+    message: "Pi Heao GUI V0.1",
+    detail,
+    buttons: ["好"],
+  };
+  if (win) void dialog.showMessageBox(win, options);
+  else void dialog.showMessageBox(options);
+}
+
+function buildTemplate(): MenuItemConstructorOptions[] {
+  const recentItems: MenuItemConstructorOptions[] = recent.length
+    ? recent.map((item) => ({
+        label: item.label.length > 48 ? `${item.label.slice(0, 48)}…` : item.label,
+        toolTip: item.file,
+        click: () => {
+          hooks?.openSession?.(item.file);
+          showMain();
+        },
+      }))
+    : [{ label: "（暂无会话）", enabled: false }];
+
+  return [
+    { label: unread > 0 ? `显示主窗口（${unread} 条未读）` : "显示主窗口", click: showMain },
+    { label: "新建会话", click: () => hooks?.newSession?.() },
+    { type: "separator" },
+    { label: "最近会话", submenu: recentItems },
+    { label: "设置", click: () => hooks?.openSettings?.() },
+    { type: "separator" },
+    { label: "关于 Pi Heao GUI", click: aboutDialog },
+    { type: "separator" },
+    {
+      label: "退出",
+      click: () => {
+        markQuitting();
+        app.quit();
+      },
+    },
+  ];
+}
+
+/** Rebuild the tray menu (recent sessions and the unread counter changed). */
+export function refreshTrayMenu(): void {
+  if (!tray || tray.isDestroyed()) return;
+  try {
+    tray.setContextMenu(Menu.buildFromTemplate(buildTemplate()));
+    tray.setToolTip(unread > 0 ? `${BASE_TOOLTIP} — ${unread} 条未读` : BASE_TOOLTIP);
+  } catch (e) {
+    log.warn("tray menu refresh:", errText(e));
+  }
+}
+
+/** Recent sessions shown in the tray submenu (already newest-first). */
+export function setRecentSessions(items: Array<{ label: string; file: string }>): void {
+  recent = items.slice(0, 8);
+  refreshTrayMenu();
+}
+
+/**
+ * Unread indicator: the window is often hidden when a turn finishes, and hiding
+ * to the tray means there is no taskbar button to flash.
+ */
+export function setUnreadCount(count: number): void {
+  if (count === unread) return;
+  unread = Math.max(0, count);
+  refreshTrayMenu();
+}
+
+export function getUnreadCount(): number {
+  return unread;
+}
+
 /**
  * @returns true when a usable tray icon exists. The caller must NOT hide the
  * main window on close if this is false (otherwise the app becomes unreachable).
  */
-export function createTray(getMainWindow: () => BrowserWindow | null): boolean {
+export function createTray(hooksIn: TrayHooks): boolean {
+  hooks = hooksIn;
   try {
     const icon = loadTrayIcon();
     tray = new Tray(icon);
-    tray.setToolTip("Pi Heao GUI V0.1 — made by HEAOZIE");
+    refreshTrayMenu();
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: "显示主窗口",
-        click: () => {
-          const win = getMainWindow();
-          if (win) {
-            win.show();
-            win.focus();
-          }
-        },
-      },
-      { type: "separator" },
-      {
-        label: "关于 Pi Heao GUI",
-        click: () => {
-          const detail = [
-            "Pi Heao GUI V0.1",
-            "made by HEAOZIE",
-            "",
-            "Electron shell for `pi --mode rpc` (JSONL over stdio).",
-            "Chat UI: vendored pi-chat (MIT, JohnnyZ93/pi-agent-studio).",
-          ].join("\n");
-          const win = getMainWindow();
-          if (win)
-            void dialog.showMessageBox(win, {
-              type: "info",
-              title: "关于",
-              message: "Pi Heao GUI V0.1",
-              detail,
-              buttons: ["好"],
-            });
-          else
-            void dialog.showMessageBox({
-              type: "info",
-              title: "关于",
-              message: "Pi Heao GUI V0.1",
-              detail,
-              buttons: ["好"],
-            });
-        },
-      },
-      { type: "separator" },
-      {
-        label: "退出",
-        click: () => {
-          markQuitting();
-          app.quit();
-        },
-      },
-    ]);
-
-    tray.setContextMenu(contextMenu);
-
-    tray.on("double-click", () => {
-      const win = getMainWindow();
-      if (win) {
-        win.show();
-        win.focus();
-      }
-    });
+    tray.on("double-click", showMain);
 
     return !icon.isEmpty();
   } catch (e) {

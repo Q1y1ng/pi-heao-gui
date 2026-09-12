@@ -12,14 +12,14 @@ const ICON = {
     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M15 10l-2 2 2 2"/>',
   expand:
     '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="M13 10l2 2-2 2"/>',
-  folder:
-    '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.2-4.2"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   star: '<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/>',
   export:
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+  archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
 };
 
 function svg(paths: string, size = 14): string {
@@ -42,6 +42,8 @@ export const SIDEBAR_HTML = `
   <div class="pi-search">
     <span class="pi-search-icon">${svg(ICON.search, 13)}</span>
     <input id="pi-session-filter" type="text" placeholder="搜索会话…" spellcheck="false" aria-label="搜索会话" />
+    <button id="pi-sidebar-archived-toggle" class="pi-search-btn" type="button"
+      title="显示/隐藏已归档会话 (Ctrl+Shift+A)" aria-label="显示已归档会话">${svg(ICON.archive, 13)}</button>
   </div>
 
   <button id="pi-new-session" class="pi-btn-primary">
@@ -49,6 +51,7 @@ export const SIDEBAR_HTML = `
   </button>
 
   <div id="pi-session-list" role="list"></div>
+  <div id="pi-archived-list" role="list" hidden></div>
 
   <div class="pi-sidebar-footer">
     <button id="pi-export-chat" class="pi-btn-ghost" title="导出对话为 Markdown">
@@ -411,6 +414,50 @@ export const SIDEBAR_HTML = `
     background: #4a5361cc;
     background-clip: content-box;
   }
+  #pi-sidebar .pi-search-btn {
+    background: none; border: 1px solid transparent; color: var(--pi-text-faint);
+    cursor: pointer; padding: 3px; border-radius: 5px; display: flex; align-items: center;
+    flex: none;
+  }
+  #pi-sidebar .pi-search-btn:hover { color: var(--pi-text); background: var(--pi-raised); }
+  #pi-sidebar .pi-search-btn.active {
+    color: var(--pi-accent); border-color: var(--pi-border); background: var(--pi-accent-soft);
+  }
+  #pi-sidebar .pi-session-item.kb { outline: 2px solid var(--pi-accent); outline-offset: -2px; }
+  #pi-sidebar .pi-session-item.archived { opacity: 0.82; }
+  #pi-archived-list { padding: 0 6px 6px; }
+  #pi-sidebar .pi-restore-btn {
+    margin-left: auto; flex: none; font-size: 10px; padding: 1px 7px;
+    background: var(--pi-raised); color: var(--pi-text-dim);
+    border: 1px solid var(--pi-border); border-radius: 999px; cursor: pointer;
+  }
+  #pi-sidebar .pi-restore-btn:hover { color: var(--pi-text); border-color: var(--pi-border-strong); }
+  #pi-archived-list .pi-archived-empty { font-size: 11px; color: var(--pi-text-faint); padding: 4px 10px 8px; }
+  .pi-ctx-item.danger { color: var(--pi-danger); }
+  .pi-ctx-hint { margin-left: auto; color: var(--pi-text-faint); font-size: 10px; padding-left: 12px; }
+  .pi-prompt-backdrop {
+    position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center;
+    justify-content: center; background: rgba(0, 0, 0, 0.45);
+  }
+  .pi-prompt {
+    width: min(420px, 88vw); background: var(--pi-surface); color: var(--pi-text);
+    border: 1px solid var(--pi-border-strong); border-radius: var(--pi-radius-lg);
+    box-shadow: var(--pi-shadow-2); padding: 16px;
+  }
+  .pi-prompt-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .pi-prompt-input {
+    width: 100%; box-sizing: border-box; background: var(--pi-raised); color: var(--pi-text);
+    border: 1px solid var(--pi-border-strong); border-radius: var(--pi-radius-sm);
+    padding: 8px 10px; font-family: var(--pi-font-ui); font-size: 13px; outline: none;
+  }
+  .pi-prompt-input:focus { border-color: var(--pi-accent); box-shadow: var(--pi-ring); }
+  .pi-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .pi-prompt-btn {
+    font-family: inherit; font-size: 12px; padding: 6px 14px; border-radius: var(--pi-radius-sm);
+    background: var(--pi-raised); color: var(--pi-text); border: 1px solid var(--pi-border); cursor: pointer;
+  }
+  .pi-prompt-btn.primary { background: var(--pi-accent); color: #ffffff; border-color: var(--pi-accent); }
+  .pi-prompt-btn:hover { filter: brightness(1.08); }
 </style>
 `;
 
@@ -683,22 +730,36 @@ export const SIDEBAR_SCRIPT = `
       { label: s.pinned ? '取消置顶' : '置顶', action: function() {
         if (window.pi) window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
       }},
+      { label: '重命名…', hint: 'F2', action: function() { startRename(s.file); }},
       { label: '在新窗口打开', action: function() {
         if (window.pi) window.pi.invoke('pi:open-session-window', s.file);
       }},
-      { label: '复制会话路径', action: function() {
-        if (window.pi) window.pi.invoke('pi:copy', s.file);
-      }},
     ];
+    if (s.archived) {
+      items.push({ label: '恢复到会话列表', action: function() { restoreSession(s.file); }});
+    } else {
+      items.push({ label: '归档（从列表隐藏）', action: function() { archiveSession(s.file); }});
+    }
+    items.push({ label: '复制会话路径', action: function() {
+      if (window.pi) window.pi.invoke('pi:copy', s.file);
+    }});
+    items.push({ label: '删除…', hint: 'Del', danger: true, action: function() { confirmDelete(s.file); }});
+
     items.forEach(function(it) {
       var el = document.createElement('div');
-      el.className = 'pi-ctx-item';
+      el.className = 'pi-ctx-item' + (it.danger ? ' danger' : '');
       el.textContent = it.label;
+      if (it.hint) {
+        var hint = document.createElement('span');
+        hint.className = 'pi-ctx-hint';
+        hint.textContent = it.hint;
+        el.appendChild(hint);
+      }
       el.onclick = function() { hideContextMenu(); it.action(); };
       ctxMenu.appendChild(el);
     });
     document.body.appendChild(ctxMenu);
-    var mw = 170, mh = items.length * 32 + 10;
+    var mw = 200, mh = items.length * 32 + 10;
     if (x + mw > window.innerWidth) x = window.innerWidth - mw - 4;
     if (y + mh > window.innerHeight) y = window.innerHeight - mh - 4;
     ctxMenu.style.left = x + 'px';
@@ -707,6 +768,177 @@ export const SIDEBAR_SCRIPT = `
   document.addEventListener('click', hideContextMenu);
   document.addEventListener('contextmenu', function(e) {
     if (!e.target.closest || !e.target.closest('.pi-session-item')) hideContextMenu();
+  });
+
+  // ── Session operations (rename / archive / restore / delete) ─────────
+  function sessionOp(op, file, name) {
+    if (!window.pi) return Promise.resolve(null);
+    return window.pi.invoke('pi:session-op', { op: op, file: file, name: name }).then(function(res) {
+      if (res && res.ok === false) showToast(res.error || '操作失败');
+      requestSessions();
+      return res;
+    }).catch(function(err) {
+      showToast('操作失败: ' + ((err && err.message) || err));
+      return null;
+    });
+  }
+  function startRename(file) {
+    var s = sessions.filter(function(x) { return x.file === file; })[0] || { file: file, name: '' };
+    askName(s.name || '', function(name) { sessionOp('rename', file, name); });
+  }
+  function archiveSession(file) { sessionOp('archive', file); }
+  function restoreSession(file) { sessionOp('restore', file); }
+  function confirmDelete(file) {
+    if (!window.confirm('删除该会话文件？此操作不可撤销。')) return;
+    sessionOp('delete', file);
+  }
+
+  /** Electron has no window.prompt(), so the rename dialog is built here. */
+  function askName(initial, done) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pi-prompt-backdrop';
+    var card = document.createElement('div');
+    card.className = 'pi-prompt';
+    var title = document.createElement('div');
+    title.className = 'pi-prompt-title';
+    title.textContent = '重命名会话';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'pi-prompt-input';
+    input.value = initial || '';
+    var actions = document.createElement('div');
+    actions.className = 'pi-prompt-actions';
+    var cancel = document.createElement('button');
+    cancel.className = 'pi-prompt-btn';
+    cancel.textContent = '取消';
+    var ok = document.createElement('button');
+    ok.className = 'pi-prompt-btn primary';
+    ok.textContent = '确定';
+    actions.appendChild(cancel);
+    actions.appendChild(ok);
+    card.appendChild(title);
+    card.appendChild(input);
+    card.appendChild(actions);
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+    setTimeout(function() { input.focus(); input.select(); }, 0);
+    function finish(accept) {
+      var value = input.value.trim();
+      wrap.remove();
+      if (accept && value) done(value);
+    }
+    ok.onclick = function() { finish(true); };
+    cancel.onclick = function() { finish(false); };
+    wrap.addEventListener('click', function(e) { if (e.target === wrap) finish(false); });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+  }
+
+  // ── Archived sessions ────────────────────────────────────────────────
+  var archivedEl = document.getElementById('pi-archived-list');
+  var archivedBtn = document.getElementById('pi-sidebar-archived-toggle');
+  var archivedVisible = false;
+  try { archivedVisible = localStorage.getItem('pi-archived') === '1'; } catch (e) { archivedVisible = false; }
+
+  function renderArchived(items) {
+    if (!archivedEl) return;
+    archivedEl.hidden = !archivedVisible;
+    if (archivedBtn) archivedBtn.classList.toggle('active', archivedVisible);
+    if (!archivedVisible) { archivedEl.innerHTML = ''; return; }
+    if (!items.length) {
+      archivedEl.innerHTML = '<div class="pi-group-head">已归档</div><div class="pi-archived-empty">没有已归档会话</div>';
+      return;
+    }
+    archivedEl.innerHTML = '<div class="pi-group-head">已归档 · ' + items.length + '</div>' + items.map(function(s) {
+      return '<div class="pi-session-item archived" data-file="' + esc(s.file) + '" title="' + esc(s.file) + '">' +
+        '<span class="pi-session-dot"></span>' +
+        '<span class="pi-session-name">' + esc(s.name || s.file) + '</span>' +
+        '<button class="pi-restore-btn" data-restore="' + esc(s.file) + '" title="恢复到会话列表">恢复</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function refreshArchived() {
+    if (!archivedEl || !window.pi) return;
+    if (!archivedVisible) { renderArchived([]); return; }
+    window.pi.invoke('pi:list-archived').then(function(list) {
+      renderArchived(Array.isArray(list) ? list : []);
+    }).catch(function() { renderArchived([]); });
+  }
+
+  function toggleArchived() {
+    archivedVisible = !archivedVisible;
+    try { localStorage.setItem('pi-archived', archivedVisible ? '1' : '0'); } catch (e) { /* private mode */ }
+    renderArchived([]);
+    refreshArchived();
+  }
+
+  if (archivedBtn) archivedBtn.addEventListener('click', function(e) { e.stopPropagation(); toggleArchived(); });
+  if (archivedEl) {
+    archivedEl.addEventListener('click', function(e) {
+      var restoreBtn = e.target.closest ? e.target.closest('.pi-restore-btn') : null;
+      if (restoreBtn) {
+        e.stopPropagation();
+        restoreSession(restoreBtn.getAttribute('data-restore') || '');
+        return;
+      }
+      var row = e.target.closest ? e.target.closest('.pi-session-item') : null;
+      if (!row || !window.pi) return;
+      var file = row.getAttribute('data-file') || '';
+      if (!file || switching) return;
+      switching = true;
+      setTitleLoading('载入会话…');
+      window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file }).then(function() {
+        switching = false;
+        currentFile = file;
+        requestSessions();
+      }).catch(function(err) {
+        switching = false;
+        showToast('切换出错: ' + ((err && err.message) || err));
+      });
+    });
+  }
+
+  // ── Keyboard navigation over the session list ────────────────────────
+  var kbIndex = -1;
+  function rows() {
+    return listEl ? Array.prototype.slice.call(listEl.querySelectorAll('.pi-session-item')) : [];
+  }
+  function focusRow(target) {
+    var all = rows();
+    if (!all.length) return;
+    var next = Math.max(0, Math.min(all.length - 1, target));
+    all.forEach(function(r) { r.classList.remove('kb'); });
+    all[next].classList.add('kb');
+    all[next].scrollIntoView({ block: 'nearest' });
+    kbIndex = next;
+  }
+  document.addEventListener('keydown', function(e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+      e.preventDefault();
+      toggleArchived();
+      return;
+    }
+    var tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (mod || e.altKey) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusRow(kbIndex + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusRow(kbIndex - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); focusRow(0); }
+    else if (e.key === 'End') { e.preventDefault(); focusRow(rows().length - 1); }
+    else if (e.key === 'Enter') {
+      var row = rows()[kbIndex];
+      if (row) { e.preventDefault(); row.click(); }
+    } else if (e.key === 'F2') {
+      var r2 = rows()[kbIndex];
+      if (r2) { e.preventDefault(); startRename(r2.getAttribute('data-file') || ''); }
+    } else if (e.key === 'Delete') {
+      var r3 = rows()[kbIndex];
+      if (r3) { e.preventDefault(); confirmDelete(r3.getAttribute('data-file') || ''); }
+    }
   });
 
   // main -> renderer messages
@@ -723,6 +955,7 @@ export const SIDEBAR_SCRIPT = `
   });
 
   function requestSessions() {
+    refreshArchived();
     if (window.pi && window.pi.invoke) {
       window.pi.invoke('pi:list-sessions').then(function(list) {
         if (Array.isArray(list)) {

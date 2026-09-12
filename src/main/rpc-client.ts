@@ -173,6 +173,11 @@ export interface CreateRpcClientOptions {
 // ─── Diagnostics log (async, rotated — never blocks the main process) ──
 
 const LOG_PATH = join(tmpdir(), "pi-standalone-rpc.log");
+
+/** Path of the rotated RPC log, for the diagnostics panel. */
+export function getRpcLogPath(): string {
+  return LOG_PATH;
+}
 const LOG_MAX_BYTES = 4 * 1024 * 1024;
 let logBytes = -1;
 let logWriteErrors = 0;

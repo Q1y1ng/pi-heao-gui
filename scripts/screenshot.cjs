@@ -53,15 +53,24 @@ app.whenReady().then(async () => {
   try {
     fs.mkdirSync(OUT_DIR, { recursive: true });
 
-    const main = await waitFor(() => {
-      const wins = BrowserWindow.getAllWindows();
-      return wins.length ? wins[0] : null;
-    }, 30_000, "main window");
+    const main = await waitFor(
+      () => {
+        const wins = BrowserWindow.getAllWindows();
+        return wins.length ? wins[0] : null;
+      },
+      30_000,
+      "main window",
+    );
 
     main.setSize(WIDTH, HEIGHT);
-    await waitFor(() => !main.webContents.isLoading() && main.webContents.getURL(), 30_000, "chat load");
     await waitFor(
-      () => main.webContents.executeJavaScript("!!document.querySelector('.pi-session-item')", true),
+      () => !main.webContents.isLoading() && main.webContents.getURL(),
+      30_000,
+      "chat load",
+    );
+    await waitFor(
+      () =>
+        main.webContents.executeJavaScript("!!document.querySelector('.pi-session-item')", true),
       30_000,
       "sidebar rows",
     );
@@ -112,21 +121,38 @@ app.whenReady().then(async () => {
     await shot(main, "main-session");
 
     // sidebar collapsed + settings are the other two surfaces worth reviewing
-    await main.webContents.executeJavaScript("document.getElementById('pi-sidebar-toggle')?.click()", true);
+    await main.webContents.executeJavaScript(
+      "document.getElementById('pi-sidebar-toggle')?.click()",
+      true,
+    );
     await sleep(500);
     await shot(main, "main-sidebar-collapsed");
-    await main.webContents.executeJavaScript("document.getElementById('pi-sidebar-expand')?.click()", true);
+    await main.webContents.executeJavaScript(
+      "document.getElementById('pi-sidebar-expand')?.click()",
+      true,
+    );
     await sleep(300);
 
     await main.webContents.executeJavaScript("window.pi.invoke('pi:open-settings')", true);
-    const settings = await waitFor(() => {
-      const wins = BrowserWindow.getAllWindows();
-      return wins.find((w) => /pi-heao-settings|pi-standalone-settings/.test(w.webContents.getURL())) || null;
-    }, 20_000, "settings window");
+    const settings = await waitFor(
+      () => {
+        const wins = BrowserWindow.getAllWindows();
+        return (
+          wins.find((w) =>
+            /pi-heao-settings|pi-standalone-settings/.test(w.webContents.getURL()),
+          ) || null
+        );
+      },
+      20_000,
+      "settings window",
+    );
     settings.setSize(760, 680);
     await sleep(900);
     await shot(settings, "settings-models");
-    await settings.webContents.executeJavaScript("document.querySelectorAll('.tab')[4]?.click()", true);
+    await settings.webContents.executeJavaScript(
+      "document.querySelectorAll('.tab')[4]?.click()",
+      true,
+    );
     await sleep(500);
     await shot(settings, "settings-general");
 

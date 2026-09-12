@@ -8,7 +8,9 @@ import { join, extname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import type { StandaloneConfig } from "../shared/types";
 import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
-import { THEME_CSS } from "./theme";
+import { STATS_HTML, STATS_SCRIPT, STATS_CSS } from "./stats-panel";
+import { PALETTE_HTML, PALETTE_SCRIPT, PALETTE_CSS } from "./palette";
+import { buildThemeCss } from "./theme";
 
 const BG_MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -419,6 +421,8 @@ function buildChromeHtml(): string {
     <aside id="pi-sidebar">
 ${SIDEBAR_HTML}
     </aside>
+${STATS_HTML}
+${PALETTE_HTML}
     <div id="pi-main"></div>
   </div>
 </div>
@@ -691,15 +695,26 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
   if (headLineIdx !== -1) {
-    lines.splice(headLineIdx, 0, THEME_CSS, CHROME_CSS, SHIM_SCRIPT, configScript);
+    lines.splice(
+      headLineIdx,
+      0,
+      buildThemeCss(config.theme, config.accent),
+      CHROME_CSS,
+      STATS_CSS,
+      PALETTE_CSS,
+      SHIM_SCRIPT,
+      configScript,
+    );
   } else {
     // fallback: inject before last </body>
     const bodyIdx = html.lastIndexOf("</body>");
     if (bodyIdx !== -1) {
       html =
         html.slice(0, bodyIdx) +
-        THEME_CSS +
+        buildThemeCss(config.theme, config.accent) +
         CHROME_CSS +
+        STATS_CSS +
+        PALETTE_CSS +
         SHIM_SCRIPT +
         configScript +
         html.slice(bodyIdx);
@@ -748,7 +763,16 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   // Inject re-parent + sidebar script before structural </body>
   for (let i = allLines.length - 1; i >= 0; i--) {
     if (allLines[i].trim() === "</body>") {
-      allLines.splice(i, 0, REPARENT_SCRIPT, SIDEBAR_SCRIPT, TITLEBAR_SCRIPT, TOKENS_SCRIPT);
+      allLines.splice(
+        i,
+        0,
+        REPARENT_SCRIPT,
+        SIDEBAR_SCRIPT,
+        TITLEBAR_SCRIPT,
+        TOKENS_SCRIPT,
+        STATS_SCRIPT,
+        PALETTE_SCRIPT,
+      );
       break;
     }
   }

@@ -83,6 +83,16 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     rpcTrace: bool(raw.rpcTrace, DEFAULT_CONFIG.rpcTrace),
     workspaceRoot: str(raw.workspaceRoot, DEFAULT_CONFIG.workspaceRoot),
     pinnedSessions: strArray(raw.pinnedSessions),
+    theme: raw.theme === "light" || raw.theme === "system" ? raw.theme : "dark",
+    accent: /^#[0-9a-f]{6}$/i.test(str(raw.accent, ""))
+      ? str(raw.accent, "")
+      : DEFAULT_CONFIG.accent,
+    favoriteModels: strArray(raw.favoriteModels),
+    budgetDailyUsd: num(raw.budgetDailyUsd, DEFAULT_CONFIG.budgetDailyUsd, 0, 100000),
+    budgetMonthlyUsd: num(raw.budgetMonthlyUsd, DEFAULT_CONFIG.budgetMonthlyUsd, 0, 1000000),
+    openAtLogin: bool(raw.openAtLogin, DEFAULT_CONFIG.openAtLogin),
+    showArchived: bool(raw.showArchived, DEFAULT_CONFIG.showArchived),
+    recentWorkspaces: strArray(raw.recentWorkspaces).slice(0, 8),
   };
 }
 

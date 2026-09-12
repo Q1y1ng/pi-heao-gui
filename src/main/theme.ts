@@ -16,38 +16,164 @@
  * The settings window is a separate document, so it imports this block directly
  * instead of re-declaring the palette.
  */
-export const TOKENS_CSS = `
+export type ThemeName = "dark" | "light" | "system";
+
+interface Palette {
+  bg: string;
+  surface: string;
+  raised: string;
+  overlay: string;
+  border: string;
+  borderStrong: string;
+  text: string;
+  textDim: string;
+  textFaint: string;
+  accentHover: string;
+  accentSoft: string;
+  accentContrast: string;
+  success: string;
+  warn: string;
+  danger: string;
+  shadow1: string;
+  shadow2: string;
+  ring: string;
+  scrollbar: string;
+  scrollbarHover: string;
+  codeBg: string;
+}
+
+/** Mix a #rrggbb colour with white (f > 0) or black (f < 0). */
+function mix(hex: string, f: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = Number.parseInt(m[1], 16);
+  const to = f >= 0 ? 255 : 0;
+  const t = Math.abs(f);
+  const ch = (shift: number): number => {
+    const v = (n >> shift) & 0xff;
+    return Math.round(v + (to - v) * t);
+  };
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, "0")}`;
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = Number.parseInt(m[1], 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function palette(theme: "dark" | "light", accent: string): Palette {
+  const soft = withAlpha(accent, theme === "dark" ? 0.16 : 0.12);
+  const ring = `0 0 0 2px ${withAlpha(accent, 0.35)}`;
+  if (theme === "light") {
+    return {
+      bg: "#ffffff",
+      surface: "#f6f7f9",
+      raised: "#eef0f4",
+      overlay: "#e7eaef",
+      border: "#dfe3e9",
+      borderStrong: "#c7ccd6",
+      text: "#1c2027",
+      textDim: "#5b6472",
+      textFaint: "#8a93a1",
+      accentHover: mix(accent, -0.12),
+      accentSoft: soft,
+      accentContrast: "#ffffff",
+      success: "#1f9d6b",
+      warn: "#b7791f",
+      danger: "#d1435b",
+      shadow1: "0 1px 2px rgba(16, 24, 40, 0.08)",
+      shadow2: "0 8px 28px rgba(16, 24, 40, 0.12)",
+      ring,
+      scrollbar: "#0f172a26",
+      scrollbarHover: "#0f172a40",
+      codeBg: "#f2f4f7",
+    };
+  }
+  return {
+    bg: "#0e1013",
+    surface: "#14171c",
+    raised: "#1a1e24",
+    overlay: "#1f242b",
+    border: "#252a32",
+    borderStrong: "#333a45",
+    text: "#e7eaf0",
+    textDim: "#9ba3af",
+    textFaint: "#6b7381",
+    accentHover: mix(accent, 0.22),
+    accentSoft: soft,
+    accentContrast: "#ffffff",
+    success: "#35c08b",
+    warn: "#e2b341",
+    danger: "#f0616d",
+    shadow1: "0 1px 2px rgba(0, 0, 0, 0.4)",
+    shadow2: "0 6px 24px rgba(0, 0, 0, 0.35)",
+    ring,
+    scrollbar: "#3a414d80",
+    scrollbarHover: "#4a5361cc",
+    codeBg: "#0b0d10",
+  };
+}
+
+/** True when the OS is in light mode (used for theme: "system"). */
+export function resolveTheme(theme: ThemeName): "dark" | "light" {
+  if (theme !== "system") return theme;
+  try {
+    // Electron's nativeTheme is optional here so this stays unit-testable.
+    const electron = require("electron") as { nativeTheme?: { shouldUseDarkColors?: boolean } };
+    return electron.nativeTheme?.shouldUseDarkColors === false ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+/** Build the token block for a theme + accent colour. */
+export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
+  const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
+  const p = palette(resolveTheme(theme), accentColor);
+  return renderTokens(p, accentColor);
+}
+
+function renderTokens(p: Palette, accentColor: string): string {
+  return `
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 :root {
   /* surfaces: app < surface < raised < overlay */
-  --pi-bg: #0e1013;
-  --pi-surface: #14171c;
-  --pi-raised: #1a1e24;
-  --pi-overlay: #1f242b;
-  --pi-border: #252a32;
-  --pi-border-strong: #333a45;
+  --pi-bg: ${p.bg};
+  --pi-surface: ${p.surface};
+  --pi-raised: ${p.raised};
+  --pi-overlay: ${p.overlay};
+  --pi-border: ${p.border};
+  --pi-border-strong: ${p.borderStrong};
 
   /* text */
-  --pi-text: #e7eaf0;
-  --pi-text-dim: #9ba3af;
-  --pi-text-faint: #6b7381;
+  --pi-text: ${p.text};
+  --pi-text-dim: ${p.textDim};
+  --pi-text-faint: ${p.textFaint};
 
   /* accent + semantics */
-  --pi-accent: #4c8dff;
-  --pi-accent-hover: #6ba1ff;
-  --pi-accent-soft: rgba(76, 141, 255, 0.14);
-  --pi-success: #35c08b;
-  --pi-warn: #e2b341;
-  --pi-danger: #f0616d;
+  --pi-accent: ${accentColor};
+  --pi-accent-hover: ${p.accentHover};
+  --pi-accent-soft: ${p.accentSoft};
+  --pi-success: ${p.success};
+  --pi-warn: ${p.warn};
+  --pi-danger: ${p.danger};
 
   /* geometry */
   --pi-radius-sm: 5px;
   --pi-radius: 8px;
   --pi-radius-lg: 12px;
   --pi-radius-pill: 999px;
-  --pi-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --pi-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.35);
-  --pi-ring: 0 0 0 2px rgba(76, 141, 255, 0.35);
+  --pi-shadow-1: ${p.shadow1};
+  --pi-shadow-2: ${p.shadow2};
+  --pi-ring: ${p.ring};
+  --pi-scrollbar: ${p.scrollbar};
+  --pi-scrollbar-hover: ${p.scrollbarHover};
+  --pi-code-bg: ${p.codeBg};
 
   /* type */
   --pi-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
@@ -75,7 +201,7 @@ export const TOKENS_CSS = `
   --vscode-input-border: var(--pi-border-strong);
   --vscode-input-placeholderForeground: var(--pi-text-faint);
   --vscode-button-background: var(--pi-accent);
-  --vscode-button-foreground: #ffffff;
+  --vscode-button-foreground: ${p.accentContrast};
   --vscode-button-hoverBackground: var(--pi-accent-hover);
   --vscode-button-secondaryBackground: var(--pi-overlay);
   --vscode-button-secondaryForeground: var(--pi-text);
@@ -84,11 +210,11 @@ export const TOKENS_CSS = `
   --vscode-dropdown-border: var(--pi-border-strong);
   --vscode-list-hoverBackground: var(--pi-raised);
   --vscode-list-activeSelectionBackground: var(--pi-accent-soft);
-  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-list-activeSelectionForeground: ${p.text};
   --vscode-badge-background: var(--pi-overlay);
   --vscode-badge-foreground: var(--pi-text);
-  --vscode-scrollbarSlider-background: #3a414d80;
-  --vscode-scrollbarSlider-hoverBackground: #4a5361cc;
+  --vscode-scrollbarSlider-background: ${p.scrollbar};
+  --vscode-scrollbarSlider-hoverBackground: ${p.scrollbarHover};
   --vscode-focusBorder: var(--pi-accent);
   --vscode-errorForeground: var(--pi-danger);
   --vscode-warningForeground: var(--pi-warn);
@@ -100,7 +226,7 @@ export const TOKENS_CSS = `
   --vscode-menu-background: var(--pi-overlay);
   --vscode-menu-foreground: var(--pi-text);
   --vscode-menu-selectionBackground: var(--pi-accent-soft);
-  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-menu-selectionForeground: ${p.text};
   --vscode-sideBar-background: var(--pi-surface);
   --vscode-sideBar-foreground: var(--pi-text);
   --vscode-sideBar-border: var(--pi-border);
@@ -111,11 +237,9 @@ export const TOKENS_CSS = `
 }
 
 `;
+}
 
-export const THEME_CSS = `
-<style id="pi-heao-theme">
-${TOKENS_CSS}
-
+export const THEME_BODY = `
 /* ── Base ───────────────────────────────────────────────────────────── */
 html,
 body,
@@ -466,14 +590,29 @@ select option {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a414d80;
+  background: var(--pi-scrollbar);
   border: 2px solid transparent;
   background-clip: content-box;
   border-radius: var(--pi-radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a5361cc;
+  background: var(--pi-scrollbar-hover);
   background-clip: content-box;
 }
 </style>
 `;
+
+// Default (dark) token block, used by the settings window which imports it directly.
+export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff");
+
+/**
+ * Full theme block for a theme + accent. The token element has its own id so a
+ * live theme switch only has to replace that one element (pi:theme channel).
+ */
+export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
+  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent)}</style>
+<style id="pi-heao-theme">${THEME_BODY}</style>`;
+}
+
+export const THEME_CSS = `<style id="pi-heao-tokens">${TOKENS_CSS}</style>
+<style id="pi-heao-theme">${THEME_BODY}</style>`;

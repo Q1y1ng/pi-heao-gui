@@ -349,6 +349,178 @@ body {
   color: var(--pi-success);
 }
 
+/* appearance: segmented group + accent swatches + font preview */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius);
+  background: var(--pi-bg);
+}
+.seg button {
+  padding: 5px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--pi-radius-sm);
+  background: transparent;
+  color: var(--pi-text-dim);
+  font-family: inherit;
+  font-size: var(--pi-fs-sm);
+  cursor: pointer;
+  transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);
+}
+.seg button:hover {
+  background: var(--pi-overlay);
+  color: var(--pi-text);
+}
+.seg button.active {
+  background: var(--pi-accent-soft);
+  border-color: var(--pi-accent);
+  color: var(--pi-accent);
+  font-weight: 600;
+}
+.swatches {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--pi-radius-pill);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  transition: transform var(--pi-speed), border-color var(--pi-speed), box-shadow var(--pi-speed);
+}
+.swatch:hover {
+  transform: scale(1.08);
+}
+.swatch.active {
+  border-color: var(--pi-text);
+  box-shadow: 0 0 0 2px var(--pi-accent-soft), inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+}
+.swatches input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius-sm);
+  background: var(--pi-bg);
+  cursor: pointer;
+}
+.font-preview {
+  padding: 8px 10px;
+  border: 1px dashed var(--pi-border-strong);
+  border-radius: var(--pi-radius);
+  background: var(--pi-bg);
+  color: var(--pi-text);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* chips + recent workspaces (常规 tab) */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius-pill);
+  background: var(--pi-bg);
+  color: var(--pi-text);
+  font-size: var(--pi-fs-xs);
+}
+.chip button {
+  padding: 2px 5px;
+  border: none;
+  border-radius: var(--pi-radius-pill);
+  background: transparent;
+  color: var(--pi-text-faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.chip button:hover {
+  background: rgba(240, 97, 109, 0.14);
+  color: var(--pi-danger);
+}
+.recent-row {
+  cursor: pointer;
+}
+
+/* diagnostics tab */
+.diag-pre {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--pi-border);
+  border-radius: var(--pi-radius);
+  background: var(--pi-bg);
+  color: var(--pi-text-dim);
+  font-family: var(--pi-font-mono);
+  font-size: var(--pi-fs-xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.diag-actions button {
+  padding: 5px 12px;
+  border: 1px solid var(--pi-border-strong);
+  border-radius: var(--pi-radius);
+  background: var(--pi-raised);
+  color: var(--pi-text-dim);
+  font-family: inherit;
+  font-size: var(--pi-fs-sm);
+  cursor: pointer;
+  transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);
+}
+.diag-actions button:hover {
+  background: var(--pi-overlay);
+  color: var(--pi-text);
+}
+.diag-feedback {
+  min-height: 15px;
+  margin-bottom: 6px;
+  font-size: var(--pi-fs-xs);
+  color: var(--pi-text-faint);
+}
+.diag-feedback.ok {
+  color: var(--pi-success);
+}
+.diag-feedback.err {
+  color: var(--pi-danger);
+}
+.diag-path {
+  margin-top: 6px;
+  font-family: var(--pi-font-mono);
+  font-size: var(--pi-fs-xs);
+  color: var(--pi-text-dim);
+  word-break: break-all;
+}
+.diag-path:empty {
+  display: none;
+}
+
 /* switch */
 .switch .slider {
   background: var(--pi-border-strong);
@@ -444,6 +616,8 @@ body {
   <div class="tab" data-tab="extensions">扩展插件</div>
   <div class="tab" data-tab="skills">技能</div>
   <div class="tab" data-tab="sysprompt">系统提示词</div>
+  <div class="tab" data-tab="appearance">外观</div>
+  <div class="tab" data-tab="diagnostics">诊断</div>
   <div class="tab" data-tab="general">常规</div>
 </div>
 <div class="content">
@@ -492,6 +666,65 @@ body {
       <label>覆盖系统提示词（SYSTEM.md）— 完全替换 pi 默认提示词（慎用）</label>
       <textarea id="agent-override" rows="5" placeholder="留空则不覆盖"></textarea>
     </div>
+  </div>
+  <!-- Appearance -->
+  <div class="panel" id="panel-appearance">
+    <div class="section-title">界面主题</div>
+    <div class="field">
+      <label>主题</label>
+      <div class="seg" id="theme-group">
+        <button type="button" data-theme="dark">深色</button>
+        <button type="button" data-theme="light">浅色</button>
+        <button type="button" data-theme="system">跟随系统</button>
+      </div>
+      <div class="hint">主题与强调色会立即应用到所有聊天窗口，无需重启。</div>
+    </div>
+    <div class="section-title">强调色</div>
+    <div class="field">
+      <label>强调色（按钮、焦点边框、选中行）</label>
+      <div class="swatches" id="accent-swatches">
+        <button type="button" class="swatch" data-accent="#4c8dff" style="background:#4c8dff" title="#4c8dff 蓝色"></button>
+        <button type="button" class="swatch" data-accent="#22c55e" style="background:#22c55e" title="#22c55e 绿色"></button>
+        <button type="button" class="swatch" data-accent="#a855f7" style="background:#a855f7" title="#a855f7 紫色"></button>
+        <button type="button" class="swatch" data-accent="#f59e0b" style="background:#f59e0b" title="#f59e0b 琥珀色"></button>
+        <button type="button" class="swatch" data-accent="#ef4444" style="background:#ef4444" title="#ef4444 红色"></button>
+        <button type="button" class="swatch" data-accent="#14b8a6" style="background:#14b8a6" title="#14b8a6 青色"></button>
+        <input type="color" id="accent-custom" value="#4c8dff" title="自定义颜色">
+      </div>
+      <div class="hint">点击色块立即生效；也可以用右侧取色器自定义任意颜色。</div>
+    </div>
+    <div class="section-title">字体大小</div>
+    <div class="row">
+      <div class="field" style="flex:0 0 130px">
+        <label>聊天字体（px）</label>
+        <input type="number" id="ap-fontSize" min="8" max="32" step="1">
+      </div>
+      <div class="field">
+        <label>预览</label>
+        <div class="font-preview" id="ap-fontPreview">13px · 预览文本 Aa 你好 0123</div>
+      </div>
+    </div>
+    <div class="hint">范围 8–32，立即应用到聊天窗口的正文与代码块。</div>
+  </div>
+  <!-- Diagnostics -->
+  <div class="panel" id="panel-diagnostics">
+    <div class="section-title">环境信息
+      <button class="btn-add" id="btn-diag-refresh">刷新</button>
+    </div>
+    <pre class="diag-pre" id="diag-info">正在读取…</pre>
+    <div class="section-title">诊断操作</div>
+    <div class="diag-actions">
+      <button type="button" id="btn-diag-log">刷新日志</button>
+      <button type="button" id="btn-diag-copy">复制诊断信息</button>
+      <button type="button" id="btn-diag-report">生成诊断包</button>
+      <button type="button" id="btn-diag-openlogs">打开日志目录</button>
+      <button type="button" id="btn-diag-openuserdata">打开数据目录</button>
+    </div>
+    <div class="diag-feedback" id="diag-feedback"></div>
+    <div class="diag-path" id="diag-report-path"></div>
+    <div class="section-title">RPC 日志（末尾）</div>
+    <pre class="diag-pre" id="diag-log">尚未读取，点击「刷新日志」查看。</pre>
+    <div class="hint">诊断包会隐去 API 密钥等敏感字段，但包含完整配置与日志末尾；生成后会自动打开所在目录。</div>
   </div>
   <!-- General -->
   <div class="panel" id="panel-general">
@@ -574,6 +807,33 @@ body {
       <label>auth.json（~/.pi/agent/auth.json）— 原始编辑（密钥以 •••• 掩码显示；不动掩码即保持原值）</label>
       <textarea class="json-editor" id="agent-auth-raw" rows="4"></textarea>
     </div>
+    <div class="section-title">启动与侧栏</div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-openAtLogin"><span class="slider"></span></label>
+      <label for="cfg-openAtLogin">开机自启（登录系统后自动打开 Pi Heao GUI）</label>
+    </div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-showArchived"><span class="slider"></span></label>
+      <label for="cfg-showArchived">侧栏显示已归档会话</label>
+    </div>
+    <div class="section-title">预算</div>
+    <div class="row">
+      <div class="field">
+        <label>每日预算（USD，0 = 不限制）</label>
+        <input type="number" id="cfg-budgetDailyUsd" min="0" step="0.5">
+      </div>
+      <div class="field">
+        <label>每月预算（USD，0 = 不限制）</label>
+        <input type="number" id="cfg-budgetMonthlyUsd" min="0" step="0.5">
+      </div>
+    </div>
+    <div class="hint">0 表示不限制；超出预算仅给出提醒，不会中断对话。</div>
+    <div class="section-title">收藏模型</div>
+    <div class="chip-row" id="favorites-list"></div>
+    <div class="hint">收藏的模型会在模型选择器中带 ★ 标记并置顶显示。</div>
+    <div class="section-title">最近工作目录</div>
+    <div id="recent-list"></div>
+    <div class="hint">点击任意一行即可将其设为默认工作目录。</div>
   </div>
 </div>
 <div class="status" id="status">就绪</div>
@@ -594,6 +854,7 @@ document.querySelectorAll('.tab').forEach(t => {
     document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     $('panel-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'diagnostics') loadDiagnosticsInfo();
   };
 });
 
@@ -895,6 +1156,324 @@ $('auth-list').onclick = (e) => {
 // ── Load / Save ──
 let currentConfig = {};
 
+// ── Appearance (外观) ──
+const THEME_LABELS = { dark: '深色', light: '浅色', system: '跟随系统' };
+
+function normHex(v) { return String(v || '').trim().toLowerCase(); }
+function isHex(v) { return /^#[0-9a-f]{6}$/.test(v); }
+
+function markTheme(theme) {
+  document.querySelectorAll('#theme-group button').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === theme);
+  });
+}
+
+function markSwatch(accent) {
+  const a = normHex(accent);
+  document.querySelectorAll('#accent-swatches .swatch').forEach(s => {
+    s.classList.toggle('active', normHex(s.dataset.accent) === a);
+  });
+}
+
+function renderFontPreview(size) {
+  const n = Math.round(Number(size));
+  const px = Math.min(32, Math.max(8, Number.isFinite(n) ? n : 13));
+  const p = $('ap-fontPreview');
+  if (!p) return;
+  p.style.fontSize = px + 'px';
+  p.textContent = px + 'px · 预览文本 Aa 你好 0123';
+}
+
+function renderAppearance() {
+  markTheme(currentConfig.theme || 'dark');
+  const accent = normHex(currentConfig.accent) || '#4c8dff';
+  markSwatch(accent);
+  if (isHex(accent)) $('accent-custom').value = accent;
+  const size = Number(currentConfig.chatFontSize) || 13;
+  $('ap-fontSize').value = size;
+  renderFontPreview(size);
+}
+
+// Merges a partial into the app config; main returns the merged config.
+async function applyPartial(partial, okMsg) {
+  const cfg = await window.pi.invoke('pi:set-config', partial);
+  if (cfg && typeof cfg === 'object') currentConfig = cfg;
+  if (okMsg) setStatus(okMsg, true);
+  return currentConfig;
+}
+
+$('theme-group').onclick = async (e) => {
+  const btn = e.target.closest('button[data-theme]');
+  if (!btn) return;
+  const theme = btn.dataset.theme;
+  markTheme(theme);
+  try {
+    await applyPartial({ theme }, '已切换主题：' + (THEME_LABELS[theme] || theme));
+  } catch (err) {
+    setStatus('切换主题失败: ' + err.message, false);
+    renderAppearance();
+  }
+};
+
+async function setAccent(hex, quiet) {
+  const value = normHex(hex);
+  markSwatch(value);
+  try {
+    await applyPartial({ accent: value }, quiet ? '' : '已应用强调色 ' + value);
+  } catch (err) {
+    setStatus('设置强调色失败: ' + err.message, false);
+    renderAppearance();
+  }
+}
+
+$('accent-swatches').onclick = (e) => {
+  const sw = e.target.closest('.swatch');
+  if (!sw) return;
+  setAccent(sw.dataset.accent, false);
+};
+
+// Native colour input writes live (debounced) while dragging, once on close.
+let accentTimer = null;
+$('accent-custom').oninput = () => {
+  const value = normHex($('accent-custom').value);
+  markSwatch(value);
+  if (accentTimer) clearTimeout(accentTimer);
+  accentTimer = setTimeout(() => setAccent(value, true), 220);
+};
+$('accent-custom').onchange = () => {
+  if (accentTimer) clearTimeout(accentTimer);
+  setAccent(normHex($('accent-custom').value), false);
+};
+
+$('ap-fontSize').oninput = () => renderFontPreview($('ap-fontSize').value);
+$('ap-fontSize').onchange = async () => {
+  let px = Math.round(Number($('ap-fontSize').value));
+  if (!Number.isFinite(px)) px = 13;
+  px = Math.min(32, Math.max(8, px));
+  $('ap-fontSize').value = px;
+  $('cfg-chatFontSize').value = px;
+  renderFontPreview(px);
+  try {
+    await applyPartial({ chatFontSize: px }, '字体大小已设为 ' + px + 'px');
+  } catch (err) {
+    setStatus('设置字体大小失败: ' + err.message, false);
+    renderAppearance();
+  }
+};
+
+// ── General: launch / sidebar / budget ──
+$('cfg-openAtLogin').onchange = async () => {
+  const on = $('cfg-openAtLogin').checked;
+  try {
+    await applyPartial({ openAtLogin: on }, on ? '已开启开机自启' : '已关闭开机自启');
+  } catch (err) {
+    setStatus('设置开机自启失败: ' + err.message, false);
+    $('cfg-openAtLogin').checked = !on;
+  }
+};
+
+$('cfg-showArchived').onchange = async () => {
+  const on = $('cfg-showArchived').checked;
+  try {
+    await applyPartial({ showArchived: on }, on ? '侧栏将显示已归档会话' : '侧栏已隐藏归档会话');
+  } catch (err) {
+    setStatus('设置失败: ' + err.message, false);
+    $('cfg-showArchived').checked = !on;
+  }
+};
+
+async function saveBudget() {
+  const daily = Math.max(0, Number($('cfg-budgetDailyUsd').value) || 0);
+  const monthly = Math.max(0, Number($('cfg-budgetMonthlyUsd').value) || 0);
+  $('cfg-budgetDailyUsd').value = daily;
+  $('cfg-budgetMonthlyUsd').value = monthly;
+  try {
+    await applyPartial({ budgetDailyUsd: daily, budgetMonthlyUsd: monthly }, '预算已保存');
+  } catch (err) {
+    setStatus('保存预算失败: ' + err.message, false);
+  }
+}
+$('cfg-budgetDailyUsd').onchange = saveBudget;
+$('cfg-budgetMonthlyUsd').onchange = saveBudget;
+
+// ── General: favourite models (chips, removable) ──
+function renderFavorites() {
+  const el = $('favorites-list');
+  const favs = Array.isArray(currentConfig.favoriteModels) ? currentConfig.favoriteModels : [];
+  el.innerHTML = '';
+  if (!favs.length) {
+    el.innerHTML = '<div class="empty-hint">暂无收藏。在模型选择器中点击 ★ 即可收藏。</div>';
+    return;
+  }
+  for (const id of favs) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const label = document.createElement('span');
+    label.textContent = id;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '×';
+    rm.title = '移除收藏';
+    rm.onclick = async () => {
+      const next = favs.filter(x => x !== id);
+      try {
+        const cfg = await window.pi.invoke('pi:set-config', { favoriteModels: next });
+        if (cfg && typeof cfg === 'object') currentConfig = cfg;
+        renderFavorites();
+        setStatus('已移除收藏 ' + id, true);
+      } catch (err) {
+        setStatus('移除收藏失败: ' + err.message, false);
+      }
+    };
+    chip.appendChild(label);
+    chip.appendChild(rm);
+    el.appendChild(chip);
+  }
+}
+
+// ── General: recent workspaces (click = set workspaceRoot) ──
+function renderRecentWorkspaces() {
+  const el = $('recent-list');
+  const list = Array.isArray(currentConfig.recentWorkspaces)
+    ? currentConfig.recentWorkspaces.filter(Boolean)
+    : [];
+  const current = currentConfig.workspaceRoot || '';
+  el.innerHTML = '';
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-hint">暂无最近工作目录。</div>';
+    return;
+  }
+  for (const dir of list) {
+    const row = document.createElement('div');
+    row.className = 'list-item recent-row';
+    row.title = '设为默认工作目录：' + dir;
+    row.innerHTML = '<span class="name">' + esc(dir) + '</span>' +
+      (dir === current ? '<span class="card-badge">当前</span>' : '<span class="meta">使用</span>');
+    row.onclick = async () => {
+      try {
+        const cfg = await window.pi.invoke('pi:set-config', { workspaceRoot: dir });
+        if (cfg && typeof cfg === 'object') currentConfig = cfg;
+        $('cfg-workspaceRoot').value = currentConfig.workspaceRoot || dir;
+        renderRecentWorkspaces();
+        setStatus('默认工作目录已设为 ' + dir, true);
+      } catch (err) {
+        setStatus('切换工作目录失败: ' + err.message, false);
+      }
+    };
+    el.appendChild(row);
+  }
+}
+
+// ── Diagnostics (诊断) ──
+let diagInfoText = '';
+let diagTimer = null;
+
+function flashDiag(msg, ok) {
+  const el = $('diag-feedback');
+  el.textContent = msg;
+  el.className = 'diag-feedback' + (ok === true ? ' ok' : ok === false ? ' err' : '');
+  if (diagTimer) clearTimeout(diagTimer);
+  diagTimer = setTimeout(() => {
+    el.textContent = '';
+    el.className = 'diag-feedback';
+  }, 4000);
+}
+
+async function loadDiagnosticsInfo() {
+  const pre = $('diag-info');
+  pre.textContent = '正在读取…';
+  try {
+    const r = await window.pi.invoke('pi:diagnostics', 'info');
+    if (r && r.ok === false) throw new Error(r.error || '读取失败');
+    diagInfoText = (r && r.info) || '（无内容）';
+    pre.textContent = diagInfoText;
+  } catch (err) {
+    pre.textContent = '读取失败：' + err.message;
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (err2) {
+      return false;
+    }
+  }
+}
+
+$('btn-diag-refresh').onclick = () => loadDiagnosticsInfo();
+
+$('btn-diag-log').onclick = async () => {
+  const pre = $('diag-log');
+  pre.textContent = '正在读取…';
+  try {
+    const r = await window.pi.invoke('pi:diagnostics', 'log');
+    if (r && r.ok === false) throw new Error(r.error || '读取失败');
+    pre.textContent = (r && r.info) || '（日志为空）';
+    setStatus('已刷新日志', true);
+  } catch (err) {
+    pre.textContent = '读取失败：' + err.message;
+    setStatus('读取日志失败: ' + err.message, false);
+  }
+};
+
+$('btn-diag-copy').onclick = async () => {
+  try {
+    const r = await window.pi.invoke('pi:diagnostics', 'copy');
+    if (r && r.ok === false) throw new Error(r.error || '读取失败');
+    const text = (r && r.info) || diagInfoText || '';
+    const ok = await copyText(text);
+    flashDiag(ok ? '已复制' : '复制失败，请在下方文本框中手动选择', ok);
+    setStatus(ok ? '诊断信息已复制到剪贴板' : '复制失败', ok);
+  } catch (err) {
+    flashDiag('复制失败：' + err.message, false);
+    setStatus('复制失败: ' + err.message, false);
+  }
+};
+
+$('btn-diag-report').onclick = async () => {
+  setStatus('正在生成诊断包…');
+  try {
+    const r = await window.pi.invoke('pi:diagnostics', 'report');
+    if (r && r.ok === false) throw new Error(r.error || '生成失败');
+    const p = (r && r.path) || '';
+    $('diag-report-path').textContent = p ? '诊断包已生成：' + p : '诊断包已生成（未返回路径）';
+    setStatus('诊断包已生成', true);
+  } catch (err) {
+    $('diag-report-path').textContent = '';
+    setStatus('生成诊断包失败: ' + err.message, false);
+  }
+};
+
+$('btn-diag-openlogs').onclick = async () => {
+  try {
+    await window.pi.invoke('pi:diagnostics', 'open-logs');
+    setStatus('已打开日志目录', true);
+  } catch (err) {
+    setStatus('打开日志目录失败: ' + err.message, false);
+  }
+};
+
+$('btn-diag-openuserdata').onclick = async () => {
+  try {
+    await window.pi.invoke('pi:diagnostics', 'open-userdata');
+    setStatus('已打开数据目录', true);
+  } catch (err) {
+    setStatus('打开数据目录失败: ' + err.message, false);
+  }
+};
+
 async function loadAll() {
   try {
     currentConfig = await window.pi.invoke('pi:get-config');
@@ -910,6 +1489,14 @@ async function loadAll() {
     $('cfg-mcpIdleTimeout').value = currentConfig.mcpIdleTimeout ?? 10;
     $('cfg-permissionMode').value = currentConfig.permissionMode || 'AskForApproval';
     $('cfg-disabledTools').value = (currentConfig.disabledTools || []).join(', ');
+
+    $('cfg-openAtLogin').checked = !!currentConfig.openAtLogin;
+    $('cfg-showArchived').checked = !!currentConfig.showArchived;
+    $('cfg-budgetDailyUsd').value = Number(currentConfig.budgetDailyUsd) || 0;
+    $('cfg-budgetMonthlyUsd').value = Number(currentConfig.budgetMonthlyUsd) || 0;
+    renderAppearance();
+    renderFavorites();
+    renderRecentWorkspaces();
 
     const agent = await window.pi.invoke('pi:read-agent-files');
     $('agent-append').value = agent.append || '';
@@ -954,6 +1541,10 @@ async function saveAll() {
       mcpIdleTimeout: Number($('cfg-mcpIdleTimeout').value) || 0,
       permissionMode: $('cfg-permissionMode').value,
       disabledTools,
+      openAtLogin: $('cfg-openAtLogin').checked,
+      showArchived: $('cfg-showArchived').checked,
+      budgetDailyUsd: Math.max(0, Number($('cfg-budgetDailyUsd').value) || 0),
+      budgetMonthlyUsd: Math.max(0, Number($('cfg-budgetMonthlyUsd').value) || 0),
     };
     await window.pi.invoke('pi:set-config', partial);
 
@@ -970,6 +1561,9 @@ async function saveAll() {
     });
     if (result && result.ok === false) throw new Error(result.error || '保存失败');
     currentConfig = await window.pi.invoke('pi:get-config');
+    renderAppearance();
+    renderFavorites();
+    renderRecentWorkspaces();
     setStatus('已保存', true);
   } catch (e) {
     setStatus('保存失败: ' + e.message, false);

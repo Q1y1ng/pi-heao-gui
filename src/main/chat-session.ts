@@ -13,6 +13,7 @@ import {
 } from "./rpc-client";
 import type { StandaloneConfig } from "../shared/types";
 import { getRealBridgeDir } from "./bridge-extract";
+import { StatsCollector, type UsageLike, type StatsSnapshot } from "./stats";
 import { log, errText } from "./log";
 
 // ─── Builtin commands (from upstream builtin-commands.ts) ─────────────
@@ -170,6 +171,9 @@ function buildEnv(config: StandaloneConfig, appPath: string): Record<string, str
 
 export interface ChatSessionHost {
   postToRenderer(msg: unknown): void;
+  /** Persist per-session telemetry (turns + per-day spend). */
+  saveStats?(sessionFile: string | undefined, data: unknown): void;
+  loadStats?(sessionFile: string): unknown;
 }
 
 export interface ChatSession {
@@ -179,6 +183,10 @@ export interface ChatSession {
   handleMessage(msg: { type: string; [k: string]: unknown }): Promise<void>;
   switchTo(sessionFile: string): Promise<void>;
   newSession(): Promise<void>;
+  /** Rename this session via pi (mirrors the /name command). */
+  renameCurrent(name: string): Promise<{ ok: boolean; error?: string }>;
+  /** Telemetry for this session: TTFT, throughput, cache hit rate, spend. */
+  statsSnapshot(): StatsSnapshot & { sessionFile: string; cwd: string };
   dispose(): void;
 }
 
@@ -204,8 +212,21 @@ export async function createChatSession(opts: {
 
   // Token metrics tracking
   let promptSentAt = 0;
-  let firstTokenAt = 0;
+  // Per-session telemetry: first-token latency, decode speed, cache hit rate,
+  // reasoning tokens, per-day cost. Replaces the old ad-hoc firstTokenAt/lastMetrics
+  // pair, which measured "settled minus first event" instead of real decode time.
+  const collector = new StatsCollector();
+  let collectorSessionFile = "";
+  let lastUsage: UsageLike | undefined;
+  let lastLivePost = 0;
   let lastMetrics: TokenMetrics = {};
+  let budgetWarnDay = "";
+  let budgetWarnMonth = "";
+
+  function monthKey(ts: number): string {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${d.getMonth() + 1}`;
+  }
 
   const post = (msg: unknown) => {
     if (!sessionDisposed) opts.host.postToRenderer(msg);
@@ -240,7 +261,64 @@ export async function createChatSession(opts: {
 
   function sendTokenMetrics() {
     if (sessionDisposed) return;
+    const last = collector.last();
+    lastMetrics = {
+      firstTokenMs: last?.ttftMs ?? undefined,
+      durationMs: last ? last.endedAt - last.startedAt : undefined,
+      tokensPerSec: last?.tps ?? undefined,
+      outputTokens: last?.outputTokens,
+      cost: last?.cost,
+    };
     post({ type: "tokenMetrics", metrics: lastMetrics });
+  }
+
+  /** Full telemetry snapshot (aggregate + per-turn + today/month spend). */
+  function statsSnapshot(): StatsSnapshot & { sessionFile: string; cwd: string } {
+    return { ...collector.snapshot(Date.now()), sessionFile: sessionFile ?? "", cwd };
+  }
+
+  /** Warn once when the configured daily/monthly budget is crossed. */
+  function checkBudget(turn: { cost: number }): void {
+    const now = Date.now();
+    const daily = opts.config.budgetDailyUsd ?? 0;
+    const monthly = opts.config.budgetMonthlyUsd ?? 0;
+    if (
+      daily > 0 &&
+      collector.costToday(now) >= daily &&
+      budgetWarnDay !== new Date(now).toDateString()
+    ) {
+      budgetWarnDay = new Date(now).toDateString();
+      post({
+        type: "toast",
+        text: `今日花费 $${collector.costToday(now).toFixed(3)} 已超出预算 $${daily.toFixed(2)}`,
+        kind: "error",
+      });
+    }
+    if (monthly > 0 && collector.costMonth(now) >= monthly && budgetWarnMonth !== monthKey(now)) {
+      budgetWarnMonth = monthKey(now);
+      post({
+        type: "toast",
+        text: `本月花费 $${collector.costMonth(now).toFixed(3)} 已超出预算 $${monthly.toFixed(2)}`,
+        kind: "error",
+      });
+    }
+    void turn;
+  }
+
+  function persistStats(): void {
+    if (!sessionFile || sessionFile === collectorSessionFile) {
+      opts.host.saveStats?.(sessionFile, collector.toJSON());
+      return;
+    }
+    collectorSessionFile = sessionFile;
+    opts.host.saveStats?.(sessionFile, collector.toJSON());
+  }
+
+  /** Load persisted telemetry for a session so totals survive app restarts. */
+  function loadStatsFor(file: string): void {
+    collectorSessionFile = file;
+    const stored = opts.host.loadStats?.(file);
+    if (stored) collector.load(stored);
   }
 
   async function sendSessionInfo() {
@@ -265,6 +343,7 @@ export async function createChatSession(opts: {
       ]);
       sessionName = st.sessionName;
       sessionFile = st.sessionFile;
+      if (sessionFile) loadStatsFor(sessionFile);
       post({ type: "state", state: st });
       post({ type: "permissionMode", mode: opts.config.permissionMode });
       post({ type: "models", models });
@@ -432,7 +511,8 @@ export async function createChatSession(opts: {
         try {
           if (await handleBuiltin(String(msg.message ?? ""))) break;
           promptSentAt = Date.now();
-          firstTokenAt = 0;
+          lastUsage = undefined;
+          collector.beginTurn(promptSentAt);
           await rpc.prompt(
             String(msg.message ?? ""),
             msg.streamingBehavior as "steer" | "followUp" | undefined,
@@ -658,6 +738,27 @@ export async function createChatSession(opts: {
     }
   }
 
+  /** Rename the current session through pi (so pi's own state sees it too). */
+  async function renameCurrent(name: string): Promise<{ ok: boolean; error?: string }> {
+    const clean = name
+      .replace(/[\r\n]+/g, " ")
+      .trim()
+      .slice(0, 120);
+    if (!clean) return { ok: false, error: "名称不能为空" };
+    try {
+      await rpc.setSessionName(clean);
+      sessionName = clean;
+      const st = await rpc.getState();
+      sessionFile = st.sessionFile;
+      post({ type: "state", state: st });
+      await sendSessionInfo();
+      return { ok: true };
+    } catch (e) {
+      warnBestEffort("rename", e);
+      return { ok: false, error: errText(e) };
+    }
+  }
+
   async function switchTo(file: string) {
     if (streaming) {
       post({
@@ -671,7 +772,10 @@ export async function createChatSession(opts: {
       await rpc.switchSession(file);
       const st = await rpc.getState();
       sessionFile = st.sessionFile;
+      // Telemetry is per session: swap in the stored turns for the new file.
+      if (sessionFile) loadStatsFor(sessionFile);
       post({ type: "state", state: st });
+      post({ type: "stats", stats: statsSnapshot() });
       const messages = await rpc.getMessages();
       post({ type: "messages", messages });
       void sendContextUsage();
@@ -724,44 +828,35 @@ export async function createChatSession(opts: {
       handlers: {
         onEvent: (event) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
+          const now = Date.now();
           if (event.type === "agent_start") {
             updateStreaming(true);
-            // first token = first event after agent_start if not already set
-            if (!firstTokenAt && promptSentAt) firstTokenAt = Date.now();
+          } else if (event.type === "message_update") {
+            const wire = event as { usage?: UsageLike };
+            if (wire.usage) lastUsage = wire.usage;
+            collector.onDelta(now, wire.usage);
+            // live readout while streaming (throttled: deltas arrive per token)
+            if (now - lastLivePost > 200) {
+              lastLivePost = now;
+              const live = collector.live(now);
+              if (live) post({ type: "liveStats", live });
+            }
+          } else if (event.type === "tool_execution_end") {
+            collector.onToolCall();
+          } else if (event.type === "turn_end" || event.type === "message_end") {
+            const wire = event as { usage?: UsageLike; stopReason?: string };
+            if (wire.usage) lastUsage = wire.usage;
           } else if (event.type === "agent_settled") {
             updateStreaming(false);
-            // Compute metrics
-            const settledAt = Date.now();
-            if (promptSentAt) {
-              const firstMs = firstTokenAt ? firstTokenAt - promptSentAt : undefined;
-              const durMs = settledAt - (firstTokenAt || promptSentAt);
-              lastMetrics = {
-                firstTokenMs: firstMs,
-                durationMs: settledAt - promptSentAt,
-              };
-              // Fetch token counts for t/s
-              void rpc
-                .getSessionStatsFull()
-                .then((stats) => {
-                  const out = stats.tokens?.output ?? stats.tokens?.total ?? 0;
-                  if (out > 0 && durMs > 0) {
-                    lastMetrics.tokensPerSec = Math.round((out / (durMs / 1000)) * 10) / 10;
-                    lastMetrics.outputTokens = out;
-                  }
-                  lastMetrics.cost = stats.cost;
-                  sendTokenMetrics();
-                })
-                .catch(() => sendTokenMetrics());
+            const turn = collector.endTurn(now, { usage: lastUsage });
+            if (turn) {
+              post({ type: "turnStats", turn, stats: statsSnapshot() });
+              sendTokenMetrics();
+              persistStats();
+              checkBudget(turn);
             }
             promptSentAt = 0;
-            firstTokenAt = 0;
-          } else if (event.type === "message_start" || event.type === "message_update") {
-            // Track first token latency from streaming events
-            if (!firstTokenAt && promptSentAt) {
-              firstTokenAt = Date.now();
-              const firstMs = firstTokenAt - promptSentAt;
-              post({ type: "firstToken", ms: firstMs });
-            }
+            lastUsage = undefined;
           }
           post({ type: "event", event });
           if (event.type === "agent_settled") {
@@ -839,6 +934,8 @@ export async function createChatSession(opts: {
     },
     switchTo,
     newSession,
+    renameCurrent,
+    statsSnapshot,
     dispose() {
       if (sessionDisposed) return;
       sessionDisposed = true;

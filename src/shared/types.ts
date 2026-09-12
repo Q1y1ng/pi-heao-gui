@@ -18,6 +18,21 @@ export interface StandaloneConfig {
   rpcTrace: boolean;
   workspaceRoot: string;
   pinnedSessions: string[];
+  /** "dark" | "light" | "system" — drives the --pi-* token palette. */
+  theme: "dark" | "light" | "system";
+  /** Accent colour as #rrggbb (buttons, focus ring, active row). */
+  accent: string;
+  /** Favourited models as "provider/modelId", shown first in the picker. */
+  favoriteModels: string[];
+  /** Soft spend limits in USD; 0 disables the warning. */
+  budgetDailyUsd: number;
+  budgetMonthlyUsd: number;
+  /** Launch the app when the user logs in. */
+  openAtLogin: boolean;
+  /** Sidebar: also list archived sessions. */
+  showArchived: boolean;
+  /** Most-recently used workspaces (per-window workspace switcher). */
+  recentWorkspaces: string[];
 }
 
 export const DEFAULT_CONFIG: StandaloneConfig = {
@@ -38,6 +53,14 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   rpcTrace: false,
   workspaceRoot: "",
   pinnedSessions: [],
+  theme: "dark",
+  accent: "#4c8dff",
+  favoriteModels: [],
+  budgetDailyUsd: 0,
+  budgetMonthlyUsd: 0,
+  openAtLogin: false,
+  showArchived: false,
+  recentWorkspaces: [],
 };
 
 /** ChatHost abstraction — replaces vscode.Disposable with a plain unsubscribe fn. */

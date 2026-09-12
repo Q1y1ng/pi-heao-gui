@@ -251,14 +251,7 @@ html, body {
   position: relative;
 }
 
-/* Hide all original body children; they get re-parented into #pi-main */
-body > *:not(#pi-shell):not(script):not(style):not(link) {
-  display: none !important;
-}
-/* After re-parent, show them again inside #pi-main */
-#pi-main > * {
-  display: revert !important;
-}
+/* Reparented pi-chat content fills the main area */
 #pi-main > * {
   flex: 1;
   min-height: 0;

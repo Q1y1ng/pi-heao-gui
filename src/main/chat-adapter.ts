@@ -271,6 +271,52 @@ html, body {
   width: 100% !important;
 }
 
+/* ── Session list (injected in head so it always applies) ── */
+#pi-sidebar { pointer-events: auto !important; }
+#pi-session-list { pointer-events: auto !important; }
+#pi-sidebar .pi-session-item,
+.pi-session-item {
+  padding: 7px 10px !important;
+  border-radius: 5px !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  margin: 1px 0 !important;
+  transition: background 0.12s !important;
+  user-select: none !important;
+}
+#pi-sidebar .pi-session-item:hover,
+.pi-session-item:hover { background: #2a2d2e !important; }
+#pi-sidebar .pi-session-item.active,
+.pi-session-item.active { background: #094771 !important; }
+.pi-session-item .pi-session-name {
+  font-size: 12px !important;
+  color: #e0e0e0 !important;
+  line-height: 1.4 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.pi-session-item .pi-session-time {
+  font-size: 10px !important;
+  color: #6a6a6a !important;
+  margin-top: 2px !important;
+}
+.pi-session-item .pi-pin-btn {
+  background: none !important;
+  border: none !important;
+  color: #666 !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+  padding: 0 2px !important;
+  opacity: 0 !important;
+  flex-shrink: 0 !important;
+  line-height: 1 !important;
+}
+.pi-session-item:hover .pi-pin-btn { opacity: 1 !important; }
+.pi-session-item.pinned .pi-pin-btn { opacity: 1 !important; color: #cca700 !important; }
+
 /* Sidebar header refinement */
 #pi-sidebar .sidebar-header {
   padding: 10px 12px 8px !important;

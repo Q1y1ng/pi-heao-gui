@@ -221,59 +221,69 @@ export const SIDEBAR_SCRIPT = `
       });
     }
     if (!filtered.length) {
-      listEl.innerHTML = '<div class="pi-session-empty">' + (filterText ? '无匹配会话' : '暂无会话') + '</div>';
+      listEl.innerHTML = '<div style="padding:20px 10px;text-align:center;color:#555;font-size:12px">' + (filterText ? '无匹配会话' : '暂无会话') + '</div>';
       return;
     }
-    filtered.forEach(function(s) {
+    filtered.forEach(function(s, idx) {
       var item = document.createElement('div');
       item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '');
-      item.setAttribute('data-session-id', s.sessionId || '');
+      item.setAttribute('data-idx', String(idx));
       item.setAttribute('data-file', s.file || '');
-      var statusCls = s.running ? 'running' : '';
+      // Inline styles — belt and suspenders so cursor/click always work
+      item.style.cssText = 'padding:7px 10px;border-radius:5px;cursor:pointer;pointer-events:auto;margin:1px 0;user-select:none;';
       var pinIcon = s.pinned ? '★' : '☆';
       item.innerHTML =
-        '<div style="display:flex;align-items:center;gap:4px;">' +
-          '<span class="pi-session-status ' + statusCls + '"></span>' +
-          '<span class="pi-session-name">' + esc(s.name || s.sessionId || '未命名') + '</span>' +
-          '<button class="pi-pin-btn" title="' + (s.pinned ? '取消置顶' : '置顶') + '">' + pinIcon + '</button>' +
+        '<div style="display:flex;align-items:center;gap:4px;pointer-events:none">' +
+          '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + (s.running ? '#4ec9b0' : '#555') + ';flex-shrink:0"></span>' +
+          '<span class="pi-session-name" style="font-size:12px;color:#e0e0e0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s.name || s.sessionId || '未命名') + '</span>' +
+          '<button class="pi-pin-btn" data-pin="1" style="background:none;border:none;color:#666;cursor:pointer;font-size:12px;padding:0 2px;opacity:0;line-height:1;pointer-events:auto">' + pinIcon + '</button>' +
         '</div>' +
-        '<div class="pi-session-time">' + esc(fmtTime(s.mtime)) + '</div>';
-      item.onclick = function(e) {
-        // Pin toggle
-        if (e.target.closest && e.target.closest('.pi-pin-btn')) {
-          e.stopPropagation();
-          e.preventDefault();
-          if (window.pi) {
-            window.pi.invoke('pi:toggle-pin', s.file).then(function() { requestSessions(); });
-          }
-          return;
-        }
-        // Switch session
-        if (!s.file) { console.warn('[sidebar] no file for session', s); return; }
-        if (!window.pi) { console.warn('[sidebar] window.pi missing'); return; }
-        // Highlight active
-        var prev = listEl.querySelector('.pi-session-item.active');
-        if (prev) prev.classList.remove('active');
-        item.classList.add('active');
-        window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: s.file })
-          .then(function(r) {
-            if (r && r.ok === false) {
-              console.error('[sidebar] switch failed:', r.error);
-              showToast('切换失败: ' + (r.error || '未知错误'));
-              item.classList.remove('active');
-            }
-          })
-          .catch(function(err) {
-            console.error('[sidebar] switch error:', err);
-            showToast('切换出错');
-            item.classList.remove('active');
-          });
-      };
-      item.oncontextmenu = function(e) {
-        e.preventDefault();
-        showContextMenu(e.clientX, e.clientY, s);
-      };
+        '<div style="font-size:10px;color:#6a6a6a;margin-top:2px;pointer-events:none">' + esc(fmtTime(s.mtime)) + '</div>';
       listEl.appendChild(item);
+    });
+  }
+
+  // Event delegation on the list — survives re-renders
+  if (listEl) {
+    listEl.addEventListener('click', function(e) {
+      var pinBtn = e.target.closest ? e.target.closest('.pi-pin-btn') : null;
+      var item = e.target.closest ? e.target.closest('.pi-session-item') : null;
+      if (!item) return;
+      var file = item.getAttribute('data-file') || '';
+      if (pinBtn) {
+        e.stopPropagation();
+        if (window.pi && file) {
+          window.pi.invoke('pi:toggle-pin', file).then(function() { requestSessions(); });
+        }
+        return;
+      }
+      if (!file) { console.warn('[sidebar] item has no data-file'); return; }
+      if (!window.pi) { console.warn('[sidebar] window.pi missing'); showToast('桥接未就绪'); return; }
+      console.log('[sidebar] switching to', file);
+      var prev = listEl.querySelector('.pi-session-item.active');
+      if (prev) prev.classList.remove('active');
+      item.classList.add('active');
+      window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file })
+        .then(function(r) {
+          console.log('[sidebar] switch result', r);
+          if (r && r.ok === false) {
+            showToast('切换失败: ' + (r.error || '未知错误'));
+            item.classList.remove('active');
+          }
+        })
+        .catch(function(err) {
+          console.error('[sidebar] switch error', err);
+          showToast('切换出错: ' + (err && err.message || err));
+          item.classList.remove('active');
+        });
+    });
+    listEl.addEventListener('contextmenu', function(e) {
+      var item = e.target.closest ? e.target.closest('.pi-session-item') : null;
+      if (!item) return;
+      e.preventDefault();
+      var file = item.getAttribute('data-file') || '';
+      var s = sessions.find(function(x) { return x.file === file; }) || { file: file };
+      showContextMenu(e.clientX, e.clientY, s);
     });
   }
 

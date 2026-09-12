@@ -4,6 +4,28 @@
  */
 export const THEME_CSS = `
 <style id="pi-standalone-theme">
+/* Custom title bar drag region (Electron titleBarStyle: hidden) */
+.pi-titlebar {
+  position: fixed; top: 0; left: 0; right: 0; height: 32px; z-index: 10000;
+  -webkit-app-region: drag;
+  background: #1e1e1e;
+  display: flex; align-items: center; padding: 0 12px;
+  pointer-events: none;
+}
+.pi-titlebar span {
+  font-size: 12px; color: #888; font-family: -apple-system, 'Segoe UI', 'PingFang SC', sans-serif;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+/* Push content below titlebar */
+body { padding-top: 32px !important; }
+/* Toolbar in chat also draggable */
+.toolbar { -webkit-app-region: drag; }
+.toolbar button, .toolbar .icon-btn, .toolbar select { -webkit-app-region: no-drag; }
+/* Sidebar header draggable */
+#pi-sidebar > div:first-child { -webkit-app-region: drag; }
+#pi-sidebar > div:first-child button { -webkit-app-region: no-drag; }
+
 :root {
   /* VS Code Dark+ palette */
   --vscode-editor-background: #1e1e1e;

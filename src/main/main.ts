@@ -86,6 +86,12 @@ async function createWindow(): Promise<void> {
     minHeight: 500,
     title: "Pi Standalone GUI",
     backgroundColor: "#1e1e1e",
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#1e1e1e",
+      symbolColor: "#cccccc",
+      height: 32,
+    },
     webPreferences: {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,

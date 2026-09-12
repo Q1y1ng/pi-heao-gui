@@ -533,6 +533,9 @@ export async function createChatSession(opts: {
   rpc = await bootRpc(sessionFile);
   rpcAlive = true;
 
+  // Hydrate immediately so UI gets state/models even if webviewReady already fired
+  void hydrate();
+
   return {
     get rpc() { return rpc; },
     get sessionFile() { return sessionFile; },

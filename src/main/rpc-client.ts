@@ -3,6 +3,7 @@
  * Ported from upstream src/chat/rpc-client.ts — pure Node, no VS Code deps.
  */
 import { spawn, spawnSync, type ChildProcess } from "child_process";
+import { join } from "path";
 import { randomUUID } from "crypto";
 import { StringDecoder } from "string_decoder";
 
@@ -144,6 +145,10 @@ function normalizeSpawnTarget(piPath: string, args: readonly string[]): { comman
 
 export async function createRpcClient(options: CreateRpcClientOptions): Promise<RpcClient> {
   const target = normalizeSpawnTarget(options.piPath, options.args);
+  try {
+    const logPath = join(require("os").tmpdir(), "pi-standalone-rpc.log");
+    require("fs").appendFileSync(logPath, `[${new Date().toISOString()}] SPAWN: ${target.command} ${target.args.join(" ")}\n  piPath=${options.piPath} cwd=${options.cwd}\n`);
+  } catch {}
   const proc: ChildProcess = spawn(target.command, target.args, {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env, ...options.env },
@@ -207,13 +212,25 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
 
   attachJsonlReader(proc.stderr, (line) => {
     console.error("[pi-rpc-stderr]", line);
+    try {
+      const logPath = join(require("os").tmpdir(), "pi-standalone-rpc.log");
+      require("fs").appendFileSync(logPath, `[${new Date().toISOString()}] STDERR: ${line}\n`);
+    } catch {}
   });
 
   proc.on("error", (err) => {
+    try {
+      const logPath = join(require("os").tmpdir(), "pi-standalone-rpc.log");
+      require("fs").appendFileSync(logPath, `[${new Date().toISOString()}] SPAWN ERROR: ${err.message}\n`);
+    } catch {}
     options.handlers.onError(err);
     failAll(err.message);
   });
   proc.on("exit", (code, signal) => {
+    try {
+      const logPath = join(require("os").tmpdir(), "pi-standalone-rpc.log");
+      require("fs").appendFileSync(logPath, `[${new Date().toISOString()}] EXIT: code=${code} signal=${signal}\n`);
+    } catch {}
     failAll("Pi RPC process exited");
     options.handlers.onExit(code, signal);
   });

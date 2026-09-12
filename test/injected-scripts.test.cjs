@@ -59,10 +59,14 @@ for (const [name, mod, keys] of EXPORTS) {
 
 test("dock: the login command keeps an escaped carriage return", () => {
   const { DOCK_SCRIPT } = require("../dist/main/dock.js");
-  // A raw CR here means the template literal swallowed the escape sequence and
-  // the emitted script has an unterminated string literal.
-  assert.ok(DOCK_SCRIPT.includes("/login ' + provider + '\\r'"), "expected '\\r' in the source");
-  assert.equal(/\r/.test(DOCK_SCRIPT), false, "no raw carriage return may reach the page");
+  // A raw CR inside that string literal means the template literal swallowed the
+  // escape sequence and the emitted script has an unterminated string literal.
+  assert.ok(DOCK_SCRIPT.includes("/login ' + provider + '\\r'"), "expected an escaped literal");
+  // Line endings are normalised first: a CRLF checkout of this repo would
+  // otherwise look like a stray CR even though the code is fine (.gitattributes
+  // pins LF, this keeps the assertion true regardless).
+  const withoutLineEndings = DOCK_SCRIPT.replace(/\r\n/g, "\n");
+  assert.equal(/\r/.test(withoutLineEndings), false, "no stray carriage return may reach the page");
 });
 
 test("generated chat page: every inline script parses", () => {

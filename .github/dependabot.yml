@@ -24,6 +24,11 @@ updates:
       # tested migration rather than a monthly bump.
       - dependency-name: node-pty
         update-types: ["version-update:semver-major"]
+      # CodeMirror 6 is a rewrite, not an upgrade: the dock's panel is written
+      # against the CM5 API, and its UMD build is inlined into the page. That
+      # migration gets its own change (see the closed codemirror 5 to 6 PR).
+      - dependency-name: codemirror
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"

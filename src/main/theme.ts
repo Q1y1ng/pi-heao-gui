@@ -40,6 +40,8 @@ interface Palette {
   scrollbar: string;
   scrollbarHover: string;
   codeBg: string;
+  /** Text-safe accent: darkened so links clear 4.5:1 on light surfaces. */
+  link: string;
 }
 
 /** Mix a #rrggbb colour with white (f > 0) or black (f < 0). */
@@ -95,6 +97,9 @@ function palette(theme: "dark" | "light", accent: string): Palette {
       scrollbar: "#0f172a26",
       scrollbarHover: "#0f172a40",
       codeBg: "#f2f4f7",
+      // Text-safe accent: the raw accent only reaches 3.20:1 on white, so links get a darker
+      // mix of the same hue. Computed from the accent, so every accent choice stays legible.
+      link: mix(accent, -0.35),
     };
   }
   return {
@@ -105,6 +110,7 @@ function palette(theme: "dark" | "light", accent: string): Palette {
     border: "#252a32",
     borderStrong: "#333a45",
     text: "#e7eaf0",
+    link: accent,
     textDim: "#9ba3af",
     textFaint: "#6b7381",
     accentHover: mix(accent, 0.22),
@@ -162,6 +168,7 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
 
   /* accent + semantics */
   --pi-accent: ${accentColor};
+  --pi-link: ${p.link};
   --pi-accent-hover: ${p.accentHover};
   --pi-accent-soft: ${p.accentSoft};
   --pi-success: ${p.success};
@@ -253,7 +260,10 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
   --vscode-focusBorder: var(--pi-accent);
   --vscode-errorForeground: var(--pi-danger);
   --vscode-warningForeground: var(--pi-warn);
-  --vscode-textLink-foreground: var(--pi-accent);
+  /* Measured: --pi-accent on white is 3.20:1, below the 4.5:1 floor for body text, which is
+     why links looked faint in light mode. Darken the accent for text use only — the accent
+     itself stays as-is where it is a background. --pi-link is computed in the token block. */
+  --vscode-textLink-foreground: var(--pi-link);
   --vscode-textLink-activeForeground: var(--pi-accent-hover);
   --vscode-editorWidget-background: var(--pi-raised);
   --vscode-editorWidget-foreground: var(--pi-text);
@@ -299,7 +309,10 @@ body {
   letter-spacing: 0.005em;
 }
 ::selection {
-  background: rgba(76, 141, 255, 0.32);
+  /* Was a hardcoded blue that ignored the accent, and set no colour, so same-hue text
+     vanished inside the selection — a selected link, for instance. */
+  background: color-mix(in srgb, var(--pi-accent) 32%, transparent);
+  color: var(--pi-text);
 }
 
 /* pi-chat's own drag bars are replaced by our title bar */
@@ -390,12 +403,15 @@ kbd {
   font-size: var(--pi-fs-xs) !important;
 }
 a {
-  color: var(--pi-accent) !important;
-  text-decoration-color: rgba(76, 141, 255, 0.4);
+  /* --pi-link, not --pi-accent: the raw accent is 3.20:1 on white, below the 4.5:1 floor, which
+     is what made links look faint in light mode. --pi-link is the same hue darkened for text. */
+  color: var(--pi-link) !important;
+  text-decoration-color: color-mix(in srgb, var(--pi-link) 45%, transparent);
   text-underline-offset: 2px;
 }
 a:hover {
-  color: var(--pi-accent-hover) !important;
+  color: var(--pi-link) !important;
+  text-decoration-color: var(--pi-link);
 }
 blockquote {
   border-left: 2px solid var(--pi-border-strong) !important;

@@ -437,7 +437,9 @@ function styleTag(id: string, css: string): string {
   return `<style id="pi-style-${id.replace(/^pi-/, "")}">${css}</style>`;
 }
 
-function buildChromeHtml(): string {
+import { t, resolveUiLang, type UiLang } from "./i18n";
+
+function buildChromeHtml(lang: UiLang): string {
   return `
 <div id="pi-shell">
   <header class="pi-titlebar" id="pi-titlebar">
@@ -447,24 +449,24 @@ function buildChromeHtml(): string {
       <span class="pi-tb-brand" title="Pi Heao GUI V1.0 — made by HEAOZIE">made by HEAOZIE</span>
     </div>
     <div class="pi-tb-center">
-      <span class="pi-tb-title is-empty" id="pi-title-text" title="当前会话"></span>
+      <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
     </div>
-    <div class="pi-tb-stats" id="pi-token-stats" title="Token 用量">
-      <span class="pi-stat" id="pi-stat-ctx" title="上下文占用"></span>
-      <span class="pi-stat" id="pi-stat-ft" title="首 token 延迟"></span>
-      <span class="pi-stat" id="pi-stat-tps" title="输出速度"></span>
-      <span class="pi-stat" id="pi-stat-cost" title="本次会话花费"></span>
+    <div class="pi-tb-stats" id="pi-token-stats" title="${t("tb.tokenUsage", lang)}">
+      <span class="pi-stat" id="pi-stat-ctx" title="${t("tb.context", lang)}"></span>
+      <span class="pi-stat" id="pi-stat-ft" title="${t("tb.ttft", lang)}"></span>
+      <span class="pi-stat" id="pi-stat-tps" title="${t("tb.tps", lang)}"></span>
+      <span class="pi-stat" id="pi-stat-cost" title="${t("tb.cost", lang)}"></span>
     </div>
     <div class="pi-tb-right">
       <div class="pi-tb-actions">
-        <button class="pi-icon-btn" id="pi-tb-new" title="新建会话 (Ctrl+N)" aria-label="新建会话">${svgIcon(ICONS.plus)}</button>
-        <button class="pi-icon-btn" id="pi-dock-toggle" title="终端 / 文件 / 变更 (Ctrl+&#96;)" aria-label="打开终端面板">${svgIcon(ICONS.terminal)}</button>
-        <button class="pi-icon-btn" id="pi-tb-history" title="会话历史 (Ctrl+H)" aria-label="会话历史">${svgIcon(ICONS.history)}</button>
-        <button class="pi-icon-btn" id="pi-tb-search" title="搜索会话 (Ctrl+F)" aria-label="搜索会话">${svgIcon(ICONS.search)}</button>
-        <button class="pi-icon-btn" id="pi-tb-refresh" title="重新加载会话" aria-label="重新加载会话">${svgIcon(ICONS.refresh)}</button>
-        <button class="pi-icon-btn" id="pi-tb-export" title="导出当前会话" aria-label="导出会话">${svgIcon(ICONS.download)}</button>
+        <button class="pi-icon-btn" id="pi-tb-new" title="${t("tb.newHint", lang)}" aria-label="${t("tb.new", lang)}">${svgIcon(ICONS.plus)}</button>
+        <button class="pi-icon-btn" id="pi-dock-toggle" title="${t("tb.dockHint", lang)}" aria-label="${t("tb.openDock", lang)}">${svgIcon(ICONS.terminal)}</button>
+        <button class="pi-icon-btn" id="pi-tb-history" title="${t("tb.history", lang)}" aria-label="${t("tb.historyLabel", lang)}">${svgIcon(ICONS.history)}</button>
+        <button class="pi-icon-btn" id="pi-tb-search" title="${t("tb.search", lang)}" aria-label="${t("tb.searchLabel", lang)}">${svgIcon(ICONS.search)}</button>
+        <button class="pi-icon-btn" id="pi-tb-refresh" title="${t("tb.refresh", lang)}" aria-label="${t("tb.refresh", lang)}">${svgIcon(ICONS.refresh)}</button>
+        <button class="pi-icon-btn" id="pi-tb-export" title="${t("tb.export", lang)}" aria-label="${t("tb.exportLabel", lang)}">${svgIcon(ICONS.download)}</button>
         <span class="pi-tb-sep" aria-hidden="true"></span>
-        <button class="pi-icon-btn" id="pi-tb-settings" title="设置 (Ctrl+,)" aria-label="设置">${svgIcon(ICONS.gear)}</button>
+        <button class="pi-icon-btn" id="pi-tb-settings" title="${t("tb.settings", lang)}" aria-label="${t("tb.settingsLabel", lang)}">${svgIcon(ICONS.gear)}</button>
       </div>
     </div>
   </header>
@@ -473,12 +475,12 @@ function buildChromeHtml(): string {
       display:none;flex-direction:column;align-items:center;padding-top:8px;gap:4px;
       width:42px;flex-shrink:0;background:var(--pi-surface,#14171c);border-right:1px solid var(--pi-border,#252a32);
     ">
-      <button id="pi-sidebar-expand" title="展开侧栏" aria-label="展开侧栏" style="
+      <button id="pi-sidebar-expand" title="${t("tb.expandSidebar", lang)}" aria-label="${t("tb.expandSidebar", lang)}" style="
         background:none;border:none;color:var(--pi-text-dim,#9ba3af);cursor:pointer;padding:6px;
         border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
       ">${svgIcon(ICONS.panel)}</button>
       <div style="width:18px;height:1px;background:var(--pi-border,#252a32);margin:4px 0;"></div>
-      <button id="pi-new-session-mini" title="新建会话" aria-label="新建会话" style="
+      <button id="pi-new-session-mini" title="${t("tb.new", lang)}" aria-label="${t("tb.new", lang)}" style="
         background:none;border:none;color:var(--pi-text-dim,#9ba3af);cursor:pointer;padding:6px;
         border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;
       ">${svgIcon(ICONS.plus)}</button>
@@ -826,7 +828,8 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
       break;
     }
   }
-  const chromeHtml = buildChromeHtml();
+  const lang = resolveUiLang(config.uiLanguage ?? "auto");
+  const chromeHtml = buildChromeHtml(lang);
   if (bodyOpenIdx !== -1) {
     allLines.splice(bodyOpenIdx + 1, 0, chromeHtml);
   } else {

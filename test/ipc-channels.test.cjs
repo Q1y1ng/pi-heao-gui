@@ -57,7 +57,11 @@ test("every channel a window invokes is granted by its preload", () => {
       if (!allowed.has(channel)) problems.push(`${win.name}: ${channel} (used in ${file})`);
     }
   }
-  assert.deepEqual(problems, [], `channels blocked by the preload allowlist:\n  ${problems.join("\n  ")}`);
+  assert.deepEqual(
+    problems,
+    [],
+    `channels blocked by the preload allowlist:\n  ${problems.join("\n  ")}`,
+  );
 });
 
 test("every granted channel has a main-process handler", () => {

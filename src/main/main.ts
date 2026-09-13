@@ -1708,7 +1708,7 @@ app.whenReady().then(async () => {
       postToWindow(win, { type: "newSession" });
     },
     openSettings: () => openSettingsWindow(),
-  });
+  }, resolveUiLang(config.uiLanguage ?? "auto"));
 
   // Unread counter: clearing happens whenever the window regains focus.
   mainWindow?.on("focus", () => {

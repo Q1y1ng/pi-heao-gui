@@ -967,7 +967,11 @@ app.whenReady().then(async () => {
               return l.filter(s => s.pinned).length;
             })()`,
           );
-          check("pin toggles and is reported by the session list", Number(pinned) >= 1, `pinned=${pinned}`);
+          check(
+            "pin toggles and is reported by the session list",
+            Number(pinned) >= 1,
+            `pinned=${pinned}`,
+          );
 
           const archivedRes = await op({ op: "archive", file: target });
           await sleep(1500);

@@ -20,8 +20,12 @@ import {
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { log, errText } from "./log";
+import { t, tParams, type UiLang } from "./i18n";
 
 let tray: Tray | null = null;
+
+/** Language for the menu labels; set by createTray from the saved config. */
+let uiLang: UiLang = "zh-cn";
 
 /** `app` has no public "quitting" flag; this is the one place that owns it. */
 interface AppWithQuitFlag {
@@ -104,10 +108,10 @@ function aboutDialog(): void {
   const win = hooks?.getMainWindow();
   const options = {
     type: "info" as const,
-    title: "关于",
+    title: t("tray.aboutTitle", uiLang),
     message: "Pi Heao GUI V1.0",
     detail,
-    buttons: ["好"],
+    buttons: [t("tray.ok", uiLang)],
   };
   if (win) void dialog.showMessageBox(win, options);
   else void dialog.showMessageBox(options);
@@ -123,19 +127,22 @@ function buildTemplate(): MenuItemConstructorOptions[] {
           showMain();
         },
       }))
-    : [{ label: "（暂无会话）", enabled: false }];
+    : [{ label: t("tray.noSessions", uiLang), enabled: false }];
 
   return [
-    { label: unread > 0 ? `显示主窗口（${unread} 条未读）` : "显示主窗口", click: showMain },
-    { label: "新建会话", click: () => hooks?.newSession?.() },
+    {
+      label: unread > 0 ? tParams("tray.showUnread", uiLang, { n: unread }) : t("tray.show", uiLang),
+      click: showMain,
+    },
+    { label: t("tray.newSession", uiLang), click: () => hooks?.newSession?.() },
     { type: "separator" },
-    { label: "最近会话", submenu: recentItems },
-    { label: "设置", click: () => hooks?.openSettings?.() },
+    { label: t("tray.recent", uiLang), submenu: recentItems },
+    { label: t("tray.settings", uiLang), click: () => hooks?.openSettings?.() },
     { type: "separator" },
-    { label: "关于 Pi Heao GUI", click: aboutDialog },
+    { label: t("tray.about", uiLang), click: aboutDialog },
     { type: "separator" },
     {
-      label: "退出",
+      label: t("tray.quit", uiLang),
       click: () => {
         markQuitting();
         app.quit();
@@ -179,8 +186,9 @@ export function getUnreadCount(): number {
  * @returns true when a usable tray icon exists. The caller must NOT hide the
  * main window on close if this is false (otherwise the app becomes unreachable).
  */
-export function createTray(hooksIn: TrayHooks): boolean {
+export function createTray(hooksIn: TrayHooks, lang: UiLang = "zh-cn"): boolean {
   hooks = hooksIn;
+  uiLang = lang;
   try {
     const icon = loadTrayIcon();
     tray = new Tray(icon);

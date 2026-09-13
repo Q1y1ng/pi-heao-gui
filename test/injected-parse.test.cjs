@@ -201,12 +201,14 @@ test("generated pages have no duplicate element ids", () => {
 
 test("chat adapter HTML parses (skipped when the vendored bundle is absent)", () => {
   const { buildChatHtml } = require(path.join(DIST, "chat-adapter.js"));
-  let html = null;
-  try {
-    html = buildChatHtml(REPO_ROOT, { theme: "dark", uiLanguage: "zh-cn" });
-  } catch {
-    html = null;
-  }
+  const build = (lang) => {
+    try {
+      return buildChatHtml(REPO_ROOT, { theme: "dark", uiLanguage: lang });
+    } catch {
+      return null;
+    }
+  };
+  const html = build("zh-cn");
   if (!html) {
     console.log("  (vendored UI bundle not present — skipped)");
     return;
@@ -216,4 +218,32 @@ test("chat adapter HTML parses (skipped when the vendored bundle is absent)", ()
   bodies.forEach((b, i) => {
     assertParses(b, `chat#${i + 1}`);
   });
+
+  // The chat window's own chrome is translated through the dictionary; the
+  // English build must not leave Chinese tooltips behind.
+  const english = build("en");
+  if (english) {
+    // Scope the check to the title bar itself: the sidebar, palette, dock and
+    // telemetry panel are separate surfaces still to be migrated.
+    const start = english.indexOf('id="pi-titlebar"');
+    const end = english.indexOf("</header>");
+    const chrome = start >= 0 && end > start ? english.slice(start, end) : "";
+    assert.ok(chrome.length > 0, "title bar not found in the generated page");
+    const leftovers = [
+      "当前会话",
+      "Token 用量",
+      "上下文占用",
+      "首 token 延迟",
+      "输出速度",
+      "本次会话花费",
+      "新建会话",
+      "会话历史",
+      "搜索会话",
+      "重新加载会话",
+      "导出当前会话",
+      "设置",
+    ].filter((phrase) => chrome.includes(phrase));
+    assert.deepEqual(leftovers, [], `untranslated title-bar strings: ${leftovers.join(", ")}`);
+    assert.match(chrome, /Current session/, "the English title bar was not translated");
+  }
 });

@@ -1,3 +1,22 @@
+## Unreleased
+
+### Added
+
+- 自动检查更新（`electron-updater`，指向本仓库 Release）：启动 20 秒后在后台检查，
+  发现新版本自动下载，可在 设置 → 诊断 → 版本与更新 里手动检查并重启安装；
+  源码运行时不检查，可用 `autoCheckUpdates: false` 关闭。
+- 英文界面覆盖到聊天窗标题栏、托盘的菜单与关于对话框。
+
+### Fixed
+
+- 设置窗所有控件点不动：内联脚本里被模板字面量吞掉的 `
+` 让字符串未闭合，
+  整段脚本解析失败。
+- 命令面板（Ctrl+K）打不开：`<style id="pi-palette">` 与面板根元素撞 id。
+- 标题栏两个指标写进了隐藏的统计面板（弹窗指标 id 与芯片撞 id）。
+- 文件编辑器报 `CodeMirror.defineSimpleMode is not a function`（缺 simple-mode 插件）。
+- Windows 上更新日志的 `npm root -g` 回退从未生效（`.cmd` 直起被 Node 拒绝）。
+- 终端重启后吞掉所有按键（`termOpening` 未复位 + ConPTY 需要沉降时间）。
 # Changelog
 
 All notable changes to this project. Format loosely follows

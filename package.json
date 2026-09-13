@@ -41,6 +41,13 @@
     "directories": {
       "output": "dist-electron"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Q1y1ng",
+        "repo": "pi-heao-gui"
+      }
+    ],
     "files": [
       "dist/**/*",
       "build/icon.png",
@@ -87,6 +94,7 @@
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "codemirror": "5.65.21",
+    "electron-updater": "^6.8.9",
     "node-pty": "1.1.0"
   },
   "engines": {

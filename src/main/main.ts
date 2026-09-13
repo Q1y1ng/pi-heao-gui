@@ -68,6 +68,65 @@ import {
 import { log, errText } from "./log";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
+import {
+  createUpdateController,
+  type UpdateController,
+  type UpdaterLike,
+} from "./updater";
+
+// ─── Updates ────────────────────────────────────────────────────────────────
+// electron-updater is loaded lazily: it is optional at runtime, and a build that
+// cannot load it must still start and answer "updates unavailable".
+let updateController: UpdateController | null = null;
+let updaterLoading: Promise<void> | null = null;
+
+async function ensureUpdater(): Promise<void> {
+  if (updateController) return;
+  if (updaterLoading) return updaterLoading;
+  updaterLoading = (async () => {
+    try {
+      const mod = (await import("electron-updater")) as { autoUpdater?: UpdaterLike };
+      const candidate = mod.autoUpdater;
+      if (!candidate || typeof candidate.on !== "function") {
+        log.warn("updater: electron-updater exposes no autoUpdater");
+        return;
+      }
+      updateController = createUpdateController({
+        updater: candidate,
+        currentVersion: app.getVersion(),
+        isPackaged: app.isPackaged,
+        onStatus: (status) => {
+          // Progress events fire constantly; log only the states that matter.
+          if (status.state !== "downloading") log.warn("updater:", JSON.stringify(status));
+        },
+      });
+      updateController.init();
+    } catch (e) {
+      log.warn("updater: unavailable:", errText(e));
+    } finally {
+      updaterLoading = null;
+    }
+  })();
+  return updaterLoading;
+}
+
+ipcMain.handle("pi:update-status", () => {
+  if (updateController) return updateController.status();
+  return app.isPackaged
+    ? { state: "idle" }
+    : { state: "unavailable", reason: "当前为源码运行，不检查更新" };
+});
+
+ipcMain.handle("pi:update-check", async () => {
+  await ensureUpdater();
+  if (!updateController) return { state: "unavailable", reason: "更新组件不可用" };
+  return updateController.check({ manual: true });
+});
+
+ipcMain.handle("pi:update-install", () => {
+  if (!updateController) return { ok: false, error: "更新组件不可用" };
+  return updateController.install();
+});
 
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
@@ -1712,6 +1771,12 @@ app.whenReady().then(async () => {
     },
     resolveUiLang(config.uiLanguage ?? "auto"),
   );
+
+  // Background update check for packaged builds: late enough not to compete with
+  // startup, and skipped entirely when the user turned it off.
+  if (config.autoCheckUpdates) {
+    setTimeout(() => void ensureUpdater(), 20_000);
+  }
 
   // Unread counter: clearing happens whenever the window regains focus.
   mainWindow?.on("focus", () => {

@@ -738,6 +738,16 @@ body {
       <button type="button" id="btn-diag-openlogs">打开日志目录</button>
       <button type="button" id="btn-diag-openuserdata">打开数据目录</button>
     </div>
+    <div class="section-title">版本与更新</div>
+    <div class="diag-actions">
+      <button type="button" id="btn-update-check">检查更新</button>
+      <button type="button" id="btn-update-install">重启并安装</button>
+    </div>
+    <div class="diag-feedback" id="update-status">尚未检查。</div>
+    <div class="hint">
+      后台会定期检查 GitHub Release（可在常规标签页关闭）。未签名的构建仍可更新；
+      更新包会被校验文件哈希。
+    </div>
     <div class="diag-feedback" id="diag-feedback"></div>
     <div class="diag-path" id="diag-report-path"></div>
     <div class="section-title">RPC 日志（末尾）</div>
@@ -1751,6 +1761,53 @@ $('btn-diag-openlogs').onclick = async () => {
     setStatus('打开日志目录失败: ' + err.message, false);
   }
 };
+
+// ── Updates ──
+function describeUpdate(res) {
+  if (!res || !res.state) return '未知状态';
+  switch (res.state) {
+    case 'idle': return '空闲';
+    case 'checking': return '正在检查…';
+    case 'available': return '发现新版本 ' + res.version + '，正在后台下载…';
+    case 'downloading': return '正在下载 ' + (res.percent || 0) + '%';
+    case 'ready': return '新版本 ' + res.version + ' 已下载，重启即可安装';
+    case 'none': return '已是最新版本（' + res.current + '）';
+    case 'unavailable': return res.reason || '当前环境不支持自动更新';
+    case 'error': return '检查失败: ' + res.message;
+    default: return String(res.state);
+  }
+}
+
+const updateBox = $('update-status');
+function showUpdate(res) {
+  if (updateBox) updateBox.textContent = describeUpdate(res);
+}
+
+$('btn-update-check').onclick = async () => {
+  if (updateBox) updateBox.textContent = '正在检查…';
+  try {
+    showUpdate(await window.pi.invoke('pi:update-check'));
+  } catch (err) {
+    if (updateBox) updateBox.textContent = '检查更新失败: ' + err.message;
+  }
+};
+
+$('btn-update-install').onclick = async () => {
+  try {
+    const res = await window.pi.invoke('pi:update-install');
+    setStatus(res && res.ok ? '正在重启以安装更新…' : ((res && res.error) || '无法安装更新'), !!res && res.ok);
+  } catch (err) {
+    setStatus('安装更新失败: ' + err.message, false);
+  }
+};
+
+void (async () => {
+  try {
+    showUpdate(await window.pi.invoke('pi:update-status'));
+  } catch {
+    /* leave the placeholder text */
+  }
+})();
 
 $('btn-diag-openuserdata').onclick = async () => {
   try {

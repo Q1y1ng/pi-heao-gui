@@ -149,3 +149,21 @@ Signing the NSIS installer signs the installer itself. The application
 job: build `win-unpacked`, sign that executable, then package the installer. The
 portable target is signed as-is.
 
+---
+
+## 9. Updates (electron-updater)
+
+`build.publish` points at this repository, so `electron-builder` writes
+`latest.yml` next to the artifacts. **Attach `latest.yml` to the release** — it is
+the file an installed copy reads to learn that a newer version exists. Without
+it, the in-app check reports “已是最新版本” forever.
+
+The check runs 20 seconds after start, in packaged builds only (a source checkout
+reports “当前为源码运行，不检查更新”). It can be turned off with
+`autoCheckUpdates: false` in `~/.pi/standalone/config.json`, and triggered by hand
+from 设置 → 诊断 → 版本与更新.
+
+Unsigned builds can still update themselves: electron-updater verifies the
+downloaded file against the hash in `latest.yml`, not against an Authenticode
+signature.
+

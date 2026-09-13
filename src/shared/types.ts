@@ -31,6 +31,8 @@ export interface StandaloneConfig {
   openAtLogin: boolean;
   /** Sidebar: also list archived sessions. */
   showArchived: boolean;
+  /** Check GitHub releases for a newer build in the background (packaged runs). */
+  autoCheckUpdates: boolean;
   /** Most-recently used workspaces (per-window workspace switcher). */
   recentWorkspaces: string[];
   /** Language of the app's own UI (chat UI has its own upstream locales). */
@@ -68,6 +70,7 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   budgetMonthlyUsd: 0,
   openAtLogin: false,
   showArchived: false,
+  autoCheckUpdates: true,
   recentWorkspaces: [],
   uiLanguage: "auto",
   lastOnboardedVersion: "",

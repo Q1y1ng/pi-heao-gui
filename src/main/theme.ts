@@ -132,13 +132,15 @@ export function resolveTheme(theme: ThemeName): "dark" | "light" {
 }
 
 /** Build the token block for a theme + accent colour. */
-export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
+export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
   const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
   const p = palette(resolveTheme(theme), accentColor);
-  return renderTokens(p, accentColor);
+  // Same clamp as the settings slider, so a hand-edited config cannot blow up the layout.
+  const fs = Math.min(32, Math.max(8, Math.round(chatFontSize || 13)));
+  return renderTokens(p, accentColor, fs);
 }
 
-function renderTokens(p: Palette, accentColor: string): string {
+function renderTokens(p: Palette, accentColor: string, fs: number): string {
   return `
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 :root {
@@ -179,10 +181,12 @@ function renderTokens(p: Palette, accentColor: string): string {
   --pi-font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
     "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --pi-font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace;
-  --pi-fs-xs: 11px;
-  --pi-fs-sm: 12px;
-  --pi-fs-md: 13px;
-  --pi-fs-lg: 14px;
+  /* --pi-fs-md is the master: the appearance slider writes config.chatFontSize and every
+     other size is a ratio of it, the same calc() idiom pi-chat uses for --chat-fs-N. */
+  --pi-fs-md: ${fs}px;
+  --pi-fs-xs: calc(var(--pi-fs-md) * 11 / 13);
+  --pi-fs-sm: calc(var(--pi-fs-md) * 12 / 13);
+  --pi-fs-lg: calc(var(--pi-fs-md) * 14 / 13);
 
   --pi-speed: 130ms;
 }
@@ -617,8 +621,8 @@ export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff");
  * Full theme block for a theme + accent. The token element has its own id so a
  * live theme switch only has to replace that one element (pi:theme channel).
  */
-export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
-  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent)}</style>
+export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
+  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent, chatFontSize)}</style>
 <style id="pi-heao-theme">${THEME_BODY}</style>`;
 }
 

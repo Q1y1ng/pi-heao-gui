@@ -331,7 +331,7 @@ function openSettingsWindow(): void {
   });
   const tmp = writeTempHtml(
     "pi-heao-settings",
-    buildSettingsHtml(resolveUiLang(config.uiLanguage)),
+    buildSettingsHtml(resolveUiLang(config.uiLanguage), config.theme, config.accent, config.chatFontSize),
   );
   settingsWindow.loadFile(tmp);
   settingsWindow.on("closed", () => {
@@ -545,6 +545,14 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   // that does not broadcast leaves the slider writing a value nothing ever reads.
   if (partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) broadcastTheme();
   // The settings document is generated per language; rebuild it on switch.
+  // The settings document bakes the tokens in at build time, so theme / accent / font size
+  // changes need the same rebuild the language switch already does — otherwise the window
+  // that offers these controls is the one place that never shows their effect.
+  if ((partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) && settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+    settingsWindow = null;
+    openSettingsWindow();
+  }
   if (partial.uiLanguage !== undefined && settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.close();
     settingsWindow = null;

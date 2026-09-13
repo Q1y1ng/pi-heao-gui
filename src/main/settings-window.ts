@@ -1,4 +1,4 @@
-import { TOKENS_CSS } from "./theme";
+import { buildTokensCss, type ThemeName } from "./theme";
 import { t, type UiLang } from "./i18n";
 
 /**
@@ -9,7 +9,7 @@ import { t, type UiLang } from "./i18n";
  * Styling: the legacy rules above are kept for layout, and a design layer that
  * consumes the shared --pi-* tokens is appended last so it wins.
  */
-export function buildSettingsHtml(lang: UiLang = "zh-cn"): string {
+export function buildSettingsHtml(lang: UiLang = "zh-cn", theme: ThemeName, accent: string, chatFontSize: number): string {
   return `<!DOCTYPE html>
 <!-- Pi Heao GUI V1.1.3 · made by HEAOZIE -->
 <html lang="zh-CN">
@@ -91,7 +91,7 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
 .switch input:checked + .slider:before{transform:translateX(16px)}
 </style>
 <style id="pi-heao-settings">
-${TOKENS_CSS}
+${buildTokensCss(theme, accent, chatFontSize)}
 /* ── Design layer ───────────────────────────────────────────────────── */
 body {
   background: var(--pi-bg);

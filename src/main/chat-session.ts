@@ -545,6 +545,10 @@ export async function createChatSession(opts: {
     if (sessionDisposed) return;
     switch (msg.type) {
       case "webviewReady":
+        // The first sessionInfo can be posted before the titlebar script has wired its
+        // listener, and the title then stays on its empty placeholder for the whole session.
+        // Re-announcing on ready closes that race.
+        void sendSessionInfo();
         void hydrate();
         break;
       case "prompt":

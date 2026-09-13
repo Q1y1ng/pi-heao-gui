@@ -1228,12 +1228,12 @@ app.whenReady().then(async () => {
         const v = ratio(cs.color, bg) * op;
         // A hidden element is not a contrast defect: an idle toast sits at opacity 0.
         if (op < 0.05) return;
-        // WCAG: large or bold text is held to 3:1, not 4.5:1. A white-on-accent button is
-        // intended at 3.2:1 and is not a defect.
-        // WCAG: large/bold text is held to 3:1. A button whose own background is the accent
-        // colour is a UI component (1.4.11), also 3:1, and white-on-accent is intended.
-        const elBg = cs.backgroundColor;
-        const onAccent = /^rgb(s*76,s*141,s*255/.test(elBg) || /^rgb(s*255,s*255,s*255/.test(cs.color) === false && false;
+        // WCAG holds large or bold text, and UI components (1.4.11), to 3:1 rather than 4.5:1.
+        // The primary button's white label on the accent colour is 3.2:1 and is intended.
+        // The accent is read from the token, so changing the accent keeps this honest.
+        const nums = (c) => (String(c).match(/[0-9.]+/g) || []).slice(0, 3).join(',');
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--pi-accent');
+        const onAccent = nums(accent) !== '' && nums(cs.backgroundColor) === nums(accent);
         const big = parseFloat(cs.fontWeight) >= 600 || parseFloat(cs.fontSize) >= 18 || onAccent;
         if (v < (big ? 3 : 4.5)) bad.push({ v: +v.toFixed(2), sel: el.tagName.toLowerCase() + '.' + String(el.className || '').slice(0, 24), color: cs.color, bg });
       });

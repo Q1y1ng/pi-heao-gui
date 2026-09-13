@@ -155,6 +155,15 @@ body {
 .composer-box:focus-within {
   border-color: var(--vscode-focusBorder);
 }
+/* The focus affordance is the border above. The editable inside is a textarea and, unlike
+   the other inputs in this stylesheet, it never got outline: none — so the browser drew its
+   own focus ring inside the box and the composer showed two nested rings whenever it was
+   clicked. */
+.composer textarea:focus,
+.composer input:focus,
+.composer [contenteditable]:focus {
+  outline: none;
+}
 .attach-preview {
   display: flex;
   flex-wrap: wrap;

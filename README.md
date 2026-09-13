@@ -219,6 +219,7 @@ npm run e2e             # 端到端：逐页面逐功能，只读
 npm run e2e:isolated    # 端到端：沙箱内跑破坏性流程（改名/归档/删除/写盘/语言切换）
 npm run smoke           # 运行时冒烟：开真窗口断言安全边界
 npm run verify          # 真机 UI 功能断言（面板 / 命令面板 / 侧栏 / 终端 / 文件 / 变更 / diff）
+npm run test:daily      # 日常流程端到端：真窗口 + 真模型，让 agent 建文件、写测试、跑测试（需 provider）
 npm run measure-load    # 会话切换耗时归因（pi 解析 vs 渲染）
 npm run check:upstream  # 断言 vendor/upstream 与 pinned tag 字节一致（需联网）
 npm run check:package   # 断言打包产物（asar）含全部运行时依赖（需先 npm run dist）
@@ -249,6 +250,10 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
   `vendor/upstream/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
 - `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
   路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
+- `npm run test:daily` 是唯一能证明“**这个应用真能把一件事做完**”的门禁：它开真窗口、
+  用真模型（你指定的 provider），让 agent 建文件、写测试、跑测试，并且**以磁盘上的产物**
+  作为完成判据（不是看界面文字猜结束）。其余检查只能证明控件在、桥在、数据在流动，
+  证明不了这一条 —— 所以发版前必跑。
 
 ## 故障排查
 

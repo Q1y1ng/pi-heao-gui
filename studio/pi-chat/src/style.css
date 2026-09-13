@@ -155,6 +155,13 @@ body {
 .composer-box:focus-within {
   border-color: var(--vscode-focusBorder);
 }
+/* Measured in the running window: div.composer and div.composer-box each computed
+   outline-width 3px, both being ancestors of the focused control, so a :focus-within rule
+   drew an outline on each — two nested rings where the border above is the intended one. */
+.composer,
+.composer-box {
+  outline: none !important;
+}
 /* The focus affordance is the border above. The editable inside is a textarea and, unlike
    the other inputs in this stylesheet, it never got outline: none — so the browser drew its
    own focus ring inside the box and the composer showed two nested rings whenever it was

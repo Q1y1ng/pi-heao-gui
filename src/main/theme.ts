@@ -79,7 +79,10 @@ function palette(theme: "dark" | "light", accent: string): Palette {
       borderStrong: "#c7ccd6",
       text: "#1c2027",
       textDim: "#5b6472",
-      textFaint: "#8a93a1",
+      // Was #8a93a1: measured 2.89:1 on the light surface and 3.10:1 on white, both below
+      // the 4.5:1 floor for body text — the "still unreadable in light mode" report. #5f6878
+      // measures 5.24:1 and 5.62:1, and stays a step lighter than textDim for hierarchy.
+      textFaint: "#5f6878",
       accentHover: mix(accent, -0.12),
       accentSoft: soft,
       accentContrast: "#ffffff",
@@ -456,16 +459,19 @@ details.thinking {
 }
 
 /* ── Composer ───────────────────────────────────────────────────────── */
-.composer-box,
-.composer {
+/* Measured in the running window: BOTH of these elements sit inside one another and each
+   drew a 1px border of its own, so the composer showed two nested rounded rectangles — the
+   reported "double frame". A single frame is the intent: the inner box is the visible
+   container, so only it keeps the border. */
+.composer-box {
   background: var(--pi-surface) !important;
   border: 1px solid var(--pi-border) !important;
   border-radius: var(--pi-radius-lg) !important;
   box-shadow: var(--pi-shadow-1);
   transition: border-color var(--pi-speed), box-shadow var(--pi-speed);
 }
-.composer-box:focus-within,
-.composer:focus-within {
+.composer:focus-within,
+.composer-box:focus-within {
   border-color: var(--pi-accent) !important;
   box-shadow: var(--pi-ring);
 }

@@ -4,7 +4,7 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## Unreleased
+## 1.1.2 — 2026-09-13
 
 ### Added
 
@@ -15,6 +15,20 @@
   上游的 `@路径` token 化、自适应高度、发送按钮状态等逻辑照常运行。
   **文件粘贴（图片/附件）不接管**，仍走上游路径；若原生编辑不可用，事件不会被拦下，
   交还原处理器，绝不吞掉粘贴。
+
+### Fixed
+
+- **扩展 UI 请求现在都会得到应答**。应用此前只应答交互型请求（`select` / `confirm` /
+  `input` / `editor`，且要人点对话框），其余 `setWidget` / `setStatus` / `notify` /
+  `setTitle` / `set_editor_text` **一律不应答**。而 pi 的扩展调用在宿主回复前不会结束，
+  于是一轮里累计几十个悬住。修的时候有两个坑：`respondExtensionUi` 会把**没有 `value`
+  的载荷变成 `cancelled`**（所以不能用空对象答应答），以及 `__mcp_status__` 分支会**提前
+  return** 把应答整个跳过。
+
+### Security
+
+- CI 里的第三方 action 从可变标签（`@v4`）**固定到 commit SHA** —— 包括那个握着
+  签名 token 的发布作业；Dependabot 仍会以可评审的 PR 推送升级。
 
 ## 1.1.1 — 2026-09-13
 

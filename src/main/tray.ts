@@ -87,7 +87,7 @@ let hooks: TrayHooks | null = null;
 let recent: Array<{ label: string; file: string }> = [];
 let unread = 0;
 
-const BASE_TOOLTIP = "Pi Heao GUI V1.1.1 — made by HEAOZIE";
+const BASE_TOOLTIP = "Pi Heao GUI V1.1.2 — made by HEAOZIE";
 
 function showMain(): void {
   const win = hooks?.getMainWindow();
@@ -99,7 +99,7 @@ function showMain(): void {
 
 function aboutDialog(): void {
   const detail = [
-    "Pi Heao GUI V1.1.1",
+    "Pi Heao GUI V1.1.2",
     "made by HEAOZIE",
     "",
     "Electron shell for `pi --mode rpc` (JSONL over stdio).",
@@ -109,7 +109,7 @@ function aboutDialog(): void {
   const options = {
     type: "info" as const,
     title: t("tray.aboutTitle", uiLang),
-    message: "Pi Heao GUI V1.1.1",
+    message: "Pi Heao GUI V1.1.2",
     detail,
     buttons: [t("tray.ok", uiLang)],
   };

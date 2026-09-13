@@ -141,7 +141,11 @@ export function resolveTheme(theme: ThemeName): "dark" | "light" {
 }
 
 /** Build the token block for a theme + accent colour. */
-export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
+export function buildTokensCss(
+  theme: ThemeName = "dark",
+  accent = "#4c8dff",
+  chatFontSize = 13,
+): string {
   const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
   const p = palette(resolveTheme(theme), accentColor);
   // Same clamp as the settings slider, so a hand-edited config cannot blow up the layout.
@@ -688,7 +692,11 @@ export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff");
  * Full theme block for a theme + accent. The token element has its own id so a
  * live theme switch only has to replace that one element (pi:theme channel).
  */
-export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
+export function buildThemeCss(
+  theme: ThemeName = "dark",
+  accent = "#4c8dff",
+  chatFontSize = 13,
+): string {
   return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent, chatFontSize)}</style>
 <style id="pi-heao-theme">${THEME_BODY}</style>`;
 }

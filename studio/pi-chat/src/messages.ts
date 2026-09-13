@@ -1662,7 +1662,9 @@ export function wrapWorkSegment(userRow: HTMLElement) {
   det.className = "work-block";
   const summ = document.createElement("summary");
   summ.className = "work-head";
-  summ.innerHTML = formatWorkTitle(turns, startTs, endTs, added, removed);
+  // formatWorkTitle returns plain text (numbers and translated labels, no markup), so
+  // textContent is both safe and sufficient here.
+  summ.textContent = formatWorkTitle(turns, startTs, endTs, added, removed);
   det.appendChild(summ);
   const body = el("div", "work-body");
   det.appendChild(body);

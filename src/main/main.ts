@@ -332,7 +332,12 @@ function openSettingsWindow(): void {
   });
   const tmp = writeTempHtml(
     "pi-heao-settings",
-    buildSettingsHtml(resolveUiLang(config.uiLanguage), config.theme, config.accent, config.chatFontSize),
+    buildSettingsHtml(
+      resolveUiLang(config.uiLanguage),
+      config.theme,
+      config.accent,
+      config.chatFontSize,
+    ),
   );
   settingsWindow.loadFile(tmp);
   settingsWindow.on("closed", () => {
@@ -544,7 +549,12 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   applyConfigSideEffects();
   // chatFontSize belongs here too: it is what --pi-fs-md is built from, so a size change
   // that does not broadcast leaves the slider writing a value nothing ever reads.
-  if (partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) broadcastTheme();
+  if (
+    partial.theme !== undefined ||
+    partial.accent !== undefined ||
+    partial.chatFontSize !== undefined
+  )
+    broadcastTheme();
   // Appearance changes are applied to the settings window IN PLACE.
   //
   // This used to close and reopen the window, which looks equivalent and is not: the click
@@ -552,23 +562,37 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   // window object the renderer still holds is destroyed. The next interaction then lands on
   // a destroyed window — reported as "the second accent click does nothing until I leave the
   // page and come back". The e2e pass caught the same defect as "Object has been destroyed".
-  if ((partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) && settingsWindow && !settingsWindow.isDestroyed()) {
+  if (
+    (partial.theme !== undefined ||
+      partial.accent !== undefined ||
+      partial.chatFontSize !== undefined) &&
+    settingsWindow &&
+    !settingsWindow.isDestroyed()
+  ) {
     const css = buildTokensCss(config.theme, config.accent, config.chatFontSize);
     const accent = String(config.accent || "").toLowerCase();
     const script =
       "(function(){" +
       "var el=document.getElementById('pi-heao-tokens');" +
       "if(!el){el=document.createElement('style');el.id='pi-heao-tokens';document.head.appendChild(el);}" +
-      "el.textContent=" + JSON.stringify(css) + ";" +
+      "el.textContent=" +
+      JSON.stringify(css) +
+      ";" +
       "document.querySelectorAll('#theme-group [data-theme]').forEach(function(b){" +
-      "b.classList.toggle('active',b.getAttribute('data-theme')===" + JSON.stringify(config.theme) + ");});" +
+      "b.classList.toggle('active',b.getAttribute('data-theme')===" +
+      JSON.stringify(config.theme) +
+      ");});" +
       "document.querySelectorAll('#accent-swatches .swatch').forEach(function(b){" +
-      "b.classList.toggle('active',String(b.getAttribute('data-accent')||'').toLowerCase()===" + JSON.stringify(accent) + ");});" +
-      "var fi=document.getElementById('cfg-chatFontSize');if(fi)fi.value=" + JSON.stringify(String(config.chatFontSize)) + ";" +
+      "b.classList.toggle('active',String(b.getAttribute('data-accent')||'').toLowerCase()===" +
+      JSON.stringify(accent) +
+      ");});" +
+      "var fi=document.getElementById('cfg-chatFontSize');if(fi)fi.value=" +
+      JSON.stringify(String(config.chatFontSize)) +
+      ";" +
       "})()";
-    void settingsWindow.webContents
-      .executeJavaScript(script)
-      .catch(() => { /* window may be closing; the next open renders from config */ });
+    void settingsWindow.webContents.executeJavaScript(script).catch(() => {
+      /* window may be closing; the next open renders from config */
+    });
   }
   if (partial.uiLanguage !== undefined && settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.close();
@@ -579,9 +603,17 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
 });
 
 /** Windows title-bar overlay colours for the current theme (it is drawn by the OS). */
-function overlayColors(theme: "dark" | "light" | "system"): { color: string; symbolColor: string; height: number } {
+function overlayColors(theme: "dark" | "light" | "system"): {
+  color: string;
+  symbolColor: string;
+  height: number;
+} {
   const light = theme === "light";
-  return { color: light ? "#f6f7f9" : "#181818", symbolColor: light ? "#1c2027" : "#cccccc", height: 32 };
+  return {
+    color: light ? "#f6f7f9" : "#181818",
+    symbolColor: light ? "#1c2027" : "#cccccc",
+    height: 32,
+  };
 }
 
 /** Push the current token CSS to every chat window (live theme switching). */
@@ -596,7 +628,11 @@ function broadcastTheme(): void {
   // The overlay is an OS-drawn strip; it does not read our CSS, so it has to be pushed.
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed() && typeof win.setTitleBarOverlay === "function") {
-      try { win.setTitleBarOverlay(overlayColors(config.theme)); } catch { /* older shell */ }
+      try {
+        win.setTitleBarOverlay(overlayColors(config.theme));
+      } catch {
+        /* older shell */
+      }
     }
   }
 

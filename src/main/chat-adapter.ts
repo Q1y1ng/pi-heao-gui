@@ -437,7 +437,7 @@ function styleTag(id: string, css: string): string {
   return `<style id="pi-style-${id.replace(/^pi-/, "")}">${css}</style>`;
 }
 
-import { t, resolveUiLang, type UiLang } from "./i18n";
+import { t, resolveUiLang, translateFragment, type UiLang } from "./i18n";
 
 function buildChromeHtml(lang: UiLang): string {
   return `
@@ -829,7 +829,10 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
   const lang = resolveUiLang(config.uiLanguage ?? "auto");
-  const chromeHtml = buildChromeHtml(lang);
+  // Our injected fragments are translated by exact phrase substitution; the
+  // vendored upstream bundle is left untouched.
+  const T = (fragment: string): string => translateFragment(fragment, lang);
+  const chromeHtml = T(buildChromeHtml(lang));
   if (bodyOpenIdx !== -1) {
     allLines.splice(bodyOpenIdx + 1, 0, chromeHtml);
   } else {
@@ -846,14 +849,15 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
       allLines.splice(
         i,
         0,
-        REPARENT_SCRIPT,
-        SIDEBAR_SCRIPT,
-        TITLEBAR_SCRIPT,
-        TOKENS_SCRIPT,
-        STATS_SCRIPT,
-        PALETTE_SCRIPT,
+        T(REPARENT_SCRIPT),
+        T(SIDEBAR_SCRIPT),
+        T(TITLEBAR_SCRIPT),
+        T(TOKENS_SCRIPT),
+        T(STATS_SCRIPT),
+        T(PALETTE_SCRIPT),
+        // The vendored upstream bundle keeps its own locales: never translated here.
         vendorAssets().js,
-        DOCK_SCRIPT,
+        T(DOCK_SCRIPT),
       );
       break;
     }

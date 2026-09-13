@@ -131,7 +131,8 @@ function buildTemplate(): MenuItemConstructorOptions[] {
 
   return [
     {
-      label: unread > 0 ? tParams("tray.showUnread", uiLang, { n: unread }) : t("tray.show", uiLang),
+      label:
+        unread > 0 ? tParams("tray.showUnread", uiLang, { n: unread }) : t("tray.show", uiLang),
       click: showMain,
     },
     { label: t("tray.newSession", uiLang), click: () => hooks?.newSession?.() },

@@ -1694,21 +1694,24 @@ app.whenReady().then(async () => {
   sweepStaleTempFiles();
   setupChineseMenu();
   await createWindow();
-  const trayReady = createTray({
-    getMainWindow: () => mainWindow,
-    openSession: (file) => {
-      if (!isSessionFile(file)) return;
-      void openSessionWindow(file);
+  const trayReady = createTray(
+    {
+      getMainWindow: () => mainWindow,
+      openSession: (file) => {
+        if (!isSessionFile(file)) return;
+        void openSessionWindow(file);
+      },
+      newSession: () => {
+        const win = mainWindow;
+        if (!win) return;
+        win.show();
+        win.focus();
+        postToWindow(win, { type: "newSession" });
+      },
+      openSettings: () => openSettingsWindow(),
     },
-    newSession: () => {
-      const win = mainWindow;
-      if (!win) return;
-      win.show();
-      win.focus();
-      postToWindow(win, { type: "newSession" });
-    },
-    openSettings: () => openSettingsWindow(),
-  }, resolveUiLang(config.uiLanguage ?? "auto"));
+    resolveUiLang(config.uiLanguage ?? "auto"),
+  );
 
   // Unread counter: clearing happens whenever the window regains focus.
   mainWindow?.on("focus", () => {

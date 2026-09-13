@@ -412,16 +412,24 @@ app.whenReady().then(async () => {
         return document.querySelectorAll('#pi-palette-list [data-id], #pi-palette-list li, #pi-palette-list .pi-palette-item').length;
       })()`,
       );
-      await sleep(300);
-      const items = await js(
-        win,
-        "document.querySelectorAll('#pi-palette-list [data-id], #pi-palette-list li, #pi-palette-list .pi-palette-item').length",
-      );
-      check(
-        "typing narrows the palette list",
-        Number(items) >= 1,
-        `during=${filtered} now=${items}`,
-      );
+      await sleep(700);
+      // Poll: the sandbox starts with a cold pi child, so the command list can
+      // take longer to render there than in the read-only run.
+      const items = await waitFor(
+        async () => {
+          const n = await js(
+            win,
+            "document.querySelectorAll('#pi-palette-list [data-id], #pi-palette-list li, #pi-palette-list .pi-palette-item').length",
+          );
+          return Number(n) > 0 ? Number(n) : null;
+        },
+        15_000,
+        "palette items",
+      ).catch(() => 0);
+      // The built-in commands do not depend on how many sessions exist, so the
+      // list must not be empty while the query matches one of them.
+      check("palette renders built-in commands", Number(filtered) >= 1 || Number(items) >= 1, `items=${filtered}`);
+      check("a matching command stays listed", Number(items) >= 1, `now=${items}`);
 
       const closed = await js(
         win,

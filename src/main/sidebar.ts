@@ -687,10 +687,11 @@ export const SIDEBAR_SCRIPT = `
         switching = false;
         item.classList.remove('loading');
         listEl.classList.remove('is-loading');
-        if (!ok) {
-          item.classList.remove('active');
-          setTitleLoading('');
-        }
+        if (!ok) item.classList.remove('active');
+        // Reset on success too. This used to be inside the failure branch, so a session
+        // that loaded fine left the sidebar title stuck on "载入会话…" with its spinner
+        // still turning — a status that outlived the thing it reported.
+        setTitleLoading('');
       };
       window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file })
         .then(function(r) {

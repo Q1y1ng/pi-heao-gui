@@ -817,7 +817,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     lines.splice(
       headLineIdx,
       0,
-      buildThemeCss(config.theme, config.accent),
+      buildThemeCss(config.theme, config.accent, config.chatFontSize),
       CHROME_CSS,
       styleTag("pi-stats", STATS_CSS),
       styleTag("pi-palette", PALETTE_CSS),
@@ -832,7 +832,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     if (bodyIdx !== -1) {
       html =
         html.slice(0, bodyIdx) +
-        buildThemeCss(config.theme, config.accent) +
+        buildThemeCss(config.theme, config.accent, config.chatFontSize) +
         CHROME_CSS +
         styleTag("pi-stats", STATS_CSS) +
         styleTag("pi-palette", PALETTE_CSS) +

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu, webContents } from "electron";
 import { join, sep, basename, dirname } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
@@ -555,8 +555,16 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
 function broadcastTheme(): void {
   const css = buildTokensCss(config.theme, config.accent);
   const payload = { type: "theme", css, theme: config.theme, accent: config.accent };
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send("pi:theme", payload);
+  // The chat UI lives in a <webview>, which is not a BrowserWindow and therefore
+  // never appeared in getAllWindows(). Its stylesheet tokens were never delivered,
+  // so every appearance setting silently did nothing in the chat pane and the chat
+  // fell back to the browser default CJK face. getAllWebContents() includes webview
+  // guests; "window" keeps the app chrome covered by the same loop.
+  for (const wc of webContents.getAllWebContents()) {
+    const kind = wc.getType();
+    if (!wc.isDestroyed() && (kind === "window" || kind === "webview")) {
+      wc.send("pi:theme", payload);
+    }
   }
 }
 

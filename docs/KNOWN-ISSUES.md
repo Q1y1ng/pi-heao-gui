@@ -51,6 +51,9 @@ shows which lines actually execute at load and on a live theme message, and sett
 above (the branch demonstrably runs, since `--pi-fs-md` updates — yet the statement next to it
 apparently does not).
 
-**Relevant code.** `src/main/chat-adapter.ts` (`SHIM_SCRIPT`), `src/main/theme.ts`
-(`buildTokensCss`, which emits `--pi-fs-md`, `--chat-fs` and `--chat-fs-8…15`),
-`studio/pi-chat/src/style.css` (`--chat-fs`).
+**Relevant code.** `src/main/chat-adapter.ts` (`SHIM_SCRIPT`, which applies a live theme message to
+`#pi-heao-tokens`), `src/main/theme.ts` (`buildTokensCss`, which emits `--pi-fs-md`, `--chat-fs` and
+`--chat-fs-8…15`), `studio/pi-chat/src/style.css` (`--chat-fs`). Note that commit `3d86504`
+("pass the font size on the initial theme injection") already forwards the size on the first
+injection, and the measurements above were taken on top of it — so the startup path is not the
+remaining gap; the live-update path is.

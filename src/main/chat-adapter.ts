@@ -756,19 +756,18 @@ const TOKENS_SCRIPT = `
 
 export function buildChatHtml(appPath: string, config: StandaloneConfig): string | null {
   const candidates = [
-    join(appPath, "vendor", "upstream", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
-    join(appPath, "vendor", "upstream", "pi-chat", "dist", "index.html"),
+    join(appPath, "studio", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
+    join(appPath, "studio", "pi-chat", "dist", "index.html"),
     join(
       appPath,
       "app.asar",
-      "vendor",
-      "upstream",
+      "studio",
       "packages",
       "pi-chat",
       "dist",
       "pi-chat-0.0.0.html",
     ),
-    join(appPath, "app.asar", "vendor", "upstream", "pi-chat", "dist", "index.html"),
+    join(appPath, "app.asar", "studio", "pi-chat", "dist", "index.html"),
   ];
   let src: string | null = null;
   for (const p of candidates) {

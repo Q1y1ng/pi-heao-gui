@@ -58,7 +58,7 @@ of the RPC log.
 ## Known, accepted limitations
 
 - The Windows binary is **unsigned**, so SmartScreen will warn on first launch.
-- `vendor/upstream/` is this project’s own fork of the MIT-licensed
+- `studio/` is this project’s own fork of the MIT-licensed
   `pi-agent-studio`; a compromised upstream tag is a supply-chain risk, which is
   why `npm run check:upstream` runs in CI.
 - Third-party extension packages installed through `pi install` execute inside the

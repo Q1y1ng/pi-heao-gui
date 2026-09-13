@@ -145,7 +145,7 @@ Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同�
 | **`pi` CLI** | 运行时**必需**，以 `--mode rpc` 在外驱动 | 走 pi 的公开 RPC 协议，**不 patch pi** | 协议变了就得跟 —— 这是**较硬**的一条依赖 |
 | **pi-agent-studio 的聊天 UI 与 bridge 扩展** | **代码副本，已归本项目维护**（不是“参考设计”，也不再要求与上游一致） | 分叉自 tag `v1.3.8`（commit `8c50c0a`）；之后可任意修改 | 上游发新版**不影响我们**；想要它的新东西时按 [docs/UPSTREAM.md](docs/UPSTREAM.md) 主动吸收 |
 
-**第二行值得说清** ✓：`vendor/upstream/` 里放的就是那份 MIT 代码（`pi-chat/` 聊天 UI、
+**第二行值得说清** ✓：`studio/` 里放的就是那份 MIT 代码（`pi-chat/` 聊天 UI、
 `bridge/` 扩展、`pi-mcp/`、`assets/`），[docs/FIDELITY.md](docs/FIDELITY.md) 逐符号记录了保留率
 （**143/253 = 57%**，未保留的绝大多数是 VS Code 宿主专有函数）。这正是本项目的取舍：
 **看聊天界面时，你看的就是原版那份** —— 代价是要跟上游的更新节奏。好消息是这份跟进是
@@ -222,7 +222,7 @@ Electron Renderer (Chromium)
 二进制）、受工作区根目录约束的 `pi:fs-*`、以及 `pi:git-*`（提交信息用 `pi -p` 一次性生成，
 不污染会话）。
 
-上游源码（现已归本项目维护）位于 `vendor/upstream/`（MIT），只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、
+上游源码（现已归本项目维护）位于 `studio/`（MIT），只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、
 `assets/` 等运行时必需品；固定版本（上游 tag `v1.3.8` / commit `8c50c0a`）与刷新流程见
 [docs/UPSTREAM.md](docs/UPSTREAM.md)。外壳为何必须重写、以及实现中踩过的坑见
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -264,7 +264,7 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 - `.github/workflows/ci.yml`：`lint + typecheck + test`、与
   `package`（打包产物含全部运行时依赖）为**阻断**作业，`smoke` 为咨询作业；依赖审计为
   咨询步骤，另有 Dependabot 分组跟进依赖。
-  `vendor/upstream/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
+  `studio/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
 - `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
   路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
 - `npm run test:daily` 是唯一能证明“**这个应用真能把一件事做完**”的门禁：它开真窗口、

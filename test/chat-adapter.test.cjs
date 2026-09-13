@@ -15,7 +15,7 @@ const { buildChatHtml } = require("../dist/main/chat-adapter.js");
 const { DEFAULT_CONFIG } = require("../dist/shared/types.js");
 
 const ROOT = path.join(__dirname, "..");
-const UI_BUNDLE = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
+const UI_BUNDLE = path.join(ROOT, "studio", "pi-chat", "dist", "index.html");
 const hasUi = fs.existsSync(UI_BUNDLE);
 const build = (overrides = {}) => buildChatHtml(ROOT, { ...DEFAULT_CONFIG, ...overrides });
 

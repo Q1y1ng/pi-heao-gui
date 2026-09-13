@@ -13,7 +13,7 @@
 | 项目 | 证据 |
 | --- | --- |
 | 上游 pin | `docs/UPSTREAM.md` 记录 tag / commit / 校验命令 |
-| 字节级一致 | `npm run check:upstream`：稀疏克隆 pinned tag 后与 `vendor/upstream/` 全量比对，**只容忍文档化的 3 处差异**（MCP 构建产物、`package-lock.json`、生成文件 `model-icons-data.ts`） |
+| 字节级一致 | `npm run check:upstream`：稀疏克隆 pinned tag 后与 `studio/` 全量比对，**只容忍文档化的 3 处差异**（MCP 构建产物、`package-lock.json`、生成文件 `model-icons-data.ts`） |
 | 聊天 UI = 原版 | 5.42 MB 单文件 bundle 由 vendored 源码构建（`npm run build:renderer`）；我方只做**运行时注入** |
 | 注入不改上游 | 注入内容（设计 token、chrome、侧栏、统计面板、命令面板、Dock）合计约 167 KB ≈ bundle 的 **3%**；无任何 vendored 文件被修改 |
 | 上游代码自愿运行 | 注入 `acquireVsCodeApi` shim，让 pi-chat 以为自己在 VS Code 宿主里，因此上游逻辑零改动 |

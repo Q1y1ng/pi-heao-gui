@@ -85,7 +85,7 @@ tracked files, then add that one bundle:
 
 ```bash
 git ls-files > /tmp/srcfiles.txt
-echo "vendor/upstream/pi-chat/dist/index.html" >> /tmp/srcfiles.txt
+echo "studio/pi-chat/dist/index.html" >> /tmp/srcfiles.txt
 tar -a -cf dist-electron/pi-heao-gui-<version>-source.zip -T /tmp/srcfiles.txt
 ```
 

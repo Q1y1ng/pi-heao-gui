@@ -60,17 +60,17 @@ const REQUIRED = [
   "/dist/preload/preload-settings.js", // settings window bridge
   "/dist/renderer/vendor/xterm.js", // dock terminal
   "/dist/renderer/vendor/codemirror.js", // dock file editor
-  "/vendor/upstream/pi-chat/dist/", // the vendored chat UI (any file under it)
-  "/vendor/upstream/bridge/todo.ts", // bundled extensions, mounted via -e
-  "/vendor/upstream/bridge/permission-gate.ts",
-  "/vendor/upstream/bridge/rewind-code.ts",
-  "/vendor/upstream/bridge/subagent/index.ts",
-  "/vendor/upstream/bridge/mcp/index.js",
+  "/studio/pi-chat/dist/", // the vendored chat UI (any file under it)
+  "/studio/bridge/todo.ts", // bundled extensions, mounted via -e
+  "/studio/bridge/permission-gate.ts",
+  "/studio/bridge/rewind-code.ts",
+  "/studio/bridge/subagent/index.ts",
+  "/studio/bridge/mcp/index.js",
   "/node_modules/node-pty/", // native terminal module
 ];
 
 /** Paths that must be present as a directory prefix rather than an exact file. */
-const PREFIXES = new Set(["/vendor/upstream/pi-chat/dist/", "/node_modules/node-pty/"]);
+const PREFIXES = new Set(["/studio/pi-chat/dist/", "/node_modules/node-pty/"]);
 
 function main() {
   const asarPath = process.argv[2] ? path.resolve(process.argv[2]) : DEFAULT_ASAR;

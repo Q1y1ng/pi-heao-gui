@@ -12,7 +12,7 @@
  *     title bar and tray with the rest in Chinese.
  *
  * The upstream chat UI is unaffected either way: it has its own locales under
- * vendor/upstream/pi-chat/src/locales, driven by PI_LANG_PLACEHOLDER.
+ * studio/pi-chat/src/locales, driven by PI_LANG_PLACEHOLDER.
  *
  * Extending coverage is mechanical: add keyed entries here, then replace the
  * literal in the module with t("key", lang). Modules that build HTML strings

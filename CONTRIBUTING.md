@@ -54,12 +54,12 @@ src/main/            Electron main process (Node)
                      PTY, git/commit-message, pi changelog, safe CLI calls
   config.ts sessions.ts search.ts session-ops.ts stats.ts …
 src/preload/         two allowlisted bridges (chat window vs settings window)
-vendor/upstream/     our fork of the pi-agent-studio UI — see docs/UPSTREAM.md
+studio/     our fork of the pi-agent-studio UI — see docs/UPSTREAM.md
 ```
 
 ## Rules that matter
 
-1. **`vendor/upstream/` is our own code now.** It started as a copy of the
+1. **`studio/` is our own code now.** It started as a copy of the
    MIT-licensed pi-agent-studio UI and is maintained here — edit it like anything
    under `src/`. Nothing requires it to match an upstream revision, and no CI job
    compares it to one. See docs/UPSTREAM.md for how changes are taken from

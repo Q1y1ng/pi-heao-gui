@@ -158,7 +158,7 @@ interface StandaloneConfig {
 
 ### Vendoring 策略
 
-从上游 `JohnnyZ93/pi-agent-studio` 克隆源码，vendored 到 `vendor/upstream/`：
+从上游 `JohnnyZ93/pi-agent-studio` 克隆源码，vendored 到 `studio/`：
 
 - `pi-chat/` — 完整复制，仅改 `acquireVsCodeApi` shim
 - `src/chat/rpc-client.ts` — 复制，去掉 vscode import
@@ -189,7 +189,7 @@ interface StandaloneConfig {
 ## Tasks
 
 - [x] T1: 初始化 Electron 项目骨架 — acceptance: `npm run dev` 打开空白窗口，preload 暴露 `window.pi`，renderer 能 postMessage 往返 (covers: S2)
-- [x] T2: Vendor 上游源码 — acceptance: `vendor/upstream/` 包含 pi-chat、rpc-client、chat-types、builtin-commands、bridge 扩展；`pnpm build` 在 vendor/pi-chat 下产出单文件 HTML (covers: S2)
+- [x] T2: Vendor 上游源码 — acceptance: `studio/` 包含 pi-chat、rpc-client、chat-types、builtin-commands、bridge 扩展；`pnpm build` 在 vendor/pi-chat 下产出单文件 HTML (covers: S2)
 - [x] T3: 实现 rpc-client + chat-session 适配层 — acceptance: Main 进程能 spawn `pi --mode rpc`，完成 getState/getModels/prompt 往返，事件流正确回调 (covers: S2; depends: T1, T2)
 - [x] T4: 接入 pi-chat 到 renderer — acceptance: 聊天界面渲染，能发消息收到流式回复，模型下拉可用 (covers: S2; depends: T3)
 - [x] T5: 实现本地配置系统 — acceptance: `~/.pi/standalone/config.json` 读写正常，pi 路径/env/args/disabledTools 生效 (covers: S2; depends: T1)

@@ -1,4 +1,4 @@
-# 我们的 UI 分支（`vendor/upstream/`）
+# 我们的 UI 分支（`studio/`）
 
 **这份代码是我们的。** 它最初是 MIT 许可的
 [`JohnnyZ93/pi-agent-studio`](https://github.com/JohnnyZ93/pi-agent-studio) VS Code 扩展在 tag
@@ -19,7 +19,7 @@
 | Field | Value |
 | --- | --- |
 | 上游仓库 | `https://github.com/JohnnyZ93/pi-agent-studio` |
-| 分叉自版本 | **1.3.8**（`vendor/upstream/package.json`） |
+| 分叉自版本 | **1.3.8**（`studio/package.json`） |
 | Tag | `v1.3.8`（lightweight tag） |
 | Commit | **`8c50c0aae0c54e320f87d930538c98db4fd9240b`** |
 
@@ -29,7 +29,7 @@
 git clone --depth 1 --branch v1.3.8 --filter=blob:none --sparse \
   https://github.com/JohnnyZ93/pi-agent-studio /tmp/upstream
 git -C /tmp/upstream sparse-checkout set pi-chat bridge assets
-diff -rq -x node_modules -x dist /tmp/upstream/pi-chat vendor/upstream/pi-chat
+diff -rq -x node_modules -x dist /tmp/upstream/pi-chat studio/pi-chat
 ```
 
 ## 我们从上游保留了什么（以及丢掉了什么）
@@ -60,7 +60,7 @@ files down to 56.
    ships prebuilt. It is produced from the vendored source by:
 
    ```bash
-   npm run build:mcp   # cd vendor/upstream/pi-mcp && npm install && npm run build
+   npm run build:mcp   # cd studio/pi-mcp && npm install && npm run build
    ```
 
    `pi-mcp/rolldown.config.ts` writes to `../bridge/mcp/index.js`. The bundle is
@@ -82,12 +82,12 @@ files down to 56.
 
 ## Not tracked / must be rebuilt
 
-- `vendor/upstream/pi-chat/dist/index.html` — the 5.7 MB single-file UI bundle is
+- `studio/pi-chat/dist/index.html` — the 5.7 MB single-file UI bundle is
   **gitignored**. A fresh clone must run `npm run build:renderer`
-  (needs network: it runs `npm install` inside `vendor/upstream/pi-chat`) before
+  (needs network: it runs `npm install` inside `studio/pi-chat`) before
   the app can show a chat UI. Without it the app falls back to
   `src/renderer/index.html` (a diagnostic placeholder).
-- `vendor/upstream/src/chat/chat-dist.html` — unused artifact that the vendored
+- `studio/src/chat/chat-dist.html` — unused artifact that the vendored
   pi-chat build still writes (gitignored).
 
 ## 主动吸收上游（可选，不是义务）
@@ -98,7 +98,7 @@ files down to 56.
 ```bash
 git clone --depth 1 --branch <new-tag> --filter=blob:none --sparse <upstream> /tmp/upstream
 git -C /tmp/upstream sparse-checkout set pi-chat bridge pi-mcp assets
-diff -rq -x node_modules -x dist /tmp/upstream/pi-chat vendor/upstream/pi-chat   # 先看清差在哪
+diff -rq -x node_modules -x dist /tmp/upstream/pi-chat studio/pi-chat   # 先看清差在哪
 # 1. 按需拷入 pi-chat/ bridge/ pi-mcp/ assets/（可以只拷其中一部分）
 # 2. pi-mcp 变了才需要重建 MCP bundle
 npm run build:mcp

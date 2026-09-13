@@ -55,7 +55,7 @@ const FALLBACK_ICON_DATA_URL =
 function iconCandidates(): string[] {
   const out = [
     join(app.getAppPath(), "build", "icon.png"),
-    join(app.getAppPath(), "vendor", "upstream", "assets", "icon.png"),
+    join(app.getAppPath(), "studio", "assets", "icon.png"),
   ];
   if (process.resourcesPath) out.push(join(process.resourcesPath, "build", "icon.png"));
   return out;

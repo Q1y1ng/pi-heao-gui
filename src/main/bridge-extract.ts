@@ -29,7 +29,7 @@ function copyDirRecursive(src: string, dest: string): void {
  * In packaged app, extracts to userData/bridge-extracted/ and returns that.
  */
 export function getRealBridgeDir(appPath: string): string {
-  const bridgeDir = join(appPath, "vendor", "upstream", "bridge");
+  const bridgeDir = join(appPath, "studio", "bridge");
 
   // Not in asar — use original path directly
   if (!appPath.includes("app.asar")) {

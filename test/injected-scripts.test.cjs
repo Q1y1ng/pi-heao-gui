@@ -70,7 +70,7 @@ test("dock: the login command keeps an escaped carriage return", () => {
 });
 
 test("generated chat page: every inline script parses", () => {
-  const bundle = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
+  const bundle = path.join(ROOT, "studio", "pi-chat", "dist", "index.html");
   if (!fs.existsSync(bundle)) {
     // The UI bundle is gitignored; a fresh clone has to build it first.
     return;
@@ -91,7 +91,7 @@ test("generated chat page: every inline script parses", () => {
 });
 
 test("generated chat page: CSS is wrapped in <style>, never bare text", () => {
-  const bundle = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
+  const bundle = path.join(ROOT, "studio", "pi-chat", "dist", "index.html");
   if (!fs.existsSync(bundle)) return;
   const { buildChatHtml } = require("../dist/main/chat-adapter.js");
   const { DEFAULT_CONFIG } = require("../dist/shared/types.js");
@@ -117,7 +117,7 @@ test("generated chat page: CSS is wrapped in <style>, never bare text", () => {
 });
 
 test("generated chat page: no template literal leaked into the markup", () => {
-  const bundle = path.join(ROOT, "vendor", "upstream", "pi-chat", "dist", "index.html");
+  const bundle = path.join(ROOT, "studio", "pi-chat", "dist", "index.html");
   if (!fs.existsSync(bundle)) return;
   const { buildChatHtml } = require("../dist/main/chat-adapter.js");
   const { DEFAULT_CONFIG } = require("../dist/shared/types.js");

@@ -5,12 +5,12 @@ following third-party work.
 
 ## Forked from upstream (MIT, maintained here)
 
-`vendor/upstream/` is this project’s fork of the MIT-licensed
+`studio/` is this project’s fork of the MIT-licensed
 [`JohnnyZ93/pi-agent-studio`](https://github.com/JohnnyZ93/pi-agent-studio) VS Code
 extension, pinned to tag `v1.3.8` (commit `8c50c0a`). It supplies the chat UI
 (`pi-chat/`), the bundled pi extensions (`bridge/`), the MCP extension source
 (`pi-mcp/`) and the tray icon (`assets/`). Upstream's own LICENSE is kept at
-`vendor/upstream/LICENSE`; the pinned revision and the refresh procedure are in
+`studio/LICENSE`; the pinned revision and the refresh procedure are in
 `docs/UPSTREAM.md`, and `npm run check:upstream` verifies the copy in CI.
 
 The chat UI bundle additionally embeds its own third-party libraries
@@ -35,5 +35,5 @@ globally and which is **not** redistributed here.
 
 ```bash
 npm ls --omit=dev --all            # runtime dependency tree
-git ls-files vendor/upstream | head # vendored file list
+git ls-files studio | head # vendored file list
 ```

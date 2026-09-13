@@ -50,7 +50,11 @@ const DEMO = path.join(DEMO_ROOT, "demo-app");
 fs.mkdirSync(path.join(DEMO, "src"), { recursive: true });
 fs.writeFileSync(
   path.join(DEMO, "package.json"),
-  JSON.stringify({ name: "demo-app", version: "0.1.0", type: "module", scripts: { test: "node --test" } }, null, 2),
+  JSON.stringify(
+    { name: "demo-app", version: "0.1.0", type: "module", scripts: { test: "node --test" } },
+    null,
+    2,
+  ),
   "utf8",
 );
 fs.writeFileSync(
@@ -155,13 +159,13 @@ const DEMO_MODELS = {
     },
   },
 };
+fs.writeFileSync(path.join(agentDir, "models.json"), JSON.stringify(DEMO_MODELS, null, 2), "utf8");
+// Keep pi from installing the real package set into the sandbox.
 fs.writeFileSync(
-  path.join(agentDir, "models.json"),
-  JSON.stringify(DEMO_MODELS, null, 2),
+  path.join(agentDir, "settings.json"),
+  JSON.stringify({ packages: [] }, null, 2),
   "utf8",
 );
-// Keep pi from installing the real package set into the sandbox.
-fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ packages: [] }, null, 2), "utf8");
 fs.mkdirSync(path.join(SANDBOX, ".pi", "standalone"), { recursive: true });
 fs.writeFileSync(
   path.join(SANDBOX, ".pi", "standalone", "config.json"),
@@ -211,7 +215,13 @@ lines.push(
     modelId: "claude-sonnet-4-5",
   }),
 );
-push({ type: "session_info", id: "s1", parentId: "m1", timestamp: new Date(now).toISOString(), name: "给 demo-app 加一个 median 函数" });
+push({
+  type: "session_info",
+  id: "s1",
+  parentId: "m1",
+  timestamp: new Date(now).toISOString(),
+  name: "给 demo-app 加一个 median 函数",
+});
 
 push(
   message(
@@ -245,13 +255,7 @@ push(
     { inputTokens: 1840, outputTokens: 612, cacheReadTokens: 0, cacheWriteTokens: 0 },
   ),
 );
-push(
-  message(
-    "u2",
-    "user",
-    "好，顺手把测试也补上。",
-  ),
-);
+push(message("u2", "user", "好，顺手把测试也补上。"));
 push(
   message(
     "a2",
@@ -271,7 +275,11 @@ push(
   ),
 );
 
-fs.writeFileSync(path.join(agentDir, "sessions", "demo", `${SESSION_ID}.jsonl`), `${lines.join("\n")}\n`, "utf8");
+fs.writeFileSync(
+  path.join(agentDir, "sessions", "demo", `${SESSION_ID}.jsonl`),
+  `${lines.join("\n")}\n`,
+  "utf8",
+);
 
 fs.mkdirSync(path.join(SANDBOX, ".pi", "standalone"), { recursive: true });
 
@@ -323,16 +331,27 @@ app.whenReady().then(async () => {
     const win = await waitFor(async () => BrowserWindow.getAllWindows()[0], 45_000, "main window");
     win.setSize(1400, 900);
     await waitFor(() => js(win, "!!document.getElementById('pi-shell')"), 45_000, "shell");
-    await waitFor(() => js(win, "document.querySelectorAll('.pi-session-item').length > 0"), 60_000, "session list");
+    await waitFor(
+      () => js(win, "document.querySelectorAll('.pi-session-item').length > 0"),
+      60_000,
+      "session list",
+    );
 
     // Open the demo session so the chat has content.
-    await js(win, `(() => {
+    await js(
+      win,
+      `(() => {
       const items = [...document.querySelectorAll('.pi-session-item')];
       const hit = items.find((el) => (el.textContent || '').includes('median')) || items[0];
       if (hit) hit.click();
       return !!hit;
-    })()`);
-    await waitFor(() => js(win, "document.querySelectorAll('.msg, .message').length >= 4"), 90_000, "messages");
+    })()`,
+    );
+    await waitFor(
+      () => js(win, "document.querySelectorAll('.msg, .message').length >= 4"),
+      90_000,
+      "messages",
+    );
     await sleep(1500);
 
     await shot(win, "chat");
@@ -340,21 +359,33 @@ app.whenReady().then(async () => {
     // Dock: terminal, then the git pane.
     await js(win, "document.getElementById('pi-dock-toggle').click()");
     await sleep(2500);
-    await js(win, "window.pi.invoke('pi:term-input', 'git status --short' + String.fromCharCode(13))");
+    await js(
+      win,
+      "window.pi.invoke('pi:term-input', 'git status --short' + String.fromCharCode(13))",
+    );
     await sleep(2500);
     await shot(win, "dock-terminal");
 
-    await js(win, `(() => { const b = document.querySelector('.pi-dock-tab[data-dock="changes"]'); if (b) b.click(); })()`);
+    await js(
+      win,
+      `(() => { const b = document.querySelector('.pi-dock-tab[data-dock="changes"]'); if (b) b.click(); })()`,
+    );
     await sleep(3000);
     await shot(win, "dock-changes");
 
     // Command palette.
     await js(win, "document.getElementById('pi-dock-close').click()");
     await sleep(600);
-    await js(win, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))");
+    await js(
+      win,
+      "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))",
+    );
     await sleep(1200);
     await shot(win, "palette");
-    await js(win, "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await js(
+      win,
+      "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))",
+    );
 
     // Settings: the two tabs that show the most surface.
     await js(win, "window.pi.invoke('pi:open-settings')");
@@ -363,12 +394,19 @@ app.whenReady().then(async () => {
       25_000,
       "settings window",
     );
-    await waitFor(() => js(settings, "!!document.getElementById('panel-models')"), 20_000, "settings dom");
+    await waitFor(
+      () => js(settings, "!!document.getElementById('panel-models')"),
+      20_000,
+      "settings dom",
+    );
     settings.setSize(1100, 780);
     await sleep(2500);
     await shot(settings, "settings-models");
 
-    await js(settings, `(() => { document.querySelector('.tab[data-tab="appearance"]').click(); })()`);
+    await js(
+      settings,
+      `(() => { document.querySelector('.tab[data-tab="appearance"]').click(); })()`,
+    );
     await sleep(1200);
     await shot(settings, "settings-appearance");
 

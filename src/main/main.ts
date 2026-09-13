@@ -321,6 +321,7 @@ function openSettingsWindow(): void {
     title: "Pi Heao 设置",
     backgroundColor: "#1e1e1e",
     parent: mainWindow ?? undefined,
+    icon: join(__dirname, "..", "..", "build", "icon.png"),
     webPreferences: {
       // settings-only preload: the only window that may touch auth/config files
       preload: join(__dirname, "..", "preload", "preload-settings.js"),
@@ -353,6 +354,7 @@ async function createWindow(): Promise<void> {
     // The overlay draws the minimise / maximise / close buttons. Hardcoded dark values
     // left a black block in the corner of an otherwise light window.
     titleBarOverlay: overlayColors(config.theme),
+    icon: join(__dirname, "..", "..", "build", "icon.png"),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,
@@ -409,6 +411,7 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
     titleBarOverlay: overlayColors(config.theme),
+    icon: join(__dirname, "..", "..", "build", "icon.png"),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,

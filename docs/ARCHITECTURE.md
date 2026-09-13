@@ -3,7 +3,7 @@
 本文记录这个项目是怎么搭起来的、为什么这么搭，以及一路上踩过的坑。
 它由早期一份交付记录整理而来，保留是因为其中的结论仍然有效。
 
-- 面向使用者的说明：[`../README.md`](../README.md)
+- 面向使用者的说明：[`../README.zh-CN.md`](../README.zh-CN.md)
 - 发布流程：[`RELEASING.md`](RELEASING.md)
 - 与上游的对应关系：[`UPSTREAM.md`](UPSTREAM.md)
 - 保真度审计：[`FIDELITY.md`](FIDELITY.md)

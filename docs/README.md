@@ -2,7 +2,7 @@
 
 | 文档 | 讲什么 | 什么时候看 |
 | --- | --- | --- |
-| [`../README.md`](../README.md) | 功能、安装、配置、安全模型 | 第一次接触这个项目 |
+| [`../README.zh-CN.md`](../README.zh-CN.md) | 功能、安装、配置、安全模型 | 第一次接触这个项目 |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 形态、关键决策，以及踩过的坑 | 改代码前想弄清“为什么这么设计” |
 | [`UPSTREAM.md`](UPSTREAM.md) | 我们那份 UI 的来源与主动吸收流程 | 确认上游对应关系，或刷新 vendored 代码 |
 | [`FIDELITY.md`](FIDELITY.md) | 与原 VS Code 插件的保真度审计（含资源占用对比） | 想知道“和原版差多少、少了什么” |

@@ -1,22 +1,44 @@
-## Unreleased
+# Changelog
+
+本项目的所有重要变更记录在此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## 1.1.0
 
 ### Added
 
 - 自动检查更新（`electron-updater`，指向本仓库 Release）：启动 20 秒后在后台检查，
-  发现新版本自动下载，可在 设置 → 诊断 → 版本与更新 里手动检查并重启安装；
-  源码运行时不检查，可用 `autoCheckUpdates: false` 关闭。
-- 英文界面覆盖到聊天窗标题栏、托盘的菜单与关于对话框。
+  发现新版本自动下载，可在 设置 → 诊断 → 版本与更新 里手动检查并重启安装。
+  源码运行时不检查（会说明原因），可用 `autoCheckUpdates: false` 关闭。
+- 英文界面覆盖到聊天窗标题栏、侧栏、停靠区（终端/文件/变更）、命令面板、
+  统计面板、托盘菜单与关于对话框；语言在 设置 → 常规 切换，`auto` 跟随系统。
+- 代码签名走 SignPath Foundation：`signpath/artifact-configuration.xml` 与手动触发的
+  `.github/workflows/sign-windows.yml`（申请通过后配置 5 个 secrets/vars 即可用）。
 
 ### Fixed
 
-- 设置窗所有控件点不动：内联脚本里被模板字面量吞掉的 `
-` 让字符串未闭合，
-  整段脚本解析失败。
-- 命令面板（Ctrl+K）打不开：`<style id="pi-palette">` 与面板根元素撞 id。
-- 标题栏两个指标写进了隐藏的统计面板（弹窗指标 id 与芯片撞 id）。
-- 文件编辑器报 `CodeMirror.defineSimpleMode is not a function`（缺 simple-mode 插件）。
-- Windows 上更新日志的 `npm root -g` 回退从未生效（`.cmd` 直起被 Node 拒绝）。
-- 终端重启后吞掉所有按键（`termOpening` 未复位 + ConPTY 需要沉降时间）。
+- **设置窗所有控件点不动**：内联脚本里被模板字面量吞掉的换行转义让字符串未闭合，
+  整段脚本解析失败，因此没有任何事件处理器被注册。浏览器不报错、主进程无日志。
+- **命令面板（Ctrl+K）打不开**：`<style id="pi-palette">` 与面板根元素撞 id，
+  `getElementById` 拿到的是样式元素，第一次按键走的是"关闭"分支。
+- **标题栏两个指标不更新**：统计面板的指标 id 与标题栏芯片撞 id，值被写进了隐藏元素。
+- **文件编辑器报错** `CodeMirror.defineSimpleMode is not a function`：Rust 模式依赖的
+  simple-mode 插件未随包提供。
+- **Windows 上更新日志的 npm 回退从未生效**：`npm.cmd` 直起被 Node 拒绝（EINVAL）。
+- **终端重启后吞掉所有按键**：`termOpening` 未复位，且 ConPTY 被 kill 后需要沉降时间，
+  否则新 shell 会在第一次写入时退出。
+- 删除已被移动的会话时不再抛出裸 `ENOENT`，而是说明文件已被移动或删除。
+- 命令面板在任何位置按 Esc 都能关闭（此前仅输入框聚焦时有效）。
+- 更新日志标签页打开即加载（此前需手动点"刷新"，看起来像空页）。
+
+### Tests
+
+本轮把"点不动"这类故障变成可自动发现的：
+
+- 解析**每一个**注入脚本 + 生成页面的**重复 id 审计**（反向验证过：还原修复即报错）；
+- preload 通道覆盖：每个窗口调用的通道必须在其白名单内，且每个授权都必须有处理器；
+- 端到端逐页面逐功能：只读 73 项 + 沙箱破坏性 83 项，**任何渲染进程报错即失败**；
+- i18n：残留中文清单、翻译后片段可解析、中文输出逐字节不变。
 # Changelog
 
 All notable changes to this project. Format loosely follows

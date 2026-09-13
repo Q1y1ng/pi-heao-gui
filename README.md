@@ -48,11 +48,11 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 ### 方式一：安装包（推荐）
 
-下载 `Pi Heao GUI Setup 1.0.0.exe`，双击安装：可自选安装目录，会自动创建桌面与开始菜单快捷方式，带卸载项（卸载不会删除你的 pi 会话与配置）。
+下载 `Pi-Heao-GUI-Setup-1.1.0.exe`，双击安装：可自选安装目录，会自动创建桌面与开始菜单快捷方式，带卸载项（卸载不会删除你的 pi 会话与配置）。
 
 ### 方式二：免安装 Portable
 
-下载 `Pi Heao GUI 1.0.0 Portable.exe`，双击直接运行，不写入安装目录。
+下载 `Pi-Heao-GUI-1.1.0-Portable.exe`，双击直接运行，不写入安装目录。
 
 > **两个包都未签名**，首次运行 Windows SmartScreen 会提示“已保护你的电脑”；
 > 点“更多信息”→“仍要运行”即可，建议先比对 Release 页面里的 SHA256。

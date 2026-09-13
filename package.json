@@ -20,6 +20,7 @@
     "build:mcp": "cd vendor/upstream/pi-mcp && npm install && npm run build",
     "dist": "npm run build && electron-builder --win portable nsis",
     "shot": "electron scripts/screenshot.cjs",
+    "shots": "electron scripts/readme-shots.cjs",
     "verify": "electron scripts/verify-features.cjs",
     "e2e": "electron scripts/e2e.cjs",
     "e2e:isolated": "electron scripts/e2e.cjs --isolated",

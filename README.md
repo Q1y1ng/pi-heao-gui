@@ -15,6 +15,11 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 [保真度审计](docs/FIDELITY.md)（上游聊天层保留 143/253 个符号） ·
 [文档索引](docs/README.md) · [变更记录](CHANGELOG.md)
 
+![对话界面](docs/images/chat.png)
+
+> 截图全部由 `npm run shots` 在**隔离沙箱**里生成：合成会话 + 临时工程，
+> 因此不会带出任何真实会话名、路径或配置。
+
 ## 快速开始
 
 1. **装 `pi`**（应用自身要依赖它）：
@@ -47,6 +52,9 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 - 流式聊天（复用上游 `pi-chat` UI）、模型与 thinking level 切换、fork / revert
 - `@file` 文件补全、文件对话框、Mermaid 与 KaTeX 渲染
 - 内置 diff 窗口，读 rewind 扩展的快照作基线
+- 命令面板（`Ctrl+K`）：命令、会话、斜杠指令、历史命中
+
+![命令面板](docs/images/palette.png)
 
 ### 会话
 
@@ -63,6 +71,10 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 - **文件**：工作区文件树 + CodeMirror 编辑器，保存、把选中内容一键发送到对话输入框
 - **变更**：git 分支与暂存状态、逐文件 diff、"生成提交信息"（沿用上游提示词与截断策略）
 
+![终端面板](docs/images/dock-terminal.png)
+
+![变更与提交信息](docs/images/dock-changes.png)
+
 ### 遥测
 
 - Token 与性能面板（`Ctrl+Shift+S`，或点标题栏指标）：首 token 延迟、解码速度、
@@ -74,6 +86,10 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 - 八个标签页：模型配置、扩展插件、技能、系统提示词、外观、诊断、更新日志、常规
 - 主题（深/浅/跟随系统）+ 任意强调色 + 字号；`uiLanguage` 支持中/英/跟随系统
 - 扩展包管理（`pi install / remove / list`）、技能增删改、provider 就绪检查、pi 更新日志、诊断包
+
+![设置窗](docs/images/settings-models.png)
+
+![外观设置](docs/images/settings-appearance.png)
 
 ### 平台集成
 
@@ -169,7 +185,8 @@ npm run smoke           # 运行时冒烟：开真窗口断言安全边界
 npm run verify          # 真机 UI 功能断言（面板 / 命令面板 / 侧栏 / 终端 / 文件 / 变更 / diff）
 npm run measure-load    # 会话切换耗时归因（pi 解析 vs 渲染）
 npm run check:upstream  # 断言 vendor/upstream 与 pinned tag 字节一致（需联网）
-npm run shot            # 截图（用于人工核对 UI，不入库）
+npm run shot            # 截图（拍本机现状，仅供人工核对，**不入库**）
+npm run shots           # 生成 README 配图：隔离沙箱 + 合成会话，输出到 docs/images/
 npm run typecheck       # tsc --noEmit
 npm run lint            # biome lint（--write 自动修）
 npm run dist            # 打包便携版 + NSIS 安装包

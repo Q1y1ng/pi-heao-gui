@@ -72,12 +72,17 @@ vendor/upstream/     byte-for-byte upstream copy — see docs/UPSTREAM.md
 3. **Never put secrets on a renderer path.** The chat window's preload has no
    access to `auth.json`, `settings.json` or the app config; keep it that way,
    and mask keys as `maskSecret()` does.
-4. **Guard every renderer-supplied path.** Anything that names a file goes through
-   `safeWorkspacePath` (workspace-relative only) or `isSessionFile` (inside the pi
-   sessions directory).
-5. **Add a test with behaviour.** Pure logic (config, parsing, diffing, telemetry,
-   git helpers) needs a `test/*.test.cjs` case; UI changes should extend
-   `scripts/verify-features.cjs` so they are asserted against a real window.
+4. **Guard every renderer-supplied path — and compare real paths.** Anything that
+   names a file goes through `safeWorkspacePath` (workspace-relative, *and*
+   resolved through symlinks and junctions: a textual prefix check is not a guard,
+   and on Windows a junction costs nothing to create) or `isSessionFile` (inside
+   the pi sessions directory). Names handed to `shell.openPath` are normalised
+   before their extension is judged, because `extname("payload.bat.")` is `"."`.
+5. **Add a test with behaviour, and run the gates.** Pure logic (config, parsing,
+   diffing, telemetry, git helpers) needs a `test/*.test.cjs` case; UI changes
+   should extend `scripts/verify-features.cjs` so they are asserted against a real
+   window. A gate that is documented but never run is not a gate — `npm run verify`
+   sat broken in `docs/RELEASING.md` because nothing executed it.
 
 ## Conventions
 

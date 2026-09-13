@@ -608,7 +608,7 @@ body {
 <div class="toolbar">
   <span class="pi-tile" aria-hidden="true">π</span>
   <h1>Pi Heao GUI 设置</h1>
-  <span class="pi-ver" title="Pi Heao GUI V1.1.3 — made by HEAOZIE">V1.1.1</span>
+  <span class="pi-ver" title="Pi Heao GUI V1.1.3 — made by HEAOZIE">V1.1.3</span>
   <button id="btn-reload">重新加载</button>
   <button id="btn-save" class="primary">保存更改</button>
 </div>

@@ -6,6 +6,29 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.2.0 — the readability release
+
+Released 2026-09-14 · [release notes](docs/release-notes-1.2.0.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.0)
+
+This release is entirely about the interface being *correct*: text that was unreadable in the light theme,
+colours hardcoded to the dark one, and appearance settings that only applied once at startup.
+
+- **Light-theme text is readable again.** Message headings and bold text were a hardcoded `#f2f4f8` —
+  **1.1:1** on white. Code blocks were a hardcoded near-black. Links used the raw accent (**3.20:1**).
+  All of them now follow the theme; links measure **6.54:1**.
+- **A contrast gate now runs in the test suite.** `npm run e2e` walks every element in both themes and
+  fails below 4.5:1 (3:1 for large text and UI components, per WCAG 1.4.11). Building it found four real
+  defects — `.pi-tb-brand` 2.2:1, `empty-hint` 4.31:1, `pi-dock-meta` 3.50:1, `pi-git-del` 4.20:1 —
+  all fixed and re-verified at zero failures.
+- **Appearance changes apply live.** A theme, accent or size change after startup landed in a document
+  that ignored it, and the accent only ever applied on the first change. Both fixed.
+- **Answers start expanded**, with a Show less toggle, and the reply body is no longer a click target —
+  selecting text in it no longer collapses the block.
+- **Known issue, with measurements:** the font-size setting still does not resize chat text. See
+  [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) for the evidence and the next measurement to run.
+
+Installed copies self-update; the portable build needs a manual swap.
+
 A **Windows desktop client for the [pi](https://github.com/earendil-works/pi) coding agent** — the same chat UI
 as the `pi-agent-studio` VS Code extension, in a standalone Electron shell, with a built-in terminal, file
 browser, git panel, command palette, auto-update, and a Chinese/English interface.

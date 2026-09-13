@@ -7,6 +7,26 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 
+## 1.2.0 更新报告
+
+发布于 2026-09-14 · [完整发布说明](docs/release-notes-1.2.0.md) · [下载 1.2.0](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.0)
+
+这一版**只做界面的正确性**：浅色主题下读不清的字、写死的深色，以及只在启动时生效一次的外观设置。
+
+- **浅色主题读不清的问题修好了。** 消息标题与粗体曾是写死的 `#f2f4f8` —— 白底上只有 **1.1:1**；
+  代码块是写死的近黑；链接用的是原始强调色（**3.20:1**）。现在全部跟随主题，链接实测 **6.54:1**。
+- **测试里加了一条对比度门禁。** `npm run e2e` 会在浅色与深色下遍历每个元素，低于 4.5:1 即失败
+  （大字与 UI 组件按 WCAG 1.4.11 取 3:1）。做这条门禁的过程中它自己抓出四个真缺陷 ——
+  `.pi-tb-brand` 2.2:1、`empty-hint` 4.31:1、`pi-dock-meta` 3.50:1、`pi-git-del` 4.20:1 ——
+  全部修完并复验为 **0 失败**。
+- **外观改动现在实时生效。** 启动之后改主题、强调色或字号，过去会落在一个忽略它们的文档上；
+  强调色则只有第一次改动有效。两者都已修好。
+- **回答默认展开**，按钮为「收起」；正文不再是点击区，选中文字不会再折叠整段。
+- **已知问题（已实测定位，未修）**：字号设置仍不会改变聊天文字大小。证据与下一步该做的测量见
+  [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md)。
+
+安装版会自动更新；便携版需要手动换包。
+
 **把 `pi` 编码 agent 从终端搬进桌面。** 聊天 UI 是从
 [JohnnyZ93/pi-agent-studio](https://github.com/JohnnyZ93/pi-agent-studio)（VS Code 扩展，MIT）
 **原样剥离**、现在由本项目维护的（那份代码已归我们，可按需修改）；外面是独立的 Electron 外壳，重新实现原本由

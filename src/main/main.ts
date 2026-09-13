@@ -545,14 +545,30 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   // chatFontSize belongs here too: it is what --pi-fs-md is built from, so a size change
   // that does not broadcast leaves the slider writing a value nothing ever reads.
   if (partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) broadcastTheme();
-  // The settings document is generated per language; rebuild it on switch.
-  // The settings document bakes the tokens in at build time, so theme / accent / font size
-  // changes need the same rebuild the language switch already does — otherwise the window
-  // that offers these controls is the one place that never shows their effect.
+  // Appearance changes are applied to the settings window IN PLACE.
+  //
+  // This used to close and reopen the window, which looks equivalent and is not: the click
+  // that caused the change is still being handled in the window being torn down, and the
+  // window object the renderer still holds is destroyed. The next interaction then lands on
+  // a destroyed window — reported as "the second accent click does nothing until I leave the
+  // page and come back". The e2e pass caught the same defect as "Object has been destroyed".
   if ((partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) && settingsWindow && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-    settingsWindow = null;
-    openSettingsWindow();
+    const css = buildTokensCss(config.theme, config.accent, config.chatFontSize);
+    const accent = String(config.accent || "").toLowerCase();
+    const script =
+      "(function(){" +
+      "var el=document.getElementById('pi-heao-tokens');" +
+      "if(!el){el=document.createElement('style');el.id='pi-heao-tokens';document.head.appendChild(el);}" +
+      "el.textContent=" + JSON.stringify(css) + ";" +
+      "document.querySelectorAll('#theme-group [data-theme]').forEach(function(b){" +
+      "b.classList.toggle('active',b.getAttribute('data-theme')===" + JSON.stringify(config.theme) + ");});" +
+      "document.querySelectorAll('#accent-swatches .swatch').forEach(function(b){" +
+      "b.classList.toggle('active',String(b.getAttribute('data-accent')||'').toLowerCase()===" + JSON.stringify(accent) + ");});" +
+      "var fi=document.getElementById('cfg-chatFontSize');if(fi)fi.value=" + JSON.stringify(String(config.chatFontSize)) + ";" +
+      "})()";
+    void settingsWindow.webContents
+      .executeJavaScript(script)
+      .catch(() => { /* window may be closing; the next open renders from config */ });
   }
   if (partial.uiLanguage !== undefined && settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.close();

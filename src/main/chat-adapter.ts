@@ -141,6 +141,22 @@ const SHIM_SCRIPT = `
   function setupBridge() {
     if (window.pi && window.pi.onMessage) {
       window.pi.onMessage(function(data) {
+        // Nothing downstream applied a live theme. buildThemeCss() writes the tokens into
+        // <style id="pi-heao-tokens"> at window creation and its own comment says a live
+        // switch "only has to replace that one element" — but no code ever did, and pi-chat
+        // does not listen for theme messages either, so every appearance change after startup
+        // landed in a document that ignored it. The applier belongs here, next to the bridge
+        // that delivers the message: it runs before the page sees the event and replaces the
+        // element by the id the theme builder chose.
+        if (data && data.type === 'theme' && typeof data.css === 'string') {
+          var tokens = document.getElementById('pi-heao-tokens');
+          if (!tokens) {
+            tokens = document.createElement('style');
+            tokens.id = 'pi-heao-tokens';
+            document.head.appendChild(tokens);
+          }
+          tokens.textContent = data.css;
+        }
         window.dispatchEvent(new MessageEvent('message', { data: data }));
       });
       console.log("[pi-shim] bridge ready");

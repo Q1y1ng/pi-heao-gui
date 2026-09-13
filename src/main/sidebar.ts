@@ -508,6 +508,13 @@ export const SIDEBAR_SCRIPT = `
       el.classList.remove('is-empty');
       el.classList.add('is-loading');
     } else {
+      // Clearing has to wipe the text, not just the class. It used to only remove
+      // is-loading, so a finished load left "载入会话…" on screen forever — the spinner
+      // stopped but the sentence did not, which reads as a load that never completed.
+      // The real title arrives later from the sessionInfo/state messages and overwrites
+      // this; when no session is active an empty title is the honest state.
+      el.textContent = '';
+      el.classList.add('is-empty');
       el.classList.remove('is-loading');
     }
   }

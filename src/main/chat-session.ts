@@ -389,14 +389,18 @@ export async function createChatSession(opts: {
   }
 
   function handleExtUiRequest(req: ExtensionUiRequest) {
+    const id = String(req.id ?? "");
     if (
       req.method === "select" ||
       req.method === "confirm" ||
       req.method === "input" ||
       req.method === "editor"
     ) {
+      // Answered later, from the dialog, by the person using the app.
       post({ type: "dialog", request: req });
-    } else if (req.method === "setWidget") {
+      return;
+    }
+    if (req.method === "setWidget") {
       post({
         type: "widget",
         widgetKey: req.widgetKey,
@@ -411,12 +415,25 @@ export async function createChatSession(opts: {
         } catch (e) {
           warnBestEffort("mcp status parse", e);
         }
-        return;
+      } else {
+        const t = req.notifyType as string | undefined;
+        const kind = t === "error" ? "error" : t === "success" ? "success" : "info";
+        post({ type: "toast", text: message, kind });
       }
-      const t = req.notifyType as string | undefined;
-      const kind = t === "error" ? "error" : t === "success" ? "success" : "info";
-      post({ type: "toast", text: message, kind });
     }
+    // setStatus / setTitle / set_editor_text carry text for a host chrome this
+    // app does not have; it is accepted and answered rather than rendered.
+
+    // Answer every non-interactive request. pi's extension call does not resolve
+    // until the host replies, so a request the app merely displays — a widget, a
+    // notification, a status line — holds the agent loop open. A typical package
+    // set emits dozens per turn, and the visible symptom was a turn that stopped
+    // after its first tool call.
+    //
+    // The payload matters: respondExtensionUi turns a missing `value` into
+    // `cancelled`, so an empty object would answer "cancelled" to what is really
+    // an acknowledgement.
+    if (id) rpc.respondExtensionUi(id, { value: "" });
   }
 
   async function handleBuiltin(message: string): Promise<boolean> {

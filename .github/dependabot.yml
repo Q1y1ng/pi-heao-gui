@@ -1,0 +1,31 @@
+---
+version: 2
+
+# Nothing in CI watched the dependency tree. There are only five runtime
+# dependencies, but one of them is Electron, and this app is a shell around a
+# coding agent — an advisory that sits unnoticed for months is the normal way
+# that goes wrong.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      # Electron and the updater move together; review them as one change.
+      electron:
+        patterns: ["electron", "electron-builder", "electron-updater"]
+      # The dock's vendored UMD libraries are inlined into generated HTML, so a
+      # bump means regenerating and eyeballing the dock.
+      dock-vendor:
+        patterns: ["@xterm/*", "codemirror"]
+    ignore:
+      # node-pty ships N-API prebuilds consumed as-is; majors are a deliberate,
+      # tested migration rather than a monthly bump.
+      - dependency-name: node-pty
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

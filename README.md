@@ -219,6 +219,7 @@ npm run smoke           # 运行时冒烟：开真窗口断言安全边界
 npm run verify          # 真机 UI 功能断言（面板 / 命令面板 / 侧栏 / 终端 / 文件 / 变更 / diff）
 npm run measure-load    # 会话切换耗时归因（pi 解析 vs 渲染）
 npm run check:upstream  # 断言 vendor/upstream 与 pinned tag 字节一致（需联网）
+npm run check:package   # 断言打包产物（asar）含全部运行时依赖（需先 npm run dist）
 npm run shot            # 截图（拍本机现状，仅供人工核对，**不入库**）
 npm run shots           # 生成 README 配图：隔离沙箱 + 合成会话，输出到 docs/images/
 npm run typecheck       # tsc --noEmit

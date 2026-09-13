@@ -26,6 +26,7 @@
     "e2e:isolated": "electron scripts/e2e.cjs --isolated",
     "measure-load": "electron scripts/measure-load.cjs",
     "check:upstream": "node scripts/check-upstream.cjs",
+    "check:package": "node scripts/check-package.cjs",
     "dist:portable": "npm run build && electron-builder --win portable"
   },
   "devDependencies": {

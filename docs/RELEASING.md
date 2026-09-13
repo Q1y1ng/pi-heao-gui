@@ -60,32 +60,62 @@ checks from step 1.
 ## 4. Checksums
 
 ```bash
-certutil -hashfile "dist-electron/Pi Heao GUI Setup 1.0.0.exe" SHA256
-certutil -hashfile "dist-electron/Pi Heao GUI 1.0.0 Portable.exe" SHA256
+certutil -hashfile "dist-electron/Pi-Heao-GUI-Setup-<version>.exe" SHA256
+certutil -hashfile "dist-electron/Pi-Heao-GUI-<version>-Portable.exe" SHA256
+```
+
+产物名用**连字符**是有意的：GitHub 上传时会改写含空格的文件名（1.0.0 被改成了
+`Pi.Heao.GUI.Setup.1.0.0.exe`），而 `latest.yml` 里存的是构建时的名字，
+`electron-updater` 会因此去取一个不存在的 URL。上传前先对一遍：
+
+```bash
+node -e 'const fs=require("fs");
+  const url=/url:\s*(.+)/.exec(fs.readFileSync("dist-electron/latest.yml","utf8"))[1].trim();
+  console.log(url, fs.existsSync("dist-electron/"+url) ? "✓ 一致" : "✗ 不一致");'
 ```
 
 ## 5. Source tarball for the release
 
 A fresh clone cannot show a UI until `npm run build:renderer` runs (the 5.4 MB
-bundle is gitignored), so attach a tarball that already contains it:
+bundle is gitignored), so attach a tarball that already contains it. List the
+tracked files, then add that one bundle:
 
 ```bash
-git archive --format=zip -o pi-heao-gui-1.0.0-source.zip HEAD
-zip -r pi-heao-gui-1.0.0-source.zip vendor/upstream/pi-chat/dist vendor/upstream/pi-chat/node_modules
+git ls-files > /tmp/srcfiles.txt
+echo "vendor/upstream/pi-chat/dist/index.html" >> /tmp/srcfiles.txt
+tar -a -cf dist-electron/pi-heao-gui-<version>-source.zip -T /tmp/srcfiles.txt
+```
+
+Two approaches that do **not** work here, and why: `git archive` alone omits the
+ignored bundle, and PowerShell's `Compress-Archive` silently produced a 0.44 MB
+archive from the same tree (once it swallowed `node_modules`-style content and
+reached 1.1 GB). Check the result — expect roughly 7 MB and 140 entries:
+
+```bash
+ls -la dist-electron/pi-heao-gui-<version>-source.zip
+tar -tf dist-electron/pi-heao-gui-<version>-source.zip | wc -l
 ```
 
 ## 6. Publish
 
 ```bash
-git tag -a v1.0.0 -m "Pi Heao GUI 1.0.0"
+git tag -a v<version> -m "Pi Heao GUI <version>"
 git push origin main --tags
 
-gh release create v1.0.0 \
-  "dist-electron/Pi Heao GUI Setup 1.0.0.exe" \
-  "dist-electron/Pi Heao GUI 1.0.0 Portable.exe" \
+gh release create v<version> \
+  "dist-electron/Pi-Heao-GUI-Setup-<version>.exe" \
+  "dist-electron/Pi-Heao-GUI-<version>-Portable.exe" \
+  "dist-electron/pi-heao-gui-<version>-source.zip" \
   "dist-electron/latest.yml" \
-  pi-heao-gui-1.0.0-source.zip \
-  --title "Pi Heao GUI 1.0.0" --notes-file docs/release-notes-1.0.0.md
+  "dist-electron/SHA256SUMS.txt" \
+  --title "Pi Heao GUI <version>" --notes-file docs/release-notes-<version>.md
+```
+
+Then confirm the upload renamed nothing — the manifest and the asset name must
+match exactly, or auto-update breaks for every installed copy:
+
+```bash
+gh release view v<version> --json assets --jq '.assets[].name'
 ```
 
 Release notes must state the two things users will hit:

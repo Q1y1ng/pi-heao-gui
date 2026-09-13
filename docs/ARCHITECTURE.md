@@ -1,15 +1,14 @@
----
-feature: pi-standalone-gui
-status: delivered
-updated: 2026-06-10
-branch: main
-commits: fce6ac1..HEAD
----
+# 架构与实现笔记
 
-# Pi Standalone GUI
+本文记录这个项目是怎么搭起来的、为什么这么搭，以及一路上踩过的坑。
+它由早期一份交付记录整理而来，保留是因为其中的结论仍然有效。
 
-## Report
+- 面向使用者的说明：[`../README.md`](../README.md)
+- 发布流程：[`RELEASING.md`](RELEASING.md)
+- 与上游的对应关系：[`UPSTREAM.md`](UPSTREAM.md)
+- 保真度审计：[`FIDELITY.md`](FIDELITY.md)
 
+## 形态与关键决策
 **What was built** — 一个独立的 Electron 桌面应用，从 Pi Agent Studio VS Code 插件中剥离出完整的聊天体验。Main 进程 spawn `pi --mode rpc` 并通过 JSONL stdio 编排会话；Renderer 托管 vendored 的 `pi-chat` 单文件 HTML（通过 `acquireVsCodeApi` shim 桥接到 preload IPC）；左侧注入会话列表侧栏（高对比度暗色主题、会话名从 session_info 或首条用户消息提取）；独立设置窗口编辑本地配置与 pi agent 文件。bundled 扩展（todo/subagent/questionnaire/permission-gate/rewind/btw/mcp）全部挂载并正确打包进 asar。最终产出 Windows portable exe（约 100MB），双击即用，无需 VS Code。
 
 Review 修复：打包 `!**/*.ts` 误删 bridge 扩展（改为精确排除 src/docs）；pi 进程退出后会话锁死（改为可 reload 恢复）；侧栏 XSS（改用 textContent）；settings.json 写入加 JSON 校验；rewindDiff/toggleFavorite 补 handler；agents/*.md 被全局 md 排除误删（重新 include）。

@@ -95,7 +95,7 @@ pi agent 自身配置仍在 `~/.pi/agent/`（settings.json、models.json、auth.
 ## 架构
 
 ```text
-Pi Heao GUI V1.0 (Electron Main, Node.js)
+Pi Heao GUI (Electron Main, Node.js)
   ├─ spawn pi --mode rpc  (JSONL stdio)
   ├─ chat-session 编排
   ├─ IPC handlers
@@ -188,11 +188,24 @@ unset ELECTRON_RUN_AS_NODE       # bash / git-bash
 | 会话侧栏 | ✓ | ✓（分组 / 归档 / 键盘导航为额外增强） |
 | 设置面板 | ✓ | ✓ |
 | 诊断 / LSP / 符号 | ✓ | ✗（依赖 VS Code 语言服务，不可剥离） |
-| 更新日志查看 | ✓ | ✗（尚未移植） |
-| OAuth 登录流程 | ✓（`models/oauth-flow.ts`） | ✗（仅 provider 就绪检查；新登录请在 pi CLI 完成） |
+| 更新日志查看 | ✓ | ✓（设置窗“更新日志”标签页） |
+| OAuth 登录流程 | ✓（`models/oauth-flow.ts`） | ✓（在内置终端里跑 pi 自己的 `/login`） |
 | 资源占用 | VS Code 全家桶（同机实测 15 进程 / 2.3 GB） | 4 进程外壳 + pi 子进程（≈ 795 MB） |
 
 完整审计（符号级保留率、为什么外壳必须重写、未移植清单）见 **[docs/FIDELITY.md](docs/FIDELITY.md)**。
+
+## 文档
+
+全量索引在 **[docs/README.md](docs/README.md)**；常看的几份：
+
+| 文档 | 内容 |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 形态与关键决策、踩过的坑 |
+| [docs/UPSTREAM.md](docs/UPSTREAM.md) | vendored 上游的固定版本与刷新流程 |
+| [docs/FIDELITY.md](docs/FIDELITY.md) | 与原插件的保真度审计 |
+| [docs/RELEASING.md](docs/RELEASING.md) | 发布、校验和、签名、更新清单 |
+| [CHANGELOG.md](CHANGELOG.md) | 全部版本的变更记录 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 开发流程与五条硬规则 |
 
 ## License
 

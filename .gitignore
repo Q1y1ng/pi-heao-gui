@@ -21,3 +21,9 @@ docs/screenshots/
 
 # Release-only artifacts: attached to a GitHub Release, never committed.
 pi-heao-gui-*-source.zip
+
+# scratch files — never commit these (a `git add -A` swept some in once)
+_*
+scripts/_*
+*.local
+!._*

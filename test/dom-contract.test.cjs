@@ -52,7 +52,9 @@ const OUR_HOOKS = [
   "pi-git-branch",
 ];
 
-test("the UI bundle exists (the rest of this file is meaningless without it)", { skip: !hasUi }, () => {
+test("the UI bundle exists (the rest of this file is meaningless without it)", {
+  skip: !hasUi,
+}, () => {
   assert.ok(html, "buildChatHtml returned null even though the bundle is present");
 });
 

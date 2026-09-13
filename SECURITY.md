@@ -30,6 +30,13 @@ All windows run with `sandbox: true`, `contextIsolation: true`,
 the upstream pi-chat bundle rendered with `markdown-it({ html: false })`; raw HTML
 in model output is not executed.
 
+The CSP does carry `script-src 'unsafe-inline'`, because the page's own scripts are
+inlined into the document. That stops remote loads, but it is *not* a second line
+of defence against injection: every place that builds HTML passes
+attacker-influenced values through a local `esc()`, and file paths are resolved —
+following symlinks and junctions — before they are used. Giving each injected
+script a nonce or hash is not implemented yet.
+
 Outbound network traffic comes from the agent (model calls) and from
 `pi install` / `pi auth` when you ask for them. The shell itself makes no
 requests and collects no telemetry.
@@ -39,7 +46,7 @@ requests and collects no telemetry.
 Please open a private security advisory on the repository (Security → Report a
 vulnerability) rather than a public issue, and include:
 
-- affected version (the About dialog shows `Pi Heao GUI V1.0`),
+- affected version (the settings window shows it next to the title),
 - reproduction steps or a proof of concept,
 - whether it requires a malicious model response, a malicious workspace, or only
   local access.

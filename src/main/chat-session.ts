@@ -14,6 +14,7 @@ import {
 import type { StandaloneConfig } from "../shared/types";
 import { getRealBridgeDir } from "./bridge-extract";
 import { StatsCollector, type UsageLike, type StatsSnapshot } from "./stats";
+import type { StoredSessionStats } from "./stats-store";
 import { log, errText } from "./log";
 
 // ─── Builtin commands (from upstream builtin-commands.ts) ─────────────
@@ -130,23 +131,38 @@ export function buildExtensionArgs(appPath: string, config: StandaloneConfig): s
     "rewind-code.ts",
   ];
   const args: string[] = [];
+  const missing: string[] = [];
   for (const ext of extensions) {
     const p = join(bridgeDir, ext);
     if (existsSync(p)) {
       args.push("-e", p);
+    } else {
+      missing.push(ext);
     }
   }
   // subagent directory
   const subagentDir = join(bridgeDir, "subagent");
   if (existsSync(join(subagentDir, "index.ts"))) {
     args.push("-e", join(subagentDir, "index.ts"));
+  } else {
+    missing.push("subagent/index.ts");
   }
   // mcp
   if (config.mcpEnabled) {
     const mcpPath = join(bridgeDir, "mcp", "index.js");
     if (existsSync(mcpPath)) {
       args.push("-e", mcpPath);
+    } else {
+      missing.push("mcp/index.js");
     }
+  }
+  if (missing.length) {
+    // Degrading silently is the wrong failure mode: a build that lost the bridge
+    // directory would run without todo, permission-gate or rewind and never say
+    // so. Say so.
+    console.error(
+      `[pi-heao] 扩展未挂载: ${missing.join(", ")}（bridge 目录: ${bridgeDir}）—— 相关功能将不可用`,
+    );
   }
   return args;
 }
@@ -172,8 +188,8 @@ export function buildEnv(config: StandaloneConfig, appPath: string): Record<stri
 export interface ChatSessionHost {
   postToRenderer(msg: unknown): void;
   /** Persist per-session telemetry (turns + per-day spend). */
-  saveStats?(sessionFile: string | undefined, data: unknown): void;
-  loadStats?(sessionFile: string): unknown;
+  saveStats?(sessionFile: string | undefined, data: StoredSessionStats): void;
+  loadStats?(sessionFile: string): StoredSessionStats | undefined;
   /** Toggle a favourite model; returns the updated list as "provider/modelId". */
   toggleFavorite?(provider: string, modelId: string): string[];
   /** Favourite models, used to seed the model picker after a restart. */

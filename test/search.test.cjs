@@ -11,7 +11,7 @@ const { searchSessions, orderByRecency } = require("../dist/main/search.js");
 function sessionFile(name, entries) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-search-"));
   const file = path.join(dir, `${name}.jsonl`);
-  fs.writeFileSync(file, entries.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf8");
+  fs.writeFileSync(file, `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`, "utf8");
   return file;
 }
 
@@ -92,11 +92,11 @@ test("ignores non-message entries and malformed lines", async () => {
   const file = path.join(dir, "e.jsonl");
   fs.writeFileSync(
     file,
-    [
+    `${[
       JSON.stringify({ type: "session", id: "s", needle: "not a message" }),
       "this is not json at all but mentions needle",
       JSON.stringify(userMsg("real needle here", "2026-01-04T10:00:00.000Z")),
-    ].join("\n") + "\n",
+    ].join("\n")}\n`,
     "utf8",
   );
   const hits = await searchSessions({ files: [file], nameOf: () => "e", query: "needle" });

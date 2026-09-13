@@ -56,7 +56,7 @@ test("hostile config strings cannot break out of the document", { skip: !hasUi }
 
   const hostile = build({
     args: [payload],
-    workspaceRoot: "C:\\w" + payload,
+    workspaceRoot: `C:\\w${payload}`,
     env: { EVIL: payload },
   });
 

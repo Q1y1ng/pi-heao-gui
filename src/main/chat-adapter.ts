@@ -91,7 +91,7 @@ function vendorAssets(): { js: string; css: string } {
     }
   };
   const wrap = (tag: string, src: string): string =>
-    "<" + tag + ">" + NL + src + NL + "</" + tag + ">";
+    `<${tag}>${NL}${src}${NL}</${tag}>`;
   const js = VENDOR_JS.map(read)
     .filter((src) => src.length > 0)
     .map((src) => wrap("script", src))

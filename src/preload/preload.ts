@@ -125,6 +125,16 @@ const forwardChannels = [
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;
+let termDataListener: ((msg: { data?: string }) => void) | null = null;
+let termExitListener: ((msg: { code?: number }) => void) | null = null;
+let loginRequestListener: ((msg: { provider?: string }) => void) | null = null;
+
+// The dock re-initialises on every terminal restart, and `ipcRenderer.on`
+// appends. Storing the handler and registering the channel once avoids stacking
+// a fresh listener per restart for the life of the window.
+ipcRenderer.on("pi:term-data", (_e, data) => termDataListener?.(data));
+ipcRenderer.on("pi:term-exit", (_e, data) => termExitListener?.(data));
+ipcRenderer.on("pi:login-request", (_e, data) => loginRequestListener?.(data));
 
 // Set up forwarding: all main->renderer messages go to the single listener
 for (const ch of forwardChannels) {
@@ -167,14 +177,14 @@ contextBridge.exposeInMainWorld("pi", {
    * additive and invisible to upstream code.
    */
   onTermData(fn: (msg: { data?: string }) => void) {
-    ipcRenderer.on("pi:term-data", (_e, data) => fn(data));
+    termDataListener = fn;
   },
   onTermExit(fn: (msg: { code?: number }) => void) {
-    ipcRenderer.on("pi:term-exit", (_e, data) => fn(data));
+    termExitListener = fn;
   },
   /** Settings asks the chat window to start a provider login in its terminal. */
   onLoginRequest(fn: (msg: { provider?: string }) => void) {
-    ipcRenderer.on("pi:login-request", (_e, data) => fn(data));
+    loginRequestListener = fn;
   },
   invoke(channel: string, ...args: unknown[]): Promise<unknown> {
     if (!INVOKE_ALLOWED.has(channel)) {

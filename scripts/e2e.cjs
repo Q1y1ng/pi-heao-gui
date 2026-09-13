@@ -136,7 +136,7 @@ app.on("web-contents-created", (_e, wc) => {
   });
   wc.on("render-process-gone", (_ev, details) => crashed.push(details.reason));
   wc.on("preload-error", (_ev, preloadPath, error) => {
-    rendererErrors.push(`preload ${preloadPath}: ${error && error.message}`);
+    rendererErrors.push(`preload ${preloadPath}: ${error?.message}`);
   });
 });
 
@@ -181,7 +181,7 @@ async function section(title, fn) {
   try {
     await fn();
   } catch (e) {
-    check(`${title} (section completed)`, false, e && e.message);
+    check(`${title} (section completed)`, false, e?.message);
   }
 }
 

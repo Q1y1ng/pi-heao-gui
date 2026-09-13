@@ -144,7 +144,7 @@ export function createTerminal(opts: TerminalOptions): TerminalResult {
       command = resolveExecutable(target.command);
       args = target.args;
     } catch (e) {
-      return { ok: false, error: "无法解析 pi 可执行文件: " + errText(e) };
+      return { ok: false, error: `无法解析 pi 可执行文件: ${errText(e)}` };
     }
   } else {
     const shell = shellCommand();
@@ -165,7 +165,7 @@ export function createTerminal(opts: TerminalOptions): TerminalResult {
     });
   } catch (e) {
     log.error("terminal spawn failed:", errText(e));
-    return { ok: false, error: "PTY 启动失败: " + errText(e) };
+    return { ok: false, error: `PTY 启动失败: ${errText(e)}` };
   }
 
   proc.onData((data) => {

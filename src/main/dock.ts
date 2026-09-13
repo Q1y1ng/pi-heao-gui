@@ -309,6 +309,12 @@ export const DOCK_SCRIPT = `
     return cm;
   }
 
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function (c) {
+      return c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;';
+    });
+  }
+
   function modeFor(name) {
     if (/\\.(ts|tsx)$/.test(name)) return 'text/typescript';
     if (/\\.(js|jsx|mjs|cjs)$/.test(name)) return 'text/javascript';
@@ -329,10 +335,10 @@ export const DOCK_SCRIPT = `
     var res = await window.pi.invoke('pi:fs-tree', treePath);
     var list = document.getElementById('pi-files-list');
     document.getElementById('pi-files-path').textContent = treePath;
-    if (!res || !res.ok) { list.innerHTML = '<div class="pi-git-hint">' + ((res && res.error) || '读取失败') + '</div>'; return; }
+    if (!res || !res.ok) { list.innerHTML = '<div class="pi-git-hint">' + esc((res && res.error) || '读取失败') + '</div>'; return; }
     var rows = (res.items || []).map(function (it) {
-      return '<div class="pi-files-row" data-path="' + it.path + '" data-dir="' + (it.dir ? '1' : '0') + '">' +
-        '<span class="pi-files-icon">' + (it.dir ? '▸' : '·') + '</span><span>' + it.name + '</span></div>';
+      return '<div class="pi-files-row" data-path="' + esc(it.path) + '" data-dir="' + (it.dir ? '1' : '0') + '">' +
+        '<span class="pi-files-icon">' + (it.dir ? '▸' : '·') + '</span><span>' + esc(it.name) + '</span></div>';
     });
     list.innerHTML = rows.join('') || '<div class="pi-git-hint">空目录</div>';
   }
@@ -380,7 +386,7 @@ export const DOCK_SCRIPT = `
   function gitRows(items, sign) {
     return (items || []).map(function (f) {
       return '<div class="pi-git-file"><span class="' + (sign === '+' ? 'pi-git-add' : 'pi-git-del') + '">' +
-        (sign === '+' ? '+' + f.added : '-' + f.removed) + '</span><span class="pi-git-path">' + f.path + '</span></div>';
+        (sign === '+' ? '+' + f.added : '-' + f.removed) + '</span><span class="pi-git-path">' + esc(f.path) + '</span></div>';
     }).join('');
   }
 

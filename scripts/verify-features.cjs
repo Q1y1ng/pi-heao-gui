@@ -318,7 +318,7 @@ app.whenReady().then(async () => {
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);
   } catch (e) {
-    console.error("verify failed:", e && e.stack ? e.stack : e);
+    console.error("verify failed:", e?.stack ? e.stack : e);
     app.exit(2);
   }
 });

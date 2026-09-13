@@ -265,7 +265,16 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 - **API Key 掩码**：`auth.json` 永远不以明文回传渲染层；表单里显示的 `••••` 表示"保持不变"，
   写回时由主进程还原真实值。
 - **CSP**：聊天页与设置页都带 `default-src 'none'` 起手的 CSP（无远端脚本、无远端请求）。
-- **`shell.openPath` 白名单**：拒绝 `.exe/.bat/.cmd/.ps1/.vbs/.lnk/.js/…` 等可执行类型与 UNC/设备路径。
+  **已知取舍**：脚本是内联注入的，策略里带 `script-src 'unsafe-inline'`，因此 CSP 只防外联、
+  不单独承担防 XSS —— 注入点靠拼接处逐一转义（`sidebar` / `dock` / `palette` / `settings` 各自
+  有 `esc()`），而不是靠策略兜底。改用 nonce/hash 需要给每个注入脚本在运行时算哈希，
+  尚未做。
+- **工作区约束**：文件面板只接受相对路径，且**解析真实路径后**（跟随 symlink/junction）
+  必须仍在工作区内 —— 否则返回“路径无效”。无法验证时**拒绝**而不是放行。
+  代价是：工作区里指向外部的软链不会在文件树里显示。
+- **`shell.openPath` 黑名单**：先做路径归一化（去掉 Windows 会静默吃掉的尾随点/空格，
+  否则 `evil.exe.` 能绕过 `extname` 检查），再拒绝
+  `.exe/.bat/.cmd/.ps1/.vbs/.lnk/.js/…` 等可执行类型与 UNC/设备路径。
 - **子进程**：Windows 下的 `pi.cmd` 会被解析成 `node cli.js` 直接 spawn，参数不经过 `cmd.exe`
   （否则 `&` 就是命令注入）。
 - **单实例锁**：避免两个实例并发写配置或抢同一会话文件。

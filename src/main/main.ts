@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu } from "electron";
-import { join, sep, basename, dirname, resolve, relative, isAbsolute } from "node:path";
+import { join, sep, basename, dirname } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
   existsSync,
@@ -24,6 +24,7 @@ import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
+import { safeWorkspacePath } from "./fs-path";
 import {
   createChatSession,
   type ChatSession,
@@ -44,7 +45,7 @@ import {
   listArchived,
 } from "./session-ops";
 import { searchSessions, orderByRecency } from "./search";
-import { createStatsStore, type StatsStore } from "./stats-store";
+import { createStatsStore, type StatsStore, type StoredSessionStats } from "./stats-store";
 import { openDiffWindow } from "./diff-window";
 import {
   runPiCli,
@@ -345,7 +346,11 @@ async function createWindow(): Promise<void> {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // This window renders untrusted agent output, so it is the last window that
+      // should run unsandboxed. `node scripts/probe-preload-sandbox.cjs` confirms
+      // the sandboxed preload still reaches webUtils.getPathForFile, so
+      // drag-and-drop keeps working — the sandbox costs nothing here.
+      sandbox: true,
     },
   });
 
@@ -422,7 +427,7 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
         cwd: config.workspaceRoot || homedir(),
         host: {
           postToRenderer: (msg) => postToWindow(win, msg),
-          saveStats: (sessionFile, data) => getStatsStore().save(sessionFile, data as never),
+          saveStats: (sessionFile, data) => getStatsStore().save(sessionFile, data),
           loadStats: (sessionFile) => getStatsStore().load(sessionFile),
           toggleFavorite: (provider, modelId) => {
             const key = `${provider}/${modelId}`;
@@ -471,8 +476,8 @@ function getStatsStore(): StatsStore {
 /** Host callbacks shared by every chat session (telemetry persistence). */
 function sessionHost(win: BrowserWindow): {
   postToRenderer: (msg: unknown) => void;
-  saveStats: (sessionFile: string | undefined, data: unknown) => void;
-  loadStats: (sessionFile: string) => unknown;
+  saveStats: (sessionFile: string | undefined, data: StoredSessionStats) => void;
+  loadStats: (sessionFile: string) => StoredSessionStats | undefined;
   toggleFavorite: (provider: string, modelId: string) => string[];
   getFavorites: () => string[];
 } {
@@ -494,7 +499,7 @@ function sessionHost(win: BrowserWindow): {
       postToWindow(win, msg);
     },
     saveStats: (sessionFile, data) => {
-      getStatsStore().save(sessionFile, data as never);
+      getStatsStore().save(sessionFile, data);
     },
     loadStats: (sessionFile) => getStatsStore().load(sessionFile),
     toggleFavorite: (provider, modelId) => {
@@ -1094,16 +1099,6 @@ function workspaceRootDir(): string {
   return config.workspaceRoot || homedir();
 }
 
-function safeWorkspacePath(relPath: string): string | null {
-  const root = workspaceRootDir();
-  const raw = String(relPath || ".");
-  if (isAbsolute(raw)) return null; // the panel works in relative paths only
-  const full = resolve(root, raw);
-  const within = relative(root, full);
-  if (within.startsWith("..") || isAbsolute(within)) return null;
-  return full;
-}
-
 const FS_SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -1120,7 +1115,7 @@ const FS_SKIP_DIRS = new Set([
 
 ipcMain.handle("pi:fs-tree", async (_e, relPath: string) => {
   const root = String(relPath || ".");
-  const dir = safeWorkspacePath(root);
+  const dir = safeWorkspacePath(workspaceRootDir(), root);
   if (!dir) return { ok: false, error: "路径无效" };
   try {
     const entries = await readdirAsync(dir, { withFileTypes: true });
@@ -1140,7 +1135,7 @@ ipcMain.handle("pi:fs-tree", async (_e, relPath: string) => {
 });
 
 ipcMain.handle("pi:fs-read", async (_e, relPath: string) => {
-  const full = safeWorkspacePath(relPath);
+  const full = safeWorkspacePath(workspaceRootDir(), relPath);
   if (!full) return { ok: false, error: "路径无效" };
   try {
     const st = await stat(full);
@@ -1153,7 +1148,7 @@ ipcMain.handle("pi:fs-read", async (_e, relPath: string) => {
 });
 
 ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string }) => {
-  const full = safeWorkspacePath(String(msg?.path || ""));
+  const full = safeWorkspacePath(workspaceRootDir(), String(msg?.path || ""));
   if (!full) return { ok: false, error: "路径无效" };
   const content = String(msg?.content ?? "");
   if (content.length > 4 * 1024 * 1024) return { ok: false, error: "内容过大（上限 4 MB）" };

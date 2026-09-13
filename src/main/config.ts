@@ -221,13 +221,26 @@ export type OpenCheck = { ok: true; path: string } | { ok: false; error: string 
  * caller does the actual shell call (and logs the rejection).
  */
 export function checkOpenPath(raw: string, workspaceRoot: string): OpenCheck {
-  let p = String(raw ?? "");
+  const p = String(raw ?? "");
   if (!p) return { ok: false, error: "empty path" };
   // UNC (\\host\share) and device paths (\\.\, \\?\) — network / device access
   if (p.startsWith("\\\\") || p.startsWith("//"))
     return { ok: false, error: "UNC/device path blocked" };
-  if (!isAbsolute(p) && workspaceRoot) p = resolve(workspaceRoot, p);
-  const ext = extname(p).toLowerCase();
+
+  // Windows drops trailing dots and spaces when it resolves a name, so
+  // "evil.exe." and "evil.exe " have to be judged as "evil.exe". Judging the
+  // raw string instead is how a blocklist gets walked around: extname("x.exe.")
+  // is ".", which matches nothing.
+  const normalized = p.replace(/[ .]+$/, "");
+  if (!normalized) return { ok: false, error: "empty path" };
+  let full = normalized;
+  if (!isAbsolute(full) && workspaceRoot) full = resolve(workspaceRoot, full);
+
+  const ext = extname(full).toLowerCase();
   if (UNSAFE_OPEN_EXT.has(ext)) return { ok: false, error: `executable type blocked: ${ext}` };
-  return { ok: true, path: p };
+  // A name whose extension existed only before normalization ("payload.") is
+  // refused rather than guessed at; genuinely extension-less files ("Makefile",
+  // ".gitignore") still pass.
+  if (!ext && extname(normalized) !== "") return { ok: false, error: "suspicious filename" };
+  return { ok: true, path: full };
 }

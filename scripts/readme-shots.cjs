@@ -110,7 +110,7 @@ try {
     "utf8",
   );
 } catch (e) {
-  console.warn("demo git setup skipped:", e && e.message);
+  console.warn("demo git setup skipped:", e?.message);
 }
 
 const agentDir = path.join(SANDBOX, ".pi", "agent");

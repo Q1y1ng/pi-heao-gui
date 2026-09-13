@@ -89,7 +89,7 @@ app.whenReady().then(async () => {
     for (const m of metrics) console.log(`[load] renderer rss=${(m.memory.workingSetSize / 1024).toFixed(0)} MB`);
     app.exit(0);
   } catch (e) {
-    console.error("measure failed:", e && e.stack ? e.stack : e);
+    console.error("measure failed:", e?.stack ? e.stack : e);
     app.exit(1);
   }
 });

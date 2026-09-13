@@ -24,7 +24,7 @@ function tmpSessions() {
   const file = path.join(dir, "2026-01-01T00-00-00.jsonl");
   fs.writeFileSync(
     file,
-    [
+    `${[
       JSON.stringify({ type: "session", id: "sess-1", timestamp: "2026-01-01T00:00:00.000Z" }),
       JSON.stringify({
         type: "message",
@@ -33,7 +33,7 @@ function tmpSessions() {
         timestamp: "2026-01-01T00:00:01.000Z",
         message: { role: "user", content: "hello" },
       }),
-    ].join("\n") + "\n",
+    ].join("\n")}\n`,
     "utf8",
   );
   return { root, dir, file };

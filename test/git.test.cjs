@@ -33,7 +33,7 @@ test("every file survives a truncation, not just the first", () => {
 });
 
 test("preamble before the first diff header is preserved", () => {
-  const diff = "'git diff --cached' Output:\n" + fileDiff("x.ts", 4000) + fileDiff("y.ts", 4000);
+  const diff = `'git diff --cached' Output:\n${fileDiff("x.ts", 4000)}${fileDiff("y.ts", 4000)}`;
   const out = truncateDiffByFile(diff, 2000);
   assert.ok(out.startsWith("'git diff --cached' Output:"));
 });

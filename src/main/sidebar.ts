@@ -894,9 +894,11 @@ export const SIDEBAR_SCRIPT = `
       window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file }).then(function() {
         switching = false;
         currentFile = file;
+        setTitleLoading('');   // 这条路径此前成功、失败都不复位，标题就永久停在“载入会话…”
         requestSessions();
       }).catch(function(err) {
         switching = false;
+        setTitleLoading('');
         showToast('切换出错: ' + ((err && err.message) || err));
       });
     });

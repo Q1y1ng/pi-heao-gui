@@ -233,16 +233,20 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 
 **测试与 CI**
 
-- `npm test` 覆盖配置校验、密钥掩码往返、`openPath` 白名单、Windows shim 解析（含 `&` 注入回归）、
+- `npm test` 覆盖配置校验、密钥掩码往返、`shell.openPath` 扩展名黑名单（含尾随点/空格
+  归一化）、**工作区路径逃逸（符号链接 / junction）**、Windows shim 解析（含 `&` 注入回归）、
   会话列表缓存、生成 HTML 的 CSP 与注入转义、注入脚本能否解析、生成页面的**重复 id 审计**、
   preload 通道覆盖、i18n 完整性、更新状态机。
 - `npm run e2e` / `npm run e2e:isolated` 打开**每个窗口与面板**并断言点击后的真实变化
   （不是元素存在），**任何渲染进程报错都判定失败**；隔离模式把 HOME/APPDATA 指向临时目录，
   破坏性操作用的是沙箱内的副本。
-- `.github/workflows/ci.yml`：`lint + typecheck + test` 与 `upstream`（vendored 字节保真）为
-  **阻断**作业，`smoke` 为咨询作业。
-- `npm run check:upstream` 是"聊天 UI 就是原版"这句承诺的守卫：它稀疏克隆 pinned tag 并与
+- `.github/workflows/ci.yml`：`lint + typecheck + test`、`upstream`（vendored 字节保真）与
+  `package`（打包产物含全部运行时依赖）为**阻断**作业，`smoke` 为咨询作业；依赖审计为
+  咨询步骤，另有 Dependabot 分组跟进依赖。
+- `npm run check:upstream` 是“聊天 UI 就是原版”这句承诺的守卫：它稀疏克隆 pinned tag 并与
   `vendor/upstream/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
+- `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
+  路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
 
 ## 故障排查
 

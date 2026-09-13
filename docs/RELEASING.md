@@ -45,9 +45,10 @@ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-
 ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm run dist
 ```
 
-Inspect the package once (native module unpacked, no sources):
+Inspect the package once (every runtime dependency present, no sources):
 
 ```bash
+npm run check:package
 ls dist-electron
 find dist-electron/win-unpacked/resources/app.asar.unpacked -name "*.node"
 node -e 'const b=require("fs").readFileSync("dist-electron/win-unpacked/resources/app.asar");

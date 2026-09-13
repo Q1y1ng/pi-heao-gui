@@ -30,6 +30,7 @@ npm test                  # node:test against dist/ (no network)
 npm run smoke             # boots a real window, 22 assertions
 npm run verify            # 33 DOM assertions incl. the terminal and dock
 npm run check:upstream    # vendor/upstream still byte-identical to the pin
+npm run check:package     # a packaged build (npm run dist) ships every runtime file
 ```
 
 `npm run verify`, `npm run smoke` and `npm run shot` launch Electron. If your

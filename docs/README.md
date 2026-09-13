@@ -7,7 +7,7 @@
 | [`UPSTREAM.md`](UPSTREAM.md) | `vendor/upstream/` 的固定版本与校验 | 确认上游对应关系，或刷新 vendored 代码 |
 | [`FIDELITY.md`](FIDELITY.md) | 与原 VS Code 插件的保真度审计（含资源占用对比） | 想知道“和原版差多少、少了什么” |
 | [`RELEASING.md`](RELEASING.md) | 发布流程、校验和、源码包、代码签名、更新清单 | 准备发版 |
-| [`release-notes-1.1.0.md`](release-notes-1.1.0.md) | 当前版本的发布说明（即 Release 正文） | 写 Release，或回答“这版改了什么” |
+| [`release-notes-<version>.md`](release-notes-1.1.1.md) | 各版本的发布说明（即 Release 正文） | 写 Release，或回答“这版改了什么” |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | 全部版本的变更记录 | 查某个行为是哪一版改的 |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | 开发流程、架构速览与五条硬规则 | 提 PR 之前 |
 | [`../SECURITY.md`](../SECURITY.md) | 安全模型与漏洞报告方式 | 评估风险 |

@@ -346,7 +346,11 @@ app.whenReady().then(async () => {
       true,
     );
     check("paste inserts the text", paste.ok && paste.inserted === true, JSON.stringify(paste));
-    check("Ctrl+Z takes the paste back in one step", paste.restored === true, JSON.stringify(paste));
+    check(
+      "Ctrl+Z takes the paste back in one step",
+      paste.restored === true,
+      JSON.stringify(paste),
+    );
 
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);

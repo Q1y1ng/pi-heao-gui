@@ -11,6 +11,10 @@
 VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / 设置界面，并补上原版没有的遥测、
 命令面板、自动更新与中英界面。
 
+同类工具各有各的路线：`pivot-ui` 是浏览器工作区、`pi-gui` 另起了一套 Codex 风格的桌面 UI、
+`pi-harness` 面向无头运行与运行时监控；**本项目的取舍只有一个 —— 把上游那份 UI 原样搬进
+Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同类项目的区别」。
+
 **[下载最新版](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)** ·
 [保真度审计](docs/FIDELITY.md)（上游聊天层保留 143/253 个符号） ·
 [文档索引](docs/README.md) · [变更记录](CHANGELOG.md)
@@ -98,6 +102,36 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
   设置 → 诊断 → 版本与更新 手动检查并一键重启安装（源码运行时不检查；
   `autoCheckUpdates: false` 可关闭）。**便携版不支持自更新**，需手动换包
 - bundled 扩展：todo、subagent、questionnaire、permission-gate、rewind-code、btw、mcp
+
+## 与同类项目的区别
+
+同类项目不止一个，形态各不相同。下表按各家仓库与包的自述归纳（细节以它们自己的文档为准）：
+
+| 项目 | 形态 | 它解决的是什么 |
+| --- | --- | --- |
+| **本项目** | Windows 桌面应用，聊天层为 vendored 上游 UI | 不做新界面：聊天层与 VS Code 插件逐字节等同，`npm run check:upstream` 守这条线 |
+| [pivot-ui](https://github.com/sincw/pivot-ui) | 浏览器工作区（本机起服务） | 一台机器跑、多设备访问（含手机）；界面自成一套 |
+| [pi-gui](https://www.pi-gui.com/) | 另一套桌面 UI（Electron，Codex 风格） | 会话时间线、每线程 git worktree、多 agent 编排；发布面向 macOS / Linux |
+| `pi-harness` 类（[npm](https://www.npmjs.com/package/pi-harness) / [runtime 包](https://pi.dev/packages/pi-harness-runtime)） | 无头服务与运行时监控 | 把 pi 跑成后台服务、做用量统计与任务编排；本身不是给人看会话的界面 |
+
+一句话：**要「和我熟悉的界面一模一样，只是不再需要 VS Code」，选这个；要另一种形态的工作区
+（浏览器 / 服务端 / 多 agent 工位），那几类更对口。**
+
+### 谁适合用
+
+- 你在终端里用 pi，想要一个 **Windows 桌面窗口**，但不想重新适应一套新界面。
+- 你在意与 VS Code 插件**行为一致**：`@file`、Mermaid / KaTeX、diff 窗口、权限门、`/login` 流程都在。
+- 你需要 Windows 安装包 / 便携版、托盘、桌面通知、自动更新、中英界面。
+- 你想让聊天、真终端、文件编辑、git 提交在**同一个窗口**里完成。
+
+### 谁不适合用
+
+- 你想在**手机或平板**上使用 —— 浏览器路线（[pivot-ui](https://github.com/sincw/pivot-ui)）更合适。
+- 你要的是**无头 / 常驻服务**，或把 pi 当作别的前端的后端。
+- 你主要在 **macOS / Linux** 上工作 —— 本项目只发布 Windows 包（外壳是 Electron，
+  但没有为其他平台做过适配与测试）。
+- 你需要 **LSP / 诊断 / 符号跳转** —— 那来自 VS Code 的语言服务，剥离后不再具备。
+- 你**不想安装 Node 与 pi CLI** —— 本应用是外壳，不自带 agent 运行时。
 
 ## 前置要求
 

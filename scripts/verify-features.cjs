@@ -67,7 +67,7 @@ app.whenReady().then(async () => {
          const kv = document.querySelectorAll('#pi-stats-totals .pi-kv-row').length;
          const table = !!document.querySelector('#pi-stats-turns');
          const tps = document.getElementById('pi-stat-tps').textContent;
-         const hit = document.getElementById('pi-stat-cache').textContent;
+         const hit = document.getElementById('pi-stat-modal-cache').textContent;
          const raw = await window.pi.invoke('pi:get-stats');
          return { missing: false, visible: !modal.hidden, cards, kv, table, tps, hit, aggregate: !!(raw && raw.aggregate && typeof raw.aggregate.turns === 'number') };
        })()`,

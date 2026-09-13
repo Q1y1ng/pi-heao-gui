@@ -15,7 +15,14 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DEFAULT_ASAR = path.join(__dirname, "..", "dist-electron", "win-unpacked", "resources", "app.asar");
+const DEFAULT_ASAR = path.join(
+  __dirname,
+  "..",
+  "dist-electron",
+  "win-unpacked",
+  "resources",
+  "app.asar",
+);
 
 /** Read the file list out of an asar archive's JSON header. */
 function listAsar(asarPath) {

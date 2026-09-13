@@ -9,7 +9,7 @@ npm ci
 npm run build:renderer     # needed on a fresh clone: the UI bundle is gitignored
 npm run lint
 npm run typecheck
-npm test                   # 96 unit tests
+npm test                   # 125 unit tests
 npm run smoke              # 22 checks, boots a real window
 npm run verify             # 33 checks, includes terminal + dock
 npm run check:upstream     # vendor/upstream still byte-identical to the pin
@@ -26,9 +26,10 @@ Also confirm by hand, in a real window:
 ## 2. Version and notes
 
 - `package.json` → `version`.
-- Version strings live in `src/main/{chat-adapter,settings-window,tray,main}.ts`
-  (`V1.0`), `README.md`, `SECURITY.md`. Grep before you tag:
-  `grep -rn "V1\.0" src README.md SECURITY.md`.
+- Version strings live in `src/main/{chat-adapter,settings-window,tray,main}.ts` —
+  nine occurrences; grep for them rather than for a literal version, so this line
+  cannot go stale:
+  `grep -rn "Pi Heao GUI V" src/main/*.ts`
 - Add a `CHANGELOG.md` section for the new version.
 
 ## 3. Build the artifacts

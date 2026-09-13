@@ -4,6 +4,44 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 1.1.1 — 2026-09-13
+
+一次以安全审计为驱动的修复版；逐条细节见 [docs/release-notes-1.1.1.md](release-notes-1.1.1.md)。
+
+### Fixed
+
+- **主聊天窗口没有沙箱**（`sandbox: false`），而 README 与 SECURITY.md 都声称每个窗口
+  都是 `sandbox: true` —— 偏偏渲染不可信 agent 输出的就是这个窗口。现已开启，并实测
+  确认沙箱内 preload 仍能取到 `webUtils.getPathForFile`，拖拽不受影响。
+- **文件面板可通过符号链接 / 目录联接逃出工作区**：路径校验只比对字符串，而 Windows 上
+  建 junction 不需要管理员权限。现解析真实路径后再判断，无法验证时**拒绝而非放行**。
+- **“用默认程序打开”的扩展名检查可被绕过**：`extname("payload.bat.")` 是 `.`、
+  `extname("payload.bat ")` 是 `.bat `，两者都不在黑名单里。现先归一化路径再判断。
+- **Dock 未转义就拼接 HTML**：文件名、git 路径与错误文本直接进 `innerHTML`。
+- **配置与遥测文件是非原子写**：崩溃或被杀会留下截断文件（`config.json` 被截断
+  等于丢失工作目录、主题、收藏与预算）。现改为写临时文件后 `rename`。
+- **pi 输出单行无上限**：子进程若一直不发换行，主进程会持续累积到内存耗尽；
+  现限制单行 32 MB，超限即中止连接并说明原因。
+- **扩展挂载失败是静默的**：6 个内置扩展逐个 `existsSync`，缺了只是不加载，
+  表现为“todo / 权限门 / rewind 凭空消失”。现会明确列出未挂载项。
+- **Dock 重复注册 IPC 监听器**：每次终端重启都会再 `ipcRenderer.on` 一次。
+- **`npm run verify` 永远失败**：它引用的 `pi-stat-cache` 已在源码中改名，
+  因此无论代码好坏都必然报 null，而发布清单还把它列为门禁。已修正，33/33 全过。
+- **SECURITY.md 的 CSP 段**补上 `script-src 'unsafe-inline'` 这一真实取舍，
+  并去掉写死的过时版本号。
+
+### Added
+
+- **CI 会打包并校验产物**：此前无任何作业打包应用；新增阻断作业，读 `app.asar` 头部
+  断言 13 条运行时路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）。
+- **依赖监控**：Dependabot（分组）+ 咨询性 `npm audit --audit-level=high`。
+- 单元测试 121 → **125**（新增符号链接 / junction 逃逸测试）。
+
+### Changed
+
+- 打包脚本显式加 `--publish never`：electron-builder 检测到 CI 会自动尝试发布
+  到 GitHub，缺少 `GH_TOKEN` 时整个作业失败（本地不触发，故从未暴露）。
+
 ## 1.1.0 — 2026-09-13
 
 ### Added

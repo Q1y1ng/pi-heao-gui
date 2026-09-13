@@ -161,7 +161,8 @@ waitForWindow().then(async (win) => {
   plog("window acquired");
   const consoleErrors = [];
   try {
-    win.setSize(1280, 860);    win.webContents.on("console-message", (eventOrLevel, level, message) => {
+    win.setSize(1280, 860);
+    win.webContents.on("console-message", (eventOrLevel, level, message) => {
       // Electron >= 37 passes a single event object, older versions pass
       // (event, level, message). Arrow functions have no `arguments`, so handle
       // both shapes explicitly.
@@ -192,7 +193,9 @@ waitForWindow().then(async (win) => {
     check("window has a title", typeof title === "string" && title.length > 0, title);
 
     console.log("\n── 2. 切到本地模型 ──");
-    await js(`window.pi.postMessage({ type: 'setModel', provider: ${JSON.stringify(PROVIDER)}, modelId: ${JSON.stringify(MODEL)} })`);
+    await js(
+      `window.pi.postMessage({ type: 'setModel', provider: ${JSON.stringify(PROVIDER)}, modelId: ${JSON.stringify(MODEL)} })`,
+    );
     const modelShown = await waitFor(
       async () => {
         const t = await js("document.body.innerText || ''");
@@ -228,8 +231,16 @@ waitForWindow().then(async (win) => {
       const afterUndo = c.textContent || '';
       return { ok: true, before, afterPaste, afterUndo, restored: afterUndo === before };
     })()`);
-    check("a wrong paste lands in the composer", pasteFlow.ok && pasteFlow.afterPaste.includes("错误粘贴"), JSON.stringify(pasteFlow).slice(0, 160));
-    check("Ctrl+Z takes the whole paste back", pasteFlow.restored === true, JSON.stringify(pasteFlow).slice(0, 160));
+    check(
+      "a wrong paste lands in the composer",
+      pasteFlow.ok && pasteFlow.afterPaste.includes("错误粘贴"),
+      JSON.stringify(pasteFlow).slice(0, 160),
+    );
+    check(
+      "Ctrl+Z takes the whole paste back",
+      pasteFlow.restored === true,
+      JSON.stringify(pasteFlow).slice(0, 160),
+    );
 
     console.log("\n── 4. 真实日常任务（真模型 + 真工具） ──");
     const task =
@@ -244,14 +255,21 @@ waitForWindow().then(async (win) => {
       return true;
     })()`);
     const composerText = await js("(document.getElementById('input') || {}).textContent || ''");
-    check("the task is in the composer", composerText.includes("greet.js"), composerText.slice(0, 80));
+    check(
+      "the task is in the composer",
+      composerText.includes("greet.js"),
+      composerText.slice(0, 80),
+    );
 
     const sentAt = Date.now();
     await js(`window.pi.postMessage({ type: 'prompt', message: ${JSON.stringify(task)} })`);
     check("prompt accepted by the app", true);
 
     const streaming = await waitFor(
-      () => js("document.body.innerText.includes('停止') || !!document.querySelector('.msg.assistant')"),
+      () =>
+        js(
+          "document.body.innerText.includes('停止') || !!document.querySelector('.msg.assistant')",
+        ),
       120_000,
       "turn to start",
     ).catch(() => null);
@@ -289,18 +307,28 @@ waitForWindow().then(async (win) => {
       return nodes.map((n) => ({ role: n.className, text: (n.innerText || '').slice(0, 400) }));
     })()`);
     const assistant = messages.filter((m) => /assistant/.test(m.role) && m.text.trim().length > 0);
-    check("an assistant reply arrived", assistant.length > 0, `${messages.length} messages in the DOM`);
+    check(
+      "an assistant reply arrived",
+      assistant.length > 0,
+      `${messages.length} messages in the DOM`,
+    );
     check(
       "the reply has real content",
       assistant.length > 0 && assistant[assistant.length - 1].text.trim().length > 20,
       assistant.length ? assistant[assistant.length - 1].text.slice(0, 120) : "none",
     );
-    check("the turn reached an end state", !!finished, finished ? "" : "no assistant content before timeout");
+    check(
+      "the turn reached an end state",
+      !!finished,
+      finished ? "" : "no assistant content before timeout",
+    );
     const replyText = await js(`(() => {
       const b = Array.from(document.querySelectorAll('.assistant-bubble, .msg.assistant')).pop();
       return b ? (b.innerText || '').trim() : '';
-    })()`).catch(() => '');
-    notes.push(`assistant reply (first 300): ${String(replyText).slice(0, 300).replace(/\n+/g, ' / ')}`);
+    })()`).catch(() => "");
+    notes.push(
+      `assistant reply (first 300): ${String(replyText).slice(0, 300).replace(/\n+/g, " / ")}`,
+    );
 
     // A second, minimal task: one tool call, nothing to interpret. This separates
     // "the pipeline cannot run tools" from "a 9B model did not choose to".
@@ -327,16 +355,20 @@ waitForWindow().then(async (win) => {
       300_000,
       "the minified task to come back with the marker",
     ).catch(() => null);
-    const miniText = await js("document.body.innerText || ''").catch(() => '');
+    const miniText = await js("document.body.innerText || ''").catch(() => "");
     check(
       "a one-tool task executed (its output reached the conversation)",
       !!miniDone || miniText.includes("PIPELINE-TOOL-OK"),
-      `marker ${marker.slice(-6)} not found in the window; files before=${beforeFiles}`, );
+      `marker ${marker.slice(-6)} not found in the window; files before=${beforeFiles}`,
+    );
 
     const piChild = require("node:child_process")
-      .execSync('powershell -NoProfile -Command "@(Get-Process node,pi -ErrorAction SilentlyContinue).Count"', {
-        encoding: "utf8",
-      })
+      .execSync(
+        'powershell -NoProfile -Command "@(Get-Process node,pi -ErrorAction SilentlyContinue).Count"',
+        {
+          encoding: "utf8",
+        },
+      )
       .trim();
     notes.push(`node/pi processes visible to the OS during the turn: ${piChild}`);
 

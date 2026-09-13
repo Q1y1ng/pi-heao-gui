@@ -18,7 +18,7 @@
     "icon": "electron scripts/make-icon.cjs",
     "build:renderer": "cd vendor/upstream/pi-chat && npm install && npm run build",
     "build:mcp": "cd vendor/upstream/pi-mcp && npm install && npm run build",
-    "dist": "npm run build && electron-builder --win portable nsis",
+    "dist": "npm run build && electron-builder --win portable nsis --publish never",
     "shot": "electron scripts/screenshot.cjs",
     "shots": "electron scripts/readme-shots.cjs",
     "verify": "electron scripts/verify-features.cjs",
@@ -27,7 +27,7 @@
     "measure-load": "electron scripts/measure-load.cjs",
     "check:upstream": "node scripts/check-upstream.cjs",
     "check:package": "node scripts/check-package.cjs",
-    "dist:portable": "npm run build && electron-builder --win portable"
+    "dist:portable": "npm run build && electron-builder --win portable --publish never"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

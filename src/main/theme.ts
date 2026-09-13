@@ -361,14 +361,14 @@ samp {
 }
 code {
   background: var(--pi-raised) !important;
-  color: #e3c9a0 !important;
+  color: var(--pi-text) !important;
   border: 1px solid var(--pi-border) !important;
   border-radius: var(--pi-radius-sm) !important;
   padding: 0.1em 0.38em !important;
   font-size: 0.9em !important;
 }
 pre {
-  background: #12151a !important;
+  background: var(--pi-code-bg) !important;
   border: 1px solid var(--pi-border) !important;
   border-radius: var(--pi-radius) !important;
   padding: 12px 14px !important;
@@ -378,7 +378,7 @@ pre code {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
-  color: #d7dbe2 !important;
+  color: var(--pi-text) !important;
 }
 kbd {
   background: var(--pi-overlay) !important;

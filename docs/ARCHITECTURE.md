@@ -9,6 +9,7 @@
 - 保真度审计：[`FIDELITY.md`](FIDELITY.md)
 
 ## 形态与关键决策
+
 **What was built** — 一个独立的 Electron 桌面应用，从 Pi Agent Studio VS Code 插件中剥离出完整的聊天体验。Main 进程 spawn `pi --mode rpc` 并通过 JSONL stdio 编排会话；Renderer 托管 vendored 的 `pi-chat` 单文件 HTML（通过 `acquireVsCodeApi` shim 桥接到 preload IPC）；左侧注入会话列表侧栏（高对比度暗色主题、会话名从 session_info 或首条用户消息提取）；独立设置窗口编辑本地配置与 pi agent 文件。bundled 扩展（todo/subagent/questionnaire/permission-gate/rewind/btw/mcp）全部挂载并正确打包进 asar。最终产出 Windows portable exe（约 100MB），双击即用，无需 VS Code。
 
 Review 修复：打包 `!**/*.ts` 误删 bridge 扩展（改为精确排除 src/docs）；pi 进程退出后会话锁死（改为可 reload 恢复）；侧栏 XSS（改用 textContent）；settings.json 写入加 JSON 校验；rewindDiff/toggleFavorite 补 handler；agents/*.md 被全局 md 排除误删（重新 include）。
@@ -16,6 +17,7 @@ Review 修复：打包 `!**/*.ts` 误删 bridge 扩展（改为精确排除 src/
 **Verification** — `npx tsc` PASS；Electron dev 启动 PASS（chat session created）；portable exe 启动 PASS；asar 包含全部 bridge/*.ts + agents/*.md + mcp/index.js。
 
 **Journey log** —
+
 1. vite singlefile 的 HTML 内 JS 字符串里也有 `</head>`，注入必须按行匹配结构性标签，不能用 `String.replace` 第一次出现。
 2. Electron 下载走 `npmmirror.com/mirrors/electron/` 可大幅加速；本机已有 v43 缓存可复用。
 3. `acquireVsCodeApi` shim 用 `window.dispatchEvent(new MessageEvent('message',{data}))` 即可对接 pi-chat 的 `window.addEventListener('message')`，无需改上游源码。
@@ -123,7 +125,7 @@ interface StandaloneConfig {
 ### 功能范围（全功能对齐）
 
 | 功能 | 实现方式 |
-|---|---|
+| --- | --- |
 | 流式聊天 | 复用 pi-chat + rpc-client |
 | 模型切换 / thinking level | 同上 |
 | fork / revert | 同上 |
@@ -146,7 +148,7 @@ interface StandaloneConfig {
 ### 明确放弃的功能
 
 | 功能 | 原因 |
-|---|---|
+| --- | --- |
 | 终端 TUI 模式 | 无 VS Code 集成终端；可后续用 xterm.js 扩展 |
 | vscode_get_diagnostics | 无编辑器/LSP |
 | /vscode-selection 等 slash 命令 | 无编辑器状态 |

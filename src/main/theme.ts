@@ -543,7 +543,7 @@ details.thinking {
 .user-bubble code {
   background: rgba(0, 0, 0, 0.28) !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
-  color: #e8d7b6 !important;
+  color: var(--pi-text) !important;
 }
 .msg {
   padding: 2px 0 !important;
@@ -559,7 +559,9 @@ details.thinking {
 .msg h1,
 .msg h2,
 .msg h3 {
-  color: #f2f4f8 !important;
+  /* Was #f2f4f8 — a dark-theme white, applied in light mode too, which painted compaction
+     headings and strong text at 1.1:1 on white: the report that headings were unreadable. */
+  color: var(--pi-text) !important;
   margin: 14px 0 6px !important;
   line-height: 1.35;
 }

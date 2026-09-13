@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.85.1",
     "@types/node": "^22.0.0",
     "electron": "^43.0.0",
     "electron-builder": "^26.0.0",

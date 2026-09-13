@@ -3,9 +3,9 @@
 Pi Heao GUI is MIT licensed (see `LICENSE`). It bundles or depends on the
 following third-party work.
 
-## Vendored upstream (byte-for-byte, MIT)
+## Forked from upstream (MIT, maintained here)
 
-`vendor/upstream/` is a subset copy of the MIT-licensed
+`vendor/upstream/` is this project’s fork of the MIT-licensed
 [`JohnnyZ93/pi-agent-studio`](https://github.com/JohnnyZ93/pi-agent-studio) VS Code
 extension, pinned to tag `v1.3.8` (commit `8c50c0a`). It supplies the chat UI
 (`pi-chat/`), the bundled pi extensions (`bridge/`), the MCP extension source

@@ -49,23 +49,6 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
-  upstream:
-    name: upstream fidelity (vendor matches the pinned tag)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Guards the project's central claim: the chat UI is the unmodified upstream
-    # bundle. Fails when a vendored file drifts from the pinned tag (or when a
-    # local change is not documented in docs/UPSTREAM.md).
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 22
-
-      - name: Compare vendor/upstream with the pinned upstream tag
-        run: node scripts/check-upstream.cjs
-
   smoke:
     name: runtime smoke test (advisory)
     runs-on: windows-latest

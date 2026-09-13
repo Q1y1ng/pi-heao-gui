@@ -1701,7 +1701,7 @@ function setupChineseMenu(): void {
               "made by HEAOZIE",
               "",
               "Electron shell for `pi --mode rpc` (JSONL over stdio).",
-              "Chat UI: vendored pi-chat (MIT, JohnnyZ93/pi-agent-studio).",
+              "Chat UI: based on pi-agent-studio (MIT, JohnnyZ93), maintained in this project.",
             ].join("\n");
             const opts = {
               type: "info" as const,

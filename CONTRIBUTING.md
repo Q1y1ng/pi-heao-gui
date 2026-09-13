@@ -29,7 +29,6 @@ npm run typecheck         # tsc --noEmit
 npm test                  # node:test against dist/ (no network)
 npm run smoke             # boots a real window, 22 assertions
 npm run verify            # 33 DOM assertions incl. the terminal and dock
-npm run check:upstream    # vendor/upstream still byte-identical to the pin
 npm run check:package     # a packaged build (npm run dist) ships every runtime file
 ```
 
@@ -55,15 +54,16 @@ src/main/            Electron main process (Node)
                      PTY, git/commit-message, pi changelog, safe CLI calls
   config.ts sessions.ts search.ts session-ops.ts stats.ts …
 src/preload/         two allowlisted bridges (chat window vs settings window)
-vendor/upstream/     byte-for-byte upstream copy — see docs/UPSTREAM.md
+vendor/upstream/     our fork of the pi-agent-studio UI — see docs/UPSTREAM.md
 ```
 
 ## Rules that matter
 
-1. **Never edit `vendor/upstream/`.** All adaptation goes through
-   `src/main/chat-adapter.ts` injection. `npm run check:upstream` fails the build
-   if a vendored file drifts; if a change is genuinely needed, document it in
-   `docs/UPSTREAM.md` and in the allowlist of `scripts/check-upstream.cjs`.
+1. **`vendor/upstream/` is our own code now.** It started as a copy of the
+   MIT-licensed pi-agent-studio UI and is maintained here — edit it like anything
+   under `src/`. Nothing requires it to match an upstream revision, and no CI job
+   compares it to one. See docs/UPSTREAM.md for how changes are taken from
+   upstream when we want them.
 2. **Injected scripts are JavaScript source inside template literals.** A raw
    backtick, an unescaped `\n`/`\r`, or an unintended `${` breaks the built page
    at runtime, and it looks like "the panel never appeared" rather than a build

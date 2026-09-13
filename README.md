@@ -7,7 +7,7 @@
 
 **把 `pi` 编码 agent 从终端搬进桌面。** 聊天 UI 是从
 [JohnnyZ93/pi-agent-studio](https://github.com/JohnnyZ93/pi-agent-studio)（VS Code 扩展，MIT）
-**原样剥离**的 —— vendored、CI 逐字节校验、零改动；外面是独立的 Electron 外壳，重新实现原本由
+**原样剥离**、现在由本项目维护的（那份代码已归我们，可按需修改）；外面是独立的 Electron 外壳，重新实现原本由
 VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / 设置界面，并补上原版没有的遥测、
 命令面板、自动更新与中英界面。
 
@@ -111,7 +111,7 @@ Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同�
 
 | 项目 | 形态 | 它解决的是什么 |
 | --- | --- | --- |
-| **本项目** | Windows 桌面应用，聊天层为 vendored 上游 UI | 不做新界面：聊天层与 VS Code 插件逐字节等同，`npm run check:upstream` 守这条线 |
+| **本项目** | Windows 桌面应用，聊天层取自 studio 的 UI 代码（现已归本项目维护） | 不从零设计界面：起点就是那份 UI，之后由我们按需修改 |
 | [pivot-ui](https://github.com/sincw/pivot-ui) | 浏览器工作区（本机起服务） | 一台机器跑、多设备访问（含手机）；界面自成一套 |
 | [pi-gui](https://www.pi-gui.com/) | 另一套桌面 UI（Electron，Codex 风格） | 会话时间线、每线程 git worktree、多 agent 编排；发布面向 macOS / Linux |
 | `pi-harness` 类（[npm](https://www.npmjs.com/package/pi-harness) / [runtime 包](https://pi.dev/packages/pi-harness-runtime)） | 无头服务与运行时监控 | 把 pi 跑成后台服务、做用量统计与任务编排；本身不是给人看会话的界面 |
@@ -143,9 +143,9 @@ Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同�
 | 依赖 | 性质 | 怎么绑定 | 上游变了怎么办 |
 | --- | --- | --- | --- |
 | **`pi` CLI** | 运行时**必需**，以 `--mode rpc` 在外驱动 | 走 pi 的公开 RPC 协议，**不 patch pi** | 协议变了就得跟 —— 这是**较硬**的一条依赖 |
-| **pi-agent-studio 的聊天 UI 与 bridge 扩展** | **代码副本**（vendored），不是“参考设计” | 钉在上游 tag `v1.3.8`（commit `8c50c0a`），**逐字节一致** | 按 [docs/UPSTREAM.md](docs/UPSTREAM.md) 的刷新流程走一步；`npm run check:upstream` 在 CI 里守住“没被改过” |
+| **pi-agent-studio 的聊天 UI 与 bridge 扩展** | **代码副本，已归本项目维护**（不是“参考设计”，也不再要求与上游一致） | 分叉自 tag `v1.3.8`（commit `8c50c0a`）；之后可任意修改 | 上游发新版**不影响我们**；想要它的新东西时按 [docs/UPSTREAM.md](docs/UPSTREAM.md) 主动吸收 |
 
-**第二行值得说清** ✓：`vendor/upstream/` 里放的就是上游那份 MIT 代码（`pi-chat/` 聊天 UI、
+**第二行值得说清** ✓：`vendor/upstream/` 里放的就是那份 MIT 代码（`pi-chat/` 聊天 UI、
 `bridge/` 扩展、`pi-mcp/`、`assets/`），[docs/FIDELITY.md](docs/FIDELITY.md) 逐符号记录了保留率
 （**143/253 = 57%**，未保留的绝大多数是 VS Code 宿主专有函数）。这正是本项目的取舍：
 **看聊天界面时，你看的就是原版那份** —— 代价是要跟上游的更新节奏。好消息是这份跟进是
@@ -222,7 +222,7 @@ Electron Renderer (Chromium)
 二进制）、受工作区根目录约束的 `pi:fs-*`、以及 `pi:git-*`（提交信息用 `pi -p` 一次性生成，
 不污染会话）。
 
-上游源码 vendored 于 `vendor/upstream/`（MIT），只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、
+上游源码（现已归本项目维护）位于 `vendor/upstream/`（MIT），只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、
 `assets/` 等运行时必需品；固定版本（上游 tag `v1.3.8` / commit `8c50c0a`）与刷新流程见
 [docs/UPSTREAM.md](docs/UPSTREAM.md)。外壳为何必须重写、以及实现中踩过的坑见
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -240,7 +240,6 @@ npm run smoke           # 运行时冒烟：开真窗口断言安全边界
 npm run verify          # 真机 UI 功能断言（面板 / 命令面板 / 侧栏 / 终端 / 文件 / 变更 / diff）
 npm run test:daily      # 日常流程端到端：真窗口 + 真模型，让 agent 建文件、写测试、跑测试（需 provider）
 npm run measure-load    # 会话切换耗时归因（pi 解析 vs 渲染）
-npm run check:upstream  # 断言 vendor/upstream 与 pinned tag 字节一致（需联网）
 npm run check:package   # 断言打包产物（asar）含全部运行时依赖（需先 npm run dist）
 npm run shot            # 截图（拍本机现状，仅供人工核对，**不入库**）
 npm run shots           # 生成 README 配图：隔离沙箱 + 合成会话，输出到 docs/images/
@@ -262,10 +261,9 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 - `npm run e2e` / `npm run e2e:isolated` 打开**每个窗口与面板**并断言点击后的真实变化
   （不是元素存在），**任何渲染进程报错都判定失败**；隔离模式把 HOME/APPDATA 指向临时目录，
   破坏性操作用的是沙箱内的副本。
-- `.github/workflows/ci.yml`：`lint + typecheck + test`、`upstream`（vendored 字节保真）与
+- `.github/workflows/ci.yml`：`lint + typecheck + test`、与
   `package`（打包产物含全部运行时依赖）为**阻断**作业，`smoke` 为咨询作业；依赖审计为
   咨询步骤，另有 Dependabot 分组跟进依赖。
-- `npm run check:upstream` 是“聊天 UI 就是原版”这句承诺的守卫：它稀疏克隆 pinned tag 并与
   `vendor/upstream/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
 - `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
   路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
@@ -338,7 +336,7 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 | 文档 | 内容 |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 形态与关键决策、踩过的坑 |
-| [docs/UPSTREAM.md](docs/UPSTREAM.md) | vendored 上游的固定版本与刷新流程 |
+| [docs/UPSTREAM.md](docs/UPSTREAM.md) | 我们那份 UI 的来龙去脉，以及主动吸收上游的流程 |
 | [docs/FIDELITY.md](docs/FIDELITY.md) | 与原插件的保真度审计 |
 | [docs/RELEASING.md](docs/RELEASING.md) | 发布、校验和、源码包、代码签名、更新清单 |
 | [CHANGELOG.md](CHANGELOG.md) | 全部版本的变更记录 |
@@ -349,4 +347,4 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 MIT —— 见 [LICENSE](LICENSE)。
 
 上游 [pi-agent-studio](https://github.com/JohnnyZ93/pi-agent-studio) 同为 MIT；
-vendored 部分的来源与许可见 [NOTICE.md](NOTICE.md)。
+分叉自上游的部分的来源与许可见 [NOTICE.md](NOTICE.md)。

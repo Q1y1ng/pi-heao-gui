@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | [`../README.md`](../README.md) | 功能、安装、配置、安全模型 | 第一次接触这个项目 |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 形态、关键决策，以及踩过的坑 | 改代码前想弄清“为什么这么设计” |
-| [`UPSTREAM.md`](UPSTREAM.md) | `vendor/upstream/` 的固定版本与校验 | 确认上游对应关系，或刷新 vendored 代码 |
+| [`UPSTREAM.md`](UPSTREAM.md) | 我们那份 UI 的来源与主动吸收流程 | 确认上游对应关系，或刷新 vendored 代码 |
 | [`FIDELITY.md`](FIDELITY.md) | 与原 VS Code 插件的保真度审计（含资源占用对比） | 想知道“和原版差多少、少了什么” |
 | [`RELEASING.md`](RELEASING.md) | 发布流程、校验和、源码包、代码签名、更新清单 | 准备发版 |
 | [`release-notes-<version>.md`](release-notes-1.1.2.md) | 各版本的发布说明（即 Release 正文） | 写 Release，或回答“这版改了什么” |

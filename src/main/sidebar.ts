@@ -711,7 +711,6 @@ export const SIDEBAR_SCRIPT = `
       if (switching) return;
       switching = true;
       setTitleLoading('载入会话…');
-      mirrorTitle();
       var prev = listEl.querySelector('.pi-session-item.active');
       if (prev) prev.classList.remove('active');
       item.classList.add('active', 'loading');
@@ -726,6 +725,11 @@ export const SIDEBAR_SCRIPT = `
         // that loaded fine left the sidebar title stuck on "载入会话…" with its spinner
         // still turning — a status that outlived the thing it reported.
         setTitleLoading('');
+        // After the switch resolves, mirror the freshly active row's name into the title.
+        // Called from the click path it was useless: setTitleLoading had just set is-loading,
+        // and mirrorTitle returns early in that state. Guarded so a cosmetic failure can
+        // never affect the switch that already succeeded.
+        try { mirrorTitle(); } catch (err) { /* title only */ }
       };
       window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: file })
         .then(function(r) {

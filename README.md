@@ -12,8 +12,7 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 命令面板、自动更新与中英界面。
 
 同类工具各有各的路线：`pivot-ui` 是浏览器工作区、`pi-gui` 另起了一套 Codex 风格的桌面 UI、
-`pi-harness` 面向无头运行与运行时监控；**本项目的取舍只有一个 —— 把上游那份 UI 原样搬进
-Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同类项目的区别」。
+`pi-harness` 面向无头运行与运行时监控；**本项目的取舍只有一个 —— 把那份 UI 搬进 Windows 桌面、由我们自己维护**，其余一切都围绕这一点展开。详见下文「与同类项目的区别」。
 
 **[下载最新版](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)** ·
 [保真度审计](docs/FIDELITY.md)（上游聊天层保留 143/253 个符号） ·
@@ -146,10 +145,13 @@ Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同�
 | **pi-agent-studio 的聊天 UI 与 bridge 扩展** | **代码副本，已归本项目维护**（不是“参考设计”，也不再要求与上游一致） | 分叉自 tag `v1.3.8`（commit `8c50c0a`）；之后可任意修改 | 上游发新版**不影响我们**；想要它的新东西时按 [docs/UPSTREAM.md](docs/UPSTREAM.md) 主动吸收 |
 
 **第二行值得说清** ✓：`studio/` 里放的就是那份 MIT 代码（`pi-chat/` 聊天 UI、
-`bridge/` 扩展、`pi-mcp/`、`assets/`），[docs/FIDELITY.md](docs/FIDELITY.md) 逐符号记录了保留率
-（**143/253 = 57%**，未保留的绝大多数是 VS Code 宿主专有函数）。这正是本项目的取舍：
-**看聊天界面时，你看的就是原版那份** —— 代价是要跟上游的更新节奏。好消息是这份跟进是
-**有边界、可脚本化**的：pinned tag + 刷新流程 + CI 字节校验，而不是盲目追新。
+`bridge/` 扩展、`pi-mcp/`、`assets/`），[docs/FIDELITY.md](docs/FIDELITY.md) 逐符号记录了当初的保留率
+（**143/253 = 57%**，未保留的绝大多数是 VS Code 宿主专有函数）—— 也就是说，**看聊天界面时，
+你看的就是那份原版 UI** ✓。
+
+区别在于**谁来决定它的下一版**：以前我们钉住上游、用 CI 强制字节一致 ✗，上游发版就可能让我们变红；
+现在这份代码是我们的 ✓，改哪里由我们决定 ✓，上游只是“想要它的新东西时可以去取”的源 ✓（先 diff、
+按需取，可只取一部分 ✓）。
 
 同样诚实地说：**体验上限由 pi 决定**。这个壳不会去修 pi 的行为，也不会加 pi 做不到的能力；
 若你要的是“重新设计一套 agent 界面”，那属于另一类工具 —— 见上文「与同类项目的区别」。
@@ -169,14 +171,14 @@ Windows 桌面**，其余一切都围绕这一点展开。详见下文「与同�
 git clone https://github.com/Q1y1ng/pi-heao-gui.git
 cd pi-heao-gui
 npm ci
-npm run build:renderer   # 构建上游 pi-chat 单文件 UI（仓库不含该 5.4 MB 产物，需要联网）
+npm run build:renderer   # 构建我们那份 pi-chat UI（5.4 MB 产物不入库，首次需联网）
 npm run build            # 编译 TypeScript + 内联 xterm/CodeMirror
 npm start                # 开发模式运行
 npm run dist             # 打包：便携版 + NSIS 安装包（输出到 dist-electron/）
 ```
 
 发布用的源码包（Release 里的 `*-source.zip`）已经包含那份 UI 产物，解压后
-`npm ci && npm run build` 即可，无需联网重建上游。
+`npm ci && npm run build` 即可，无需联网重建。
 
 ## 配置
 
@@ -212,7 +214,7 @@ Pi Heao GUI (Electron Main, Node.js)
   ├─ IPC handlers
   └─ settings / sessions / file ops / updater
 Electron Renderer (Chromium)
-  ├─ pi-chat UI (vendored, single-file HTML)
+  ├─ pi-chat UI (our fork, single-file HTML)
   ├─ acquireVsCodeApi shim → window.pi (preload bridge)
   ├─ 会话侧栏 / 标题栏 / 统计面板 / 命令面板 (injected)
   └─ Dock：终端(xterm.js) · 文件(CodeMirror) · 变更(git)
@@ -223,7 +225,7 @@ Electron Renderer (Chromium)
 不污染会话）。
 
 上游源码（现已归本项目维护）位于 `studio/`（MIT），只保留 `pi-chat/`、`bridge/`、`pi-mcp/`、
-`assets/` 等运行时必需品；固定版本（上游 tag `v1.3.8` / commit `8c50c0a`）与刷新流程见
+`assets/` 等运行时必需品；分叉自上游 tag `v1.3.8` / commit `8c50c0a`，主动吸收上游新变动的流程见
 [docs/UPSTREAM.md](docs/UPSTREAM.md)。外壳为何必须重写、以及实现中踩过的坑见
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
@@ -248,8 +250,8 @@ npm run lint            # biome lint（--write 自动修）
 npm run dist            # 打包便携版 + NSIS 安装包
 npm run dist:portable   # 只打便携版
 npm run icon            # 重新生成 build/icon.png + 多尺寸 .ico
-npm run build:renderer  # 重建 vendored 的 pi-chat 单文件 UI
-npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
+npm run build:renderer  # 重建我们那份 pi-chat 单文件 UI（首次需联网装依赖）
+npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 ```
 
 **测试与 CI**
@@ -261,12 +263,10 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 - `npm run e2e` / `npm run e2e:isolated` 打开**每个窗口与面板**并断言点击后的真实变化
   （不是元素存在），**任何渲染进程报错都判定失败**；隔离模式把 HOME/APPDATA 指向临时目录，
   破坏性操作用的是沙箱内的副本。
-- `.github/workflows/ci.yml`：`lint + typecheck + test`、与
-  `package`（打包产物含全部运行时依赖）为**阻断**作业，`smoke` 为咨询作业；依赖审计为
-  咨询步骤，另有 Dependabot 分组跟进依赖。
-  `studio/` 全量比对，只容忍 [docs/UPSTREAM.md](docs/UPSTREAM.md) 记录的差异。
+- `.github/workflows/ci.yml`：`lint + typecheck + test` 与 `package`（打包产物含全部运行时依赖）
+  为**阻断**作业，`smoke` 为咨询作业；依赖审计为咨询步骤，另有 Dependabot 分组跟进依赖。
 - `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
-  路径（vendored 聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
+  路径（自带聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
 - `npm run test:daily` 是唯一能证明“**这个应用真能把一件事做完**”的门禁：它开真窗口、
   用真模型（你指定的 provider），让 agent 建文件、写测试、跑测试，并且**以磁盘上的产物**
   作为完成判据（不是看界面文字猜结束）。其余检查只能证明控件在、桥在、数据在流动，
@@ -315,7 +315,7 @@ npm run build:mcp       # 重建 vendored 的 MCP 扩展 bundle
 
 | 能力 | VS Code 插件 | 本应用 |
 | --- | --- | --- |
-| 聊天 UI | ✓ | ✓ **同一份上游代码** |
+| 聊天 UI | ✓ | ✓ **同一份 UI 代码**（现已归本项目维护） |
 | 终端 TUI | ✓（VS Code 集成终端） | ✓（node-pty + xterm.js，同样跑 `pi` TUI） |
 | 编辑器桥（选区/文件→对话） | ✓ | ✓（Dock 文件面板 + 发送选中） |
 | SCM 提交信息 | ✓ | ✓（Dock 变更面板） |

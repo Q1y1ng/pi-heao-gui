@@ -1230,10 +1230,17 @@ app.whenReady().then(async () => {
         if (op < 0.05) return;
         // WCAG holds large or bold text, and UI components (1.4.11), to 3:1 rather than 4.5:1.
         // The primary button's white label on the accent colour is 3.2:1 and is intended.
-        // The accent is read from the token, so changing the accent keeps this honest.
-        const nums = (c) => (String(c).match(/[0-9.]+/g) || []).slice(0, 3).join(',');
+        // Both sides are normalised to "r,g,b" so a hex token and an rgb() computed value compare.
+        const rgb = (c) => {
+          const s = String(c).trim();
+          if (s.charAt(0) === '#') {
+            const h = s.length === 4 ? s.replace(/[0-9a-f]/gi, (d) => d + d).slice(1) : s.slice(1);
+            return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',');
+          }
+          return (s.match(/[0-9.]+/g) || []).slice(0, 3).join(',');
+        };
         const accent = getComputedStyle(document.documentElement).getPropertyValue('--pi-accent');
-        const onAccent = nums(accent) !== '' && nums(cs.backgroundColor) === nums(accent);
+        const onAccent = accent.trim() !== '' && rgb(cs.backgroundColor) === rgb(accent);
         const big = parseFloat(cs.fontWeight) >= 600 || parseFloat(cs.fontSize) >= 18 || onAccent;
         if (v < (big ? 3 : 4.5)) bad.push({ v: +v.toFixed(2), sel: el.tagName.toLowerCase() + '.' + String(el.className || '').slice(0, 24), color: cs.color, bg });
       });

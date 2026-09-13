@@ -33,6 +33,7 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 ### 对话
 
 - 流式聊天（复用上游 `pi-chat` UI）、模型与 thinking level 切换、fork / revert
+- **回答默认展开**，按钮是「收起」；正文不再是点击区，选字不会再误折叠整段
 - `@file` 文件补全、文件对话框、Mermaid 与 KaTeX 渲染
 - 输入框里**粘贴整段内容可用 `Ctrl+Z` 一步撤回**：粘贴走的是浏览器的原生编辑，因此它和
   逐字输入一样进撤销栈（上游原本是拦下粘贴后重建 DOM，所以怎么撤都撤不掉）
@@ -70,6 +71,8 @@ VS Code 宿主提供的侧栏 / 终端 / 编辑器桥 / diff / 密钥存储 / �
 
 - 八个标签页：模型配置、扩展插件、技能、系统提示词、外观、诊断、更新日志、常规
 - 主题（深/浅/跟随系统）+ 任意强调色 + 字号；`uiLanguage` 支持中/英/跟随系统
+- **浅色与深色都过了一遍自动化对比度检查**（`npm run e2e` 遍历页面上每个元素，低于 4.5:1 即失败；
+  大字与 UI 组件按 WCAG 1.4.11 取 3:1）—— 它第一次运行就抓到了两个真缺陷
 - 扩展包管理（`pi install / remove / list`）、技能增删改、provider 就绪检查、pi 更新日志、诊断包
 
 ![设置窗](docs/images/settings-models.png)
@@ -285,6 +288,7 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 | 首次运行被 SmartScreen 拦住 | 包未签名（见上）。点"更多信息 → 仍要运行"，或先比对 Release 页面上的 SHA256 |
 | 提示找不到 `pi` | 按应用内指引安装，或在 设置 → 常规 里指定 `piPath` |
 | 终端面板起不来 | 需要绝对可执行路径；若 `piPath` 指向 shim（`.cmd`）请留空让应用自行解析。面板的 meta 行会显示实际使用的 shell |
+| **改了字号，聊天文字大小不变** | 已知问题（1.2.0）：内置聊天 UI 自己的样式表远在注入点之后，而且 **CSS 变量声明无法用 `!important` 压制**。实测数据、两条已排除的修法与下一步测量见 [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) |
 | 会话很多时启动慢 | 会话元数据是异步 + 缓存的；首次仍会较慢（要读一遍 session 文件） |
 | 想彻底卸载 | 卸载程序只删程序本体。会话在 `~/.pi/agent/sessions/`，应用数据在 `%APPDATA%\pi-heao-gui`，配置在 `~/.pi/standalone/config.json` |
 
@@ -344,6 +348,7 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 | [docs/UPSTREAM.md](docs/UPSTREAM.md) | 我们那份 UI 的来龙去脉，以及主动吸收上游的流程 |
 | [docs/FIDELITY.md](docs/FIDELITY.md) | 与原插件的保真度审计 |
 | [docs/RELEASING.md](docs/RELEASING.md) | 发布、校验和、源码包、代码签名、更新清单 |
+| [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) | 未结项缺陷的实测证据与下一步 |
 | [CHANGELOG.md](CHANGELOG.md) | 全部版本的变更记录 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 开发流程与五条硬规则 |
 

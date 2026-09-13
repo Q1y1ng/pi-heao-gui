@@ -1790,7 +1790,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V1.1.3",
+              message: "Pi Heao GUI V1.2.0",
               detail,
               buttons: ["好"],
             };

@@ -24,6 +24,8 @@ host API surface that cannot exist outside an extension.
 ### Chat
 
 - Streaming replies, thinking blocks, tool calls, diffs, images, markdown.
+- **Answers arrive expanded**, with a 收起 / Show less toggle. The reply body is not a click target,
+  so selecting text in it no longer collapses the block.
 - **Ctrl+Z undoes a paste.** Pasting a large block used to be one irreversible edit; pastes now go in as a
   native undo entry, so Ctrl+Z removes exactly what you pasted. Pasting *files* is untouched.
 - Attach files, drag and drop, slash commands, model picker, per-session token/cost readout.
@@ -48,6 +50,9 @@ What is recorded locally is UI-level counters (which panel you opened, etc.). Se
 
 - Light/dark/system themes, accent colour, font size, window behaviour — all in a settings window that applies
   live. Settings are stored in `~/.pi/standalone/config.json`.
+- **Both themes are covered by an automated contrast pass** (`npm run e2e` walks every element in light
+  and dark and fails below 4.5:1, or 3:1 for large text and UI components). It found two real defects the
+  first time it ran.
 
 ### Platform integration
 
@@ -178,6 +183,10 @@ runtime dependency) as **blocking** jobs, with `smoke` advisory.
 - **Agent stops mid-turn** — usually a provider error surfaced in the transcript; the app does not retry
   silently.
 - **SmartScreen** — expected; see the signing note above.
+- **The font-size setting does not resize chat text** — a known, measured limitation of 1.2.0. The vendored
+  chat stylesheet declares `--chat-fs` in its own `:root`, sits after everything this project injects, and a
+  custom-property declaration cannot be forced with `!important`. Evidence and the next measurement to run:
+  [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Security model
 
@@ -209,6 +218,7 @@ runtime dependency) as **blocking** jobs, with `smoke` advisory.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — why the shell was rewritten
 - [docs/FIDELITY.md](docs/FIDELITY.md) — symbol-level audit of the UI fork
 - [docs/UPSTREAM.md](docs/UPSTREAM.md) — how to deliberately adopt upstream changes
+- [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) — open defects with their measured evidence
 
 Screenshots in this README come from `npm run shots`, which builds a disposable sandbox HOME and a synthetic
 project — no real credentials, sessions, or model names are ever photographed.

@@ -11,7 +11,7 @@ import { t, type UiLang } from "./i18n";
  */
 export function buildSettingsHtml(lang: UiLang = "zh-cn", theme: ThemeName, accent: string, chatFontSize: number): string {
   return `<!DOCTYPE html>
-<!-- Pi Heao GUI V1.1.3 · made by HEAOZIE -->
+<!-- Pi Heao GUI V1.2.0 · made by HEAOZIE -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -608,7 +608,7 @@ body {
 <div class="toolbar">
   <span class="pi-tile" aria-hidden="true">π</span>
   <h1>Pi Heao GUI 设置</h1>
-  <span class="pi-ver" title="Pi Heao GUI V1.1.3 — made by HEAOZIE">V1.1.3</span>
+  <span class="pi-ver" title="Pi Heao GUI V1.2.0 — made by HEAOZIE">V1.2.0</span>
   <button id="btn-reload">重新加载</button>
   <button id="btn-save" class="primary">保存更改</button>
 </div>
@@ -884,7 +884,7 @@ body {
   </div>
 </div>
 <div class="status" id="status">就绪</div>
-<div class="brand" title="Pi Heao GUI V1.1.3 — made by HEAOZIE">made by HEAOZIE</div>
+<div class="brand" title="Pi Heao GUI V1.2.0 — made by HEAOZIE">made by HEAOZIE</div>
 <script>
 const $ = id => document.getElementById(id);
 const status = $('status');

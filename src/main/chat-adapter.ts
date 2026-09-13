@@ -463,7 +463,7 @@ function buildChromeHtml(lang: UiLang): string {
     <div class="pi-tb-left">
       <div class="pi-tb-logo" aria-hidden="true">π</div>
       <span class="pi-tb-app">Pi Heao GUI</span>
-      <span class="pi-tb-brand" title="Pi Heao GUI V1.1.3 — made by HEAOZIE">made by HEAOZIE</span>
+      <span class="pi-tb-brand" title="Pi Heao GUI V1.2.0 — made by HEAOZIE">made by HEAOZIE</span>
     </div>
     <div class="pi-tb-center">
       <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
@@ -918,5 +918,5 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
 
-  return `<!-- Pi Heao GUI V1.1.3 · made by HEAOZIE -->\n${allLines.join("\n")}`;
+  return `<!-- Pi Heao GUI V1.2.0 · made by HEAOZIE -->\n${allLines.join("\n")}`;
 }

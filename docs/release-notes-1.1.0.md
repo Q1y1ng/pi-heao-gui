@@ -36,6 +36,17 @@
 签名申请。**本次发布的包仍未签名**（已验证状态为 `NotSigned`），首次运行 Windows
 SmartScreen 会提示"已保护你的电脑"：点"更多信息 → 仍要运行"，或先比对下方 SHA256。
 
+## Code signing
+
+This project uses the **SignPath Foundation** for code signing: the Windows
+artifacts published here are produced by the workflow in
+[`.github/workflows/sign-windows.yml`](https://github.com/Q1y1ng/pi-heao-gui/blob/main/.github/workflows/sign-windows.yml)
+and signed through SignPath's free programme for open-source projects.
+
+> The 1.1.0 artifacts below were built before the application was approved and
+> are therefore still unsigned; they will be replaced by signed builds under the
+> same names, with the checksums below updated at the same time.
+
 ## 下载
 
 | 文件 | 大小 | 说明 |

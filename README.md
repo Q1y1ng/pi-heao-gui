@@ -44,6 +44,17 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 - 至少一个 provider 的 API Key（在 `~/.pi/agent/auth.json` 或设置面板中配置）
 
+## Code signing
+
+Windows builds are published unsigned today. Signing is being applied for
+through the **[SignPath Foundation](https://signpath.org/foundation)**, which
+provides free code signing for open-source projects; the repository side is ready
+(`signpath/artifact-configuration.xml` plus a manually triggered
+`.github/workflows/sign-windows.yml`). Until a signed build replaces it, verify
+the SHA256 published on the release page before running the installer.
+
+---
+
 ## 安装
 
 ### 方式一：安装包（推荐）

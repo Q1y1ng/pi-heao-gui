@@ -2012,6 +2012,10 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   align-items: center;
   gap: 6px;
   font-size: var(--chat-fs-11);
+  /* Explicit rather than inherited: the hint used to pick up the dimmed body colour and
+     land at 4.31:1 once its 0.72 opacity was composited. Composited at 0.72 the full-strength
+     text colour still measures well past 4.5:1, so the de-emphasis is kept. */
+  color: var(--pi-text);
   opacity: 0.72;
   white-space: nowrap;
   justify-self: start;

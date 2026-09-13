@@ -112,7 +112,7 @@ function palette(theme: "dark" | "light", accent: string): Palette {
     text: "#e7eaf0",
     link: accent,
     textDim: "#9ba3af",
-    textFaint: "#6b7381",
+    textFaint: "#848c9a",
     accentHover: mix(accent, 0.22),
     accentSoft: soft,
     accentContrast: "#ffffff",
@@ -475,7 +475,10 @@ hr {
 .empty,
 .empty-line,
 .empty-hint {
-  color: var(--pi-text-dim) !important;
+  /* Not --pi-text-dim: the hint carries opacity .72, so the dim token composited down to
+     3.25:1 in light and 4.4:1 in dark. Full text strength at the same opacity measures
+     comfortably past 4.5:1 and stays visibly de-emphasised. */
+  color: var(--pi-text) !important;
 }
 .empty-accent {
   color: var(--pi-accent) !important;

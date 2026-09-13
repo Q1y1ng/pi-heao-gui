@@ -1225,7 +1225,23 @@ app.whenReady().then(async () => {
         while (n) { op *= parseFloat(getComputedStyle(n).opacity || '1'); n = n.parentElement; }
         let bg = 'rgb(255,255,255)', m = el;
         while (m) { const b = getComputedStyle(m).backgroundColor; if (b && b !== 'rgba(0, 0, 0, 0)') { bg = b; break; } m = m.parentElement; }
-        const v = ratio(cs.color, bg) * op;
+        // Contrast is not linear in opacity, so the text colour is composited with its backdrop
+        // at the element's effective opacity, and the ratio is measured on the result.
+        const parse = (c) => {
+          const s = String(c).trim();
+          if (s.charAt(0) === '#') {
+            const h = s.length === 4 ? s.replace(/[0-9a-f]/gi, (d) => d + d).slice(1) : s.slice(1);
+            return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
+          }
+          const n = (s.match(/[0-9.]+/g) || []).map(Number);
+          return [n[0] || 0, n[1] || 0, n[2] || 0, n.length > 3 ? n[3] : 1];
+        };
+        const mix = (fg, over, a) => {
+          const f = parse(fg), o = parse(over);
+          const c = [0, 1, 2].map((i) => Math.round(f[i] * a + o[i] * (1 - a)));
+          return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')';
+        };
+        const v = ratio(mix(cs.color, bg, op), bg);
         // A hidden element is not a contrast defect: an idle toast sits at opacity 0.
         if (op < 0.05) return;
         // WCAG holds large or bold text, and UI components (1.4.11), to 3:1 rather than 4.5:1.

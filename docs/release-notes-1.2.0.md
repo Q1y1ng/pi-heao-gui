@@ -75,5 +75,5 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 ```text
 b96a7fbe7dc8f62525b1c6d8a4b276b9284c32d2f710303195f3175a5765b825  Pi-Heao-GUI-Setup-1.2.0.exe
 27e5ac17c667f966d8cb71dfeb7f6542859b6de36a96918ecf9fe80af6c924b4  Pi-Heao-GUI-1.2.0-Portable.exe
-9d930177e7a2573f7075bf2c35b74eaf5e1c6346109b7fc49db55cd4c274118a  pi-heao-gui-1.2.0-source.zip
+f4993c44cb35e154df5b9d84ae053b19daf9bd0bc94aa83aa73d69256a0b5f24  pi-heao-gui-1.2.0-source.zip
 ```

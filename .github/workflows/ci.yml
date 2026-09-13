@@ -27,6 +27,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Without the generated bundle, the tests that build the chat page skip
+      # themselves (buildChatHtml returns null) and "# fail 0" means less than
+      # it looks: six tests, including the build watermark, were skipped here
+      # while passing locally. Build it, so this gate is the real one.
+      - name: Build the vendored chat UI
+        run: npm run build:renderer
+
       - name: Lint (biome)
         run: npm run lint
 

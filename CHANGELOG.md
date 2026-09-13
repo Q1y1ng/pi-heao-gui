@@ -4,6 +4,18 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## Unreleased
+
+### Added
+
+- **输入框粘贴可用 `Ctrl+Z` 一步撤回**。上游的粘贴处理器会拦掉浏览器默认行为、
+  然后根据字符串重建编辑器内容，这次插入因此从不进入原生撤销栈 —— 逐字输入能撤，
+  粘贴一大段却不能。现改为在捕获阶段接管粘贴，用 `document.execCommand('insertText')`
+  插入：它是一次**原生编辑**，所以 Ctrl+Z 能一步吃掉整段，而且会触发 `input` 事件，
+  上游的 `@路径` token 化、自适应高度、发送按钮状态等逻辑照常运行。
+  **文件粘贴（图片/附件）不接管**，仍走上游路径；若原生编辑不可用，事件不会被拦下，
+  交还原处理器，绝不吞掉粘贴。
+
 ## 1.1.1 — 2026-09-13
 
 一次以安全审计为驱动的修复版；逐条细节见 [docs/release-notes-1.1.1.md](release-notes-1.1.1.md)。

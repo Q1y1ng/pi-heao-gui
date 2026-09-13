@@ -504,6 +504,52 @@ ${DOCK_HTML}
 `;
 }
 
+/**
+ * Make paste undoable with Ctrl+Z.
+ *
+ * The composer is a contenteditable div, and the vendored paste handler calls
+ * preventDefault() and then re-renders its contents from a string. That insert
+ * never touches the browser's native undo stack, so Ctrl+Z cannot take a pasted
+ * block back — while ordinary typing, which the browser edits itself, undoes
+ * fine. This listens in the capture phase to get the event first, and hands the
+ * text to document.execCommand('insertText'), which IS a native edit: it becomes
+ * a single undo entry, and it fires an input event, so the upstream handling
+ * (token discovery for @paths, autosizing, the send-button state) still runs.
+ *
+ * Two escape hatches, both deliberate: a paste carrying files is left entirely
+ * alone, because that path turns images into attachments, and if the edit cannot
+ * be performed the event is not cancelled, so the original handler still does
+ * its job instead of the paste being swallowed.
+ */
+const PASTE_UNDO_SCRIPT = `
+<script>
+(function() {
+  var composer = document.getElementById('input');
+  if (!composer) return;
+  composer.addEventListener('paste', function(e) {
+    var dt = e.clipboardData;
+    if (!dt) return;
+    if (dt.items) {
+      for (var i = 0; i < dt.items.length; i++) {
+        if (dt.items[i].kind === 'file') return;
+      }
+    }
+    var text = dt.getData('text/plain');
+    if (!text) return;
+    if (document.activeElement !== composer) composer.focus();
+    var ok = false;
+    try {
+      ok = document.execCommand('insertText', false, text);
+    } catch (err) {
+      ok = false;
+    }
+    if (!ok) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+})();
+</script>`;
+
 const REPARENT_SCRIPT = `
 <script>
 (function() {
@@ -850,6 +896,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
         i,
         0,
         T(REPARENT_SCRIPT),
+        T(PASTE_UNDO_SCRIPT),
         T(SIDEBAR_SCRIPT),
         T(TITLEBAR_SCRIPT),
         T(TOKENS_SCRIPT),

@@ -315,6 +315,39 @@ app.whenReady().then(async () => {
     );
     check("changes tab offers commit-message generation", changesPane.hasGenerate === true);
 
+    // Paste has to land as a native edit, otherwise Ctrl+Z cannot take a pasted
+    // block back. This is the discriminating assertion: with the injected
+    // capture-phase handler the edit is undoable, while upstream's path rebuilds
+    // the composer from a string and leaves nothing on the undo stack.
+    const paste = await win.webContents.executeJavaScript(
+      `(() => {
+         const c = document.getElementById('input');
+         if (!c) return { ok: false, why: 'composer missing' };
+         const before = c.textContent || '';
+         c.focus();
+         let dispatched = false;
+         try {
+           const dt = new DataTransfer();
+           dt.setData('text/plain', 'PASTED-BLOCK-MARKER');
+           const ev = new ClipboardEvent('paste', {
+             clipboardData: dt, bubbles: true, cancelable: true,
+           });
+           c.dispatchEvent(ev);
+           dispatched = true;
+         } catch (err) {
+           return { ok: false, why: 'cannot synthesise a paste: ' + err.message };
+         }
+         const inserted = (c.textContent || '').indexOf('PASTED-BLOCK-MARKER') !== -1;
+         document.execCommand('undo');
+         const restored = (c.textContent || '') === before;
+         if (!restored) { c.textContent = before; }
+         return { ok: true, dispatched, inserted, restored };
+       })()`,
+      true,
+    );
+    check("paste inserts the text", paste.ok && paste.inserted === true, JSON.stringify(paste));
+    check("Ctrl+Z takes the paste back in one step", paste.restored === true, JSON.stringify(paste));
+
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);
     app.exit(failed === 0 ? 0 : 1);
   } catch (e) {

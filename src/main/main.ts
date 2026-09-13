@@ -68,11 +68,7 @@ import {
 import { log, errText } from "./log";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
-import {
-  createUpdateController,
-  type UpdateController,
-  type UpdaterLike,
-} from "./updater";
+import { createUpdateController, type UpdateController, type UpdaterLike } from "./updater";
 
 // ─── Updates ────────────────────────────────────────────────────────────────
 // electron-updater is loaded lazily: it is optional at runtime, and a build that

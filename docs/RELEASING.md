@@ -166,4 +166,3 @@ from 设置 → 诊断 → 版本与更新.
 Unsigned builds can still update themselves: electron-updater verifies the
 downloaded file against the hash in `latest.yml`, not against an Authenticode
 signature.
-

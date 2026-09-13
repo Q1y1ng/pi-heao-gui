@@ -52,7 +52,8 @@ function messageOf(error: unknown): string {
 }
 
 export function createUpdateController(deps: UpdaterDeps): UpdateController {
-  const warn = deps.logWarn ?? ((message: string, error?: unknown) => log.warn(message, errText(error)));
+  const warn =
+    deps.logWarn ?? ((message: string, error?: unknown) => log.warn(message, errText(error)));
   const autoDownload = deps.autoDownload !== false;
 
   let current: UpdateStatus = deps.isPackaged
@@ -77,14 +78,19 @@ export function createUpdateController(deps: UpdaterDeps): UpdateController {
     updater.autoDownload = autoDownload;
     updater.on("checking-for-update", () => set({ state: "checking" }));
     updater.on("update-available", (info: { version?: string }) =>
-      set({ state: "available", version: String(info?.version ?? ""), current: deps.currentVersion }),
+      set({
+        state: "available",
+        version: String(info?.version ?? ""),
+        current: deps.currentVersion,
+      }),
     );
     updater.on("update-not-available", () => set({ state: "none", current: deps.currentVersion }));
     updater.on("download-progress", (progress: { percent?: number }) =>
       set({
         state: "downloading",
         percent: Math.max(0, Math.min(100, Math.round(Number(progress?.percent ?? 0)))),
-        version: current.state === "available" || current.state === "downloading" ? current.version : "",
+        version:
+          current.state === "available" || current.state === "downloading" ? current.version : "",
       }),
     );
     updater.on("update-downloaded", (info: { version?: string }) =>

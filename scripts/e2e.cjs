@@ -434,7 +434,11 @@ app.whenReady().then(async () => {
       ).catch(() => 0);
       // The built-in commands do not depend on how many sessions exist, so the
       // list must not be empty while the query matches one of them.
-      check("palette renders built-in commands", Number(filtered) >= 1 || Number(items) >= 1, `items=${filtered}`);
+      check(
+        "palette renders built-in commands",
+        Number(filtered) >= 1 || Number(items) >= 1,
+        `items=${filtered}`,
+      );
       check("a matching command stays listed", Number(items) >= 1, `now=${items}`);
 
       const closed = await js(

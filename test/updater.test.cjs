@@ -10,7 +10,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const { createUpdateController } = require(path.join(__dirname, "..", "dist", "main", "updater.js"));
+const { createUpdateController } = require(
+  path.join(__dirname, "..", "dist", "main", "updater.js"),
+);
 
 function fakeUpdater() {
   const handlers = new Map();

@@ -10,9 +10,7 @@ const assert = require("node:assert");
 const path = require("node:path");
 
 const DIST = path.join(__dirname, "..", "dist", "main");
-const { CHAT_STRINGS, translateFragment, untranslatedRuns } = require(
-  path.join(DIST, "i18n.js"),
-);
+const { CHAT_STRINGS, translateFragment, untranslatedRuns } = require(path.join(DIST, "i18n.js"));
 
 function fragments() {
   const { SIDEBAR_HTML, SIDEBAR_SCRIPT } = require(path.join(DIST, "sidebar.js"));

@@ -18,7 +18,6 @@ host API surface that cannot exist outside an extension.
 
 ![Feature tour](docs/images/tour.gif)
 
-
 ## Features
 
 ### Chat

@@ -1,9 +1,14 @@
 /**
- * Daily-use end-to-end test: the real app, a real local model, a real workspace.
+ * Daily-use end-to-end test: the real app, a real model, a real workspace.
  *
  * Throwaway harness (gitignored, `_` prefix). It does what a person does — switch
- * to the local model, say what they want, watch the tools run, then use the dock —
+ * to the model under test, say what they want, watch the tools run, then use the dock —
  * and asserts on the live DOM plus the filesystem.
+ *
+ * The model under test defaults to a hosted one because a local llama-server is not always
+ * up, and a test that fails because a server was not started says nothing about the app.
+ * Override with PI_DAILY_PROVIDER / PI_DAILY_MODEL, e.g. a local model:
+ *   PI_DAILY_PROVIDER=local-ornith-ud PI_DAILY_MODEL=ornith-1.5-9b-ud
  *
  * Isolation: HOME/APPDATA point at a temp directory, so the real config, sessions
  * and the user's own pi setup are never touched. The model catalogue is copied
@@ -16,8 +21,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const PROVIDER = process.env.PI_DAILY_PROVIDER || "local-ornith-ud";
-const MODEL = process.env.PI_DAILY_MODEL || "ornith-1.5-9b-ud";
+const PROVIDER = process.env.PI_DAILY_PROVIDER || "opencode-go";
+const MODEL = process.env.PI_DAILY_MODEL || "mimo-v2.5";
 const TURN_TIMEOUT_MS = 600_000;
 
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "pi-daily-"));

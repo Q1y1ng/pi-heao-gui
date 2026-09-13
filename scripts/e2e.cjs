@@ -1201,12 +1201,12 @@ app.whenReady().then(async () => {
       }
     }
     await section("Accessibility: text contrast in both themes", async () => {
-    // Regression guard. Shipped defects this would have caught on the spot:
-    //   .msg h1/h2/h3 pinned to #f2f4f8 -> 1.1:1 on a light background;
-    //   pre pinned to #12151a            -> a black code block in light mode;
-    //   links using the raw accent       -> 3.20:1 on white.
-    // All three were hardcoded values in the theme bridge that ignored the theme.
-    const measure = `(() => {
+      // Regression guard. Shipped defects this would have caught on the spot:
+      //   .msg h1/h2/h3 pinned to #f2f4f8 -> 1.1:1 on a light background;
+      //   pre pinned to #12151a            -> a black code block in light mode;
+      //   links using the raw accent       -> 3.20:1 on white.
+      // All three were hardcoded values in the theme bridge that ignored the theme.
+      const measure = `(() => {
       const lum = (c) => {
         const m = String(c).match(/[\\d.]+/g) || [];
         const f = (v) => { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -1264,33 +1264,36 @@ app.whenReady().then(async () => {
       return JSON.stringify(bad.slice(0, 6));
     })()`;
 
-    for (const theme of ["light", "dark"]) {
-      await js(chatWindow(), `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
-      await sleep(1200);
-      const w = allWindows().find((x) => /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL()))) || chatWindow();
-      let rows;
-      try {
-        rows = await w.webContents.executeJavaScript(measure, true);
-      } catch (e) {
-        rows = "ERR " + (e && e.message);
+      for (const theme of ["light", "dark"]) {
+        await js(chatWindow(), `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
+        await sleep(1200);
+        const w =
+          allWindows().find((x) =>
+            /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
+          ) || chatWindow();
+        let rows;
+        try {
+          rows = await w.webContents.executeJavaScript(measure, true);
+        } catch (e) {
+          rows = "ERR " + (e && e.message);
+        }
+        if (typeof rows !== "string" || !rows.startsWith("[")) {
+          check(`contrast measurable in ${theme} theme`, false, String(rows).slice(0, 90));
+          continue;
+        }
+        const bad = JSON.parse(rows);
+        const worst = bad[0];
+        check(
+          `no text below 4.5:1 in the ${theme} theme`,
+          bad.length === 0,
+          worst ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel}` : undefined,
+        );
       }
-      if (typeof rows !== "string" || !rows.startsWith("[")) {
-        check(`contrast measurable in ${theme} theme`, false, String(rows).slice(0, 90));
-        continue;
-      }
-      const bad = JSON.parse(rows);
-      const worst = bad[0];
-      check(
-        `no text below 4.5:1 in the ${theme} theme`,
-        bad.length === 0,
-        worst ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel}` : undefined,
-      );
-    }
-    await js(chatWindow(), "window.pi.invoke('pi:set-config',{theme:'light'})");
-    await sleep(600);
-  });
+      await js(chatWindow(), "window.pi.invoke('pi:set-config',{theme:'light'})");
+      await sleep(600);
+    });
 
-  // Let the app run its own shutdown path (will-quit disposes the PTYs); a
+    // Let the app run its own shutdown path (will-quit disposes the PTYs); a
     // hard app.exit() would leave node-pty's ConPTY helper to crash on the way out.
     app.quit();
     setTimeout(() => app.exit(failed === 0 ? 0 : 1), 2500);

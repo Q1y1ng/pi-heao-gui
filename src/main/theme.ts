@@ -90,7 +90,9 @@ function palette(theme: "dark" | "light", accent: string): Palette {
       accentContrast: "#ffffff",
       success: "#1f9d6b",
       warn: "#b7791f",
-      danger: "#d1435b",
+      // Not #d1435b: that measured 4.20:1 for the dock's deletion count on the panel background.
+      // #c5364e is 4.88:1 there and 5.23:1 on white, still unmistakably red.
+      danger: "#c5364e",
       shadow1: "0 1px 2px rgba(16, 24, 40, 0.08)",
       shadow2: "0 8px 28px rgba(16, 24, 40, 0.12)",
       ring,

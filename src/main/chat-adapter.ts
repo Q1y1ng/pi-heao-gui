@@ -260,7 +260,9 @@ html, body {
 /* Author mark: present but deliberately quiet. */
 .pi-tb-brand {
   font-size: 9.5px;
-  color: #464c56;
+  /* Was #464c56: in the dark theme that is 2.2:1 on the title bar, i.e. invisible. Measured
+     by the e2e contrast pass. Tokens switch; this value did not. */
+  color: var(--pi-text-faint);
   letter-spacing: 0.35px;
   white-space: nowrap;
   user-select: none;

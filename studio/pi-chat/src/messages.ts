@@ -72,10 +72,12 @@ export function addUserMessage(text: string, images?: any[]) {
   setLastUserBubble(bubble);
 
   if (bubble.scrollHeight > 240) {
-    bubble.classList.add("is-collapsible");
+    // Expanded by default: the answer is there to be read, so the button offers to collapse
+    // rather than to reveal. Clicking it again expands.
+    bubble.classList.add("is-collapsible", "is-expanded");
     const btn = el("button", "expand-btn");
     btn.type = "button";
-    btn.textContent = t("Show more");
+    btn.textContent = t("Show less");
     btn.addEventListener("click", function () {
       const expanded = bubble.classList.toggle("is-expanded");
       btn.textContent = expanded ? t("Show less") : t("Show more");
@@ -475,10 +477,11 @@ export function applyTextCollapsible(b: any): void {
   textEl.classList.remove("is-collapsible");
   textEl.classList.remove("is-expanded");
   if (textEl.scrollHeight <= 360) return;
-  textEl.classList.add("is-collapsible");
+  // Expanded by default (same reasoning as the user bubble above).
+  textEl.classList.add("is-collapsible", "is-expanded");
   const btn = el("button", "expand-btn");
   btn.type = "button";
-  btn.textContent = t("Show more");
+  btn.textContent = t("Show less");
   btn.addEventListener("click", function () {
     const expanded = textEl.classList.toggle("is-expanded");
     btn.textContent = expanded ? t("Show less") : t("Show more");

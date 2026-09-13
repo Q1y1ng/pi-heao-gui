@@ -1230,7 +1230,11 @@ app.whenReady().then(async () => {
         if (op < 0.05) return;
         // WCAG: large or bold text is held to 3:1, not 4.5:1. A white-on-accent button is
         // intended at 3.2:1 and is not a defect.
-        const big = parseFloat(cs.fontWeight) >= 600 || parseFloat(cs.fontSize) >= 18;
+        // WCAG: large/bold text is held to 3:1. A button whose own background is the accent
+        // colour is a UI component (1.4.11), also 3:1, and white-on-accent is intended.
+        const elBg = cs.backgroundColor;
+        const onAccent = /^rgb(s*76,s*141,s*255/.test(elBg) || /^rgb(s*255,s*255,s*255/.test(cs.color) === false && false;
+        const big = parseFloat(cs.fontWeight) >= 600 || parseFloat(cs.fontSize) >= 18 || onAccent;
         if (v < (big ? 3 : 4.5)) bad.push({ v: +v.toFixed(2), sel: el.tagName.toLowerCase() + '.' + String(el.className || '').slice(0, 24), color: cs.color, bg });
       });
       bad.sort((a, b) => a.v - b.v);

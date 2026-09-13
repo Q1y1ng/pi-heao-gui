@@ -107,7 +107,7 @@ body {
   height: 48px;
   padding: 0 16px;
   gap: 10px;
-  background: linear-gradient(180deg, var(--pi-surface), #12141a);
+  background: linear-gradient(180deg, var(--pi-surface, #14171c), var(--pi-raised, #12141a));
   border-bottom: 1px solid var(--pi-border);
 }
 .toolbar .pi-tile {

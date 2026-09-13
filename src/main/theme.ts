@@ -203,6 +203,36 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
   --vscode-input-foreground: var(--pi-text);
   --vscode-input-border: var(--pi-border-strong);
   --vscode-input-placeholderForeground: var(--pi-text-faint);
+  /* pi-chat references 56 --vscode-* variables; this bridge only defined 44, and an
+     undefined var() with no fallback is invalid, so those declarations dropped and the
+     element fell back to pi-chat's own dark defaults. That is why a light theme produced a
+     black code block and text that vanished into the background. */
+  --vscode-textCodeBlock-background: var(--pi-code-bg);
+  --vscode-editor-font-family: var(--pi-font-mono);
+  --vscode-editorGroup-border: var(--pi-border);
+  --vscode-quickInput-background: var(--pi-overlay);
+  --vscode-disabledForeground: var(--pi-text-faint);
+  --vscode-toolbar-hoverBackground: var(--pi-raised);
+  --vscode-textBlockQuote-border: var(--pi-border);
+  --vscode-textBlockQuote-foreground: var(--pi-text-dim);
+  --vscode-inputOption-activeBackground: var(--pi-accent-soft);
+  --vscode-inputOption-activeForeground: var(--pi-text);
+  --vscode-inputValidation-errorBackground: color-mix(in srgb, var(--pi-danger) 14%, transparent);
+  --vscode-inputValidation-errorForeground: var(--pi-danger);
+  --vscode-editorError-foreground: var(--pi-danger);
+  --vscode-editorWarning-foreground: var(--pi-warn);
+  --vscode-list-highlightForeground: var(--pi-accent);
+  --vscode-charts-blue: var(--pi-accent);
+  --vscode-charts-green: var(--pi-success);
+  --vscode-charts-purple: var(--pi-accent);
+  --vscode-charts-yellow: var(--pi-warn);
+  --vscode-terminal-ansiGreen: var(--pi-success);
+  --vscode-gitDecoration-addedResourceForeground: var(--pi-success);
+  --vscode-gitDecoration-deletedResourceForeground: var(--pi-danger);
+  --vscode-diffEditor-insertedLineBackground: color-mix(in srgb, var(--pi-success) 18%, transparent);
+  --vscode-diffEditor-removedLineBackground: color-mix(in srgb, var(--pi-danger) 18%, transparent);
+  --vscode-testing-iconPassed: var(--pi-success);
+  --vscode-testing-runPassed: var(--pi-success);
   --vscode-button-background: var(--pi-accent);
   --vscode-button-foreground: ${p.accentContrast};
   --vscode-button-hoverBackground: var(--pi-accent-hover);

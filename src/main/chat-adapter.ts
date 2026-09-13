@@ -220,7 +220,7 @@ html, body {
      of the window, ~138px wide for three buttons. Without this reservation our
      own right-hand buttons sit underneath it and cannot be clicked. */
   padding: 0 148px 0 12px;
-  background: linear-gradient(180deg, var(--pi-surface, #14171c), #12141a);
+  background: linear-gradient(180deg, var(--pi-surface, #14171c), var(--pi-raised, #12141a));
   border-bottom: 1px solid var(--pi-border, #252a32);
   -webkit-app-region: drag;
   user-select: none;

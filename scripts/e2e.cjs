@@ -408,7 +408,10 @@ app.whenReady().then(async () => {
         win,
         `(() => {
         const i = document.getElementById('pi-palette-input');
-        i.value = '统计'; i.dispatchEvent(new Event('input', { bubbles: true }));
+        // "token" matches the title in either language: the sandbox can resolve to
+        // English, and this check must not depend on which one is active.
+        i.value = 'token';
+        i.dispatchEvent(new Event('input', { bubbles: true }));
         return document.querySelectorAll('#pi-palette-list [data-id], #pi-palette-list li, #pi-palette-list .pi-palette-item').length;
       })()`,
       );
@@ -423,7 +426,10 @@ app.whenReady().then(async () => {
           );
           return Number(n) > 0 ? Number(n) : null;
         },
-        15_000,
+        // A fresh home makes pi install its packages on first start ("added 134
+        // packages" showed up here), and the palette's data arrives over RPC, so
+        // this can take much longer in the sandbox than in the read-only run.
+        75_000,
         "palette items",
       ).catch(() => 0);
       // The built-in commands do not depend on how many sessions exist, so the

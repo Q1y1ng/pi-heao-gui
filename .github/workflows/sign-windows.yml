@@ -1,0 +1,114 @@
+name: sign windows artifacts (SignPath Foundation)
+
+# Manual on purpose. This repository is applying for the free signing program
+# at https://signpath.org/foundation — the token and the identifiers below only
+# exist once that application is approved, and a workflow that needs missing
+# secrets would fail on every push.
+#
+# Configure before the first run (Settings → Secrets and variables → Actions):
+#   secret SIGNPATH_API_TOKEN      issued by SignPath for this project
+#   var    SIGNPATH_ORG_ID         your SignPath organization id
+#   var    SIGNPATH_PROJECT        e.g. pi-heao-gui
+#   var    SIGNPATH_POLICY         e.g. release-signing
+#   var    SIGNPATH_CONFIG         e.g. pi-heao-gui-portable
+#   var    SIGNPATH_API_URL        optional, public service by default
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to build and sign (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    steps:
+      # Fail with a readable message instead of an API error deep inside the
+      # signing step when the configuration is incomplete.
+      - name: Check the signing configuration
+        shell: pwsh
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORG_ID }}
+          PROJECT: ${{ vars.SIGNPATH_PROJECT }}
+          POLICY: ${{ vars.SIGNPATH_POLICY }}
+          CONFIG: ${{ vars.SIGNPATH_CONFIG }}
+        run: |
+          $missing = @()
+          if (-not $env:TOKEN) { $missing += 'SIGNPATH_API_TOKEN' }
+          if (-not $env:ORG) { $missing += 'SIGNPATH_ORG_ID' }
+          if (-not $env:PROJECT) { $missing += 'SIGNPATH_PROJECT' }
+          if (-not $env:POLICY) { $missing += 'SIGNPATH_POLICY' }
+          if (-not $env:CONFIG) { $missing += 'SIGNPATH_CONFIG' }
+          if ($missing.Count -gt 0) {
+            Write-Error ("Signing is not configured. Missing: " +
+              ($missing -join ', '))
+          }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the unsigned Windows artifacts
+        run: npm run dist
+
+      - name: Upload the unsigned artifacts
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows
+          path: dist-electron/*.exe
+          if-no-files-found: error
+
+      - name: Sign them with SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_CONFIG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Upload the signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-windows
+          path: signed/*.exe
+          if-no-files-found: error
+
+      - name: Record the hashes for the release notes
+        shell: pwsh
+        run: |
+          Get-ChildItem signed/*.exe | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "{0}  {1}" -f $h, $_.Name |
+              Add-Content signed/SHA256SUMS.txt
+          }
+          Get-Content signed/SHA256SUMS.txt
+
+      - name: Upload the checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-checksums
+          path: signed/SHA256SUMS.txt
+          if-no-files-found: error

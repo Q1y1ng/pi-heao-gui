@@ -57,6 +57,11 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 > **两个包都未签名**，首次运行 Windows SmartScreen 会提示“已保护你的电脑”；
 > 点“更多信息”→“仍要运行”即可，建议先比对 Release 页面里的 SHA256。
 >
+> 签名正在走 **SignPath Foundation（开源项目免费签名）** 的申请流程，仓库侧已就绪
+> （`.github/workflows/sign-windows.yml` 手动触发 + `signpath/artifact-configuration.xml`），
+> 见 `docs/RELEASING.md` 第 8 节。签名后的包会替换 Release 上的同名文件，并同步更新 SHA256。
+> 注意即便是签名包，SmartScreen 的信誉也要靠下载量逐步累积（不是 EV 证书）。
+>
 > **首次运行**：应用会自动检查 pi CLI；未安装时会弹出安装指引并可一键打开设置。
 
 ### 方式三：从源码构建

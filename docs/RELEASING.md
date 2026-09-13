@@ -102,3 +102,50 @@ Release notes must state the two things users will hit:
 - Check the CI badge on `main`.
 - If `latest.yml` is published, a future `electron-updater` integration can point
   at it; today upgrades are a manual re-download (see CHANGELOG limitations).
+
+---
+
+## 8. Windows code signing (SignPath Foundation)
+
+The free signing program at <https://signpath.org/foundation> covers open-source
+projects: the certificate is issued to SignPath and used on our behalf, so there
+is no certificate to buy. It signs Windows artifacts only, and it is not an EV
+certificate, so SmartScreen reputation still accumulates from downloads.
+
+### What the application needs
+
+Be ready to state all of this in the form — the reviewers check it:
+
+| Requirement | Where it is satisfied here |
+| --- | --- |
+| OSI-approved license | `LICENSE` (MIT) |
+| Public source repository | <https://github.com/Q1y1ng/pi-heao-gui> |
+| Build instructions that reproduce the artifact | `CONTRIBUTING.md`, `npm ci && npm run dist` |
+| No signing of third-party binaries | The vendored upstream UI is MIT and is bundled, not signed |
+| Project is not malware / not a fork used to distribute someone else's build | `NOTICE.md` describes what is vendored and why |
+| An active maintainer | The repository owner |
+
+### Once approved
+
+1. In SignPath, create a **project** for this repository and link the GitHub
+   organization (SignPath verifies the origin of the artifact).
+2. Create a **signing policy** (e.g. `release-signing`) restricted to release
+   tags, and an **artifact configuration** from
+   `signpath/artifact-configuration.xml` (slug e.g. `pi-heao-gui-portable`).
+3. Issue an API token for the project.
+4. Add to GitHub — secret `SIGNPATH_API_TOKEN`; variables `SIGNPATH_ORG_ID`,
+   `SIGNPATH_PROJECT`, `SIGNPATH_POLICY`, `SIGNPATH_CONFIG`.
+5. Run **sign windows artifacts (SignPath Foundation)** from the Actions tab with
+   the tag to sign. It builds that tag, submits the unsigned artifacts, waits for
+   the signing to finish, and uploads the signed `.exe` files plus
+   `SHA256SUMS.txt`.
+6. Attach those signed files to the release and update the checksums in the
+   release notes — never mix signed and unsigned hashes.
+
+### Known gap
+
+Signing the NSIS installer signs the installer itself. The application
+`Pi Heao GUI.exe` that it unpacks stays unsigned until the build does a two-pass
+job: build `win-unpacked`, sign that executable, then package the installer. The
+portable target is signed as-is.
+

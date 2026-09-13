@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for Pi Heao GUI.
+
+  The GitHub Action uploads the build output as a zip, so the outer element is
+  <zip-file>. Both Windows targets are signed here:
+
+    - the portable executable, which users run directly;
+    - the NSIS installer.
+
+  Two things to know when this is first wired up:
+
+  1. The file names carry the version ("Pi Heao GUI 1.0.0 Portable.exe"), hence
+     the wildcard. Password the signing policy so a renamed artifact cannot pass
+     through unsigned: SignPath refuses an artifact whose configuration matches
+     nothing.
+  2. Signing the installer signs the installer. The application executable that
+     unzips from it is a separate file; to sign that too, build the unpacked app
+     first, sign "Pi Heao GUI.exe" from the win-unpacked directory, and only then
+     package the installer. Until that two-pass build is in place, an installed
+     copy still relies on the installer's signature.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="*.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

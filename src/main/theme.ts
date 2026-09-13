@@ -132,7 +132,8 @@ export function resolveTheme(theme: ThemeName): "dark" | "light" {
 }
 
 /** Build the token block for a theme + accent colour. */
-export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", config.chatFontSize): string {
+export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
+  const fs = Math.min(32, Math.max(8, Math.round(chatFontSize || 13)));
   const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
   const p = palette(resolveTheme(theme), accentColor);
   return renderTokens(p, accentColor);
@@ -613,14 +614,14 @@ select option {
 `;
 
 // Default (dark) token block, used by the settings window which imports it directly.
-export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff", config.chatFontSize);
+export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff");
 
 /**
  * Full theme block for a theme + accent. The token element has its own id so a
  * live theme switch only has to replace that one element (pi:theme channel).
  */
 export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
-  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent, config.chatFontSize)}</style>
+  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent)}</style>
 <style id="pi-heao-theme">${THEME_BODY}</style>`;
 }
 

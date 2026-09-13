@@ -132,7 +132,7 @@ export function resolveTheme(theme: ThemeName): "dark" | "light" {
 }
 
 /** Build the token block for a theme + accent colour. */
-export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
+export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", config.chatFontSize): string {
   const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
   const p = palette(resolveTheme(theme), accentColor);
   return renderTokens(p, accentColor);
@@ -179,10 +179,12 @@ function renderTokens(p: Palette, accentColor: string): string {
   --pi-font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
     "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --pi-font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace;
-  --pi-fs-xs: 11px;
-  --pi-fs-sm: 12px;
-  --pi-fs-md: 13px;
-  --pi-fs-lg: 14px;
+  /* One master size. The appearance slider writes config.chatFontSize; every other
+     size in the app is a ratio of it, the same trick the chat stylesheet already uses. */
+  --pi-fs-md: ${fs}px;
+  --pi-fs-xs: calc(var(--pi-fs-md) * 11 / 13);
+  --pi-fs-sm: calc(var(--pi-fs-md) * 12 / 13);
+  --pi-fs-lg: calc(var(--pi-fs-md) * 14 / 13);
 
   --pi-speed: 130ms;
 }
@@ -611,14 +613,14 @@ select option {
 `;
 
 // Default (dark) token block, used by the settings window which imports it directly.
-export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff");
+export const TOKENS_CSS = buildTokensCss("dark", "#4c8dff", config.chatFontSize);
 
 /**
  * Full theme block for a theme + accent. The token element has its own id so a
  * live theme switch only has to replace that one element (pi:theme channel).
  */
 export function buildThemeCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
-  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent)}</style>
+  return `<style id="pi-heao-tokens">${buildTokensCss(theme, accent, config.chatFontSize)}</style>
 <style id="pi-heao-theme">${THEME_BODY}</style>`;
 }
 

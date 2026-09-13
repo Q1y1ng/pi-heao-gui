@@ -21,67 +21,67 @@ export function buildSettingsHtml(lang: UiLang = "zh-cn"): string {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-  background:#1e1e1e;color:#d4d4d4;font-size:13px;height:100vh;display:flex;flex-direction:column}
+  background:#1e1e1e;color:#d4d4d4;font-size:var(--pi-fs-md);height:100vh;display:flex;flex-direction:column}
 .toolbar{padding:12px 16px;border-bottom:1px solid #3c3c3c;display:flex;align-items:center;gap:10px;background:#252526}
 .toolbar h1{font-size:15px;font-weight:600;flex:1;color:#e8e8e8}
-.toolbar button{padding:5px 12px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:12px}
+.toolbar button{padding:5px 12px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:var(--pi-fs-sm)}
 .toolbar button.primary{background:#0e639c;border-color:#0e639c;color:#fff}
 .toolbar button:hover{background:#3a3a3a}
 .toolbar button.primary:hover{background:#1177bb}
 .tabs{display:flex;border-bottom:1px solid #3c3c3c;padding:0 8px;background:#252526;overflow-x:auto}
-.tab{padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;color:#999;font-size:12px;white-space:nowrap;user-select:none}
+.tab{padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;color:#999;font-size:var(--pi-fs-sm);white-space:nowrap;user-select:none}
 .tab:hover{color:#d4d4d4}
 .tab.active{color:#4ec9b0;border-bottom-color:#4ec9b0}
 .content{flex:1;overflow-y:auto;padding:16px}
 .panel{display:none}
 .panel.active{display:block}
 .field{margin-bottom:14px}
-.field label{display:block;margin-bottom:5px;color:#aaa;font-size:12px}
+.field label{display:block;margin-bottom:5px;color:#aaa;font-size:var(--pi-fs-sm)}
 .field input,.field select,.field textarea{
   width:100%;padding:7px 10px;border-radius:5px;border:1px solid #454545;
-  background:#2d2d2d;color:#d4d4d4;font-size:13px;font-family:inherit;
+  background:#2d2d2d;color:#d4d4d4;font-size:var(--pi-fs-md);font-family:inherit;
 }
-.field textarea{min-height:80px;resize:vertical;font-family:'Cascadia Code','Consolas',monospace;font-size:12px}
+.field textarea{min-height:80px;resize:vertical;font-family:'Cascadia Code','Consolas',monospace;font-size:var(--pi-fs-sm)}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#0e639c}
-.field .hint{margin-top:3px;font-size:11px;color:#777}
+.field .hint{margin-top:3px;font-size:var(--pi-fs-xs);color:#777}
 .row{display:flex;gap:10px}
 .row .field{flex:1}
 .card{background:#252526;border:1px solid #3c3c3c;border-radius:6px;padding:12px;margin-bottom:10px}
 .card-title{font-weight:600;color:#e0e0e0;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-.card-desc{color:#999;font-size:12px;line-height:1.5}
+.card-desc{color:#999;font-size:var(--pi-fs-sm);line-height:1.5}
 .card-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#0e639c;color:#fff}
 .card-badge.warn{background:#8b5a00}
 .card-badge.muted{background:#555}
 .card-badge.ok{background:#2e7d32}
 .list-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:5px;margin:3px 0;background:#2a2a2a}
 .list-item:hover{background:#303030}
-.list-item .name{flex:1;font-size:12px;color:#d4d4d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.list-item .meta{font-size:11px;color:#888;flex-shrink:0}
+.list-item .name{flex:1;font-size:var(--pi-fs-sm);color:#d4d4d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list-item .meta{font-size:var(--pi-fs-xs);color:#888;flex-shrink:0}
 .json-editor{width:100%;min-height:200px;padding:10px;border-radius:5px;border:1px solid #454545;
-  background:#1a1a1a;color:#d4d4d4;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical}
-.status{padding:6px 16px;border-top:1px solid #3c3c3c;font-size:11px;color:#888;background:#252526}
+  background:#1a1a1a;color:#d4d4d4;font-family:'Cascadia Code','Consolas',monospace;font-size:var(--pi-fs-sm);resize:vertical}
+.status{padding:6px 16px;border-top:1px solid #3c3c3c;font-size:var(--pi-fs-xs);color:#888;background:#252526}
 .brand{padding:0 16px 6px;font-size:9.5px;color:#4a4a4a;letter-spacing:0.35px;background:#252526;text-align:right;user-select:none;-webkit-user-select:none}
 .status.ok{color:#4ec9b0}
 .status.err{color:#f44747}
 .checkbox-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .checkbox-row input[type=checkbox]{width:auto;accent-color:#0e639c}
 .checkbox-row label{margin:0;color:#d4d4d4}
-.empty-hint{text-align:center;padding:30px;color:#666;font-size:12px}
-.section-title{font-size:13px;font-weight:600;color:#e0e0e0;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #333;display:flex;align-items:center;gap:8px}
+.empty-hint{text-align:center;padding:30px;color:#666;font-size:var(--pi-fs-sm)}
+.section-title{font-size:var(--pi-fs-md);font-weight:600;color:#e0e0e0;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #333;display:flex;align-items:center;gap:8px}
 .section-title:first-child{margin-top:0}
-.section-title .btn-add{margin-left:auto;padding:3px 10px;border-radius:4px;border:1px solid #0e639c;background:transparent;color:#0e639c;cursor:pointer;font-size:11px}
+.section-title .btn-add{margin-left:auto;padding:3px 10px;border-radius:4px;border:1px solid #0e639c;background:transparent;color:#0e639c;cursor:pointer;font-size:var(--pi-fs-xs)}
 .section-title .btn-add:hover{background:#0e639c;color:#fff}
 .masked{font-family:monospace;letter-spacing:1px}
-.btn-sm{padding:3px 8px;border-radius:4px;border:1px solid #555;background:transparent;color:#aaa;cursor:pointer;font-size:11px;white-space:nowrap}
+.btn-sm{padding:3px 8px;border-radius:4px;border:1px solid #555;background:transparent;color:#aaa;cursor:pointer;font-size:var(--pi-fs-xs);white-space:nowrap}
 .btn-sm:hover{background:#333;color:#fff}
 .btn-sm.danger{border-color:#8b3a3a;color:#f44747}
 .btn-sm.danger:hover{background:#5a1a1a}
 .btn-sm.ok{border-color:#2e7d32;color:#4ec9b0}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal{background:#252526;border:1px solid #454545;border-radius:8px;padding:20px;width:480px;max-height:80vh;overflow-y:auto}
-.modal h3{font-size:14px;margin-bottom:14px;color:#e8e8e8}
+.modal h3{font-size:var(--pi-fs-lg);margin-bottom:14px;color:#e8e8e8}
 .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
-.modal .actions button{padding:6px 16px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:12px}
+.modal .actions button{padding:6px 16px;border-radius:5px;border:1px solid #4a4a4a;background:#333;color:#d4d4d4;cursor:pointer;font-size:var(--pi-fs-sm)}
 .modal .actions button.primary{background:#0e639c;border-color:#0e639c;color:#fff}
 .switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
 .switch input{opacity:0;width:0;height:0}
@@ -117,7 +117,7 @@ body {
   background: #0b0b0b;
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #fff;
-  font-size: 12px;
+  font-size: var(--pi-fs-sm);
   font-weight: 700;
   display: inline-flex;
   align-items: center;
@@ -448,7 +448,7 @@ body {
   border-radius: var(--pi-radius-pill);
   background: transparent;
   color: var(--pi-text-faint);
-  font-size: 13px;
+  font-size: var(--pi-fs-md);
   line-height: 1;
   cursor: pointer;
 }
@@ -670,7 +670,7 @@ body {
       <button class="btn-add" id="btn-add-skill">+ 新建技能</button>
     </div>
     <div id="skills-list"></div>
-    <div class="hint" style="color:#666;font-size:12px;margin-top:12px">
+    <div class="hint" style="color:#666;font-size:var(--pi-fs-sm);margin-top:12px">
       技能目录：~/.pi/agent/skills/（每个子目录含 SKILL.md）
     </div>
   </div>
@@ -714,7 +714,7 @@ body {
     <div class="section-title">字体大小</div>
     <div class="row">
       <div class="field" style="flex:0 0 130px">
-        <label>聊天字体（px）</label>
+        <label>界面字号（px）</label>
         <input type="number" id="ap-fontSize" min="8" max="32" step="1">
       </div>
       <div class="field">
@@ -964,7 +964,7 @@ function renderModels() {
         '<button class="btn-sm danger" data-act="del-model" data-pid="' + esc(id) + '" data-mid="' + esc(mid) + '">删除</button>';
       mlist.appendChild(row);
     }
-    if (!modelIds.length) mlist.innerHTML = '<div style="color:#666;font-size:11px;padding:4px 0">无模型，点击「+ 模型」添加</div>';
+    if (!modelIds.length) mlist.innerHTML = '<div style="color:#666;font-size:var(--pi-fs-xs);padding:4px 0">无模型，点击「+ 模型」添加</div>';
     card.appendChild(mlist);
     el.appendChild(card);
   }

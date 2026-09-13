@@ -92,7 +92,7 @@ export const SIDEBAR_HTML = `
     border: 1px solid rgba(255, 255, 255, 0.16);
     color: #fff;
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--pi-fs-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -432,7 +432,7 @@ export const SIDEBAR_HTML = `
     border: 1px solid var(--pi-border); border-radius: 999px; cursor: pointer;
   }
   #pi-sidebar .pi-restore-btn:hover { color: var(--pi-text); border-color: var(--pi-border-strong); }
-  #pi-archived-list .pi-archived-empty { font-size: 11px; color: var(--pi-text-faint); padding: 4px 10px 8px; }
+  #pi-archived-list .pi-archived-empty { font-size: var(--pi-fs-xs); color: var(--pi-text-faint); padding: 4px 10px 8px; }
   .pi-ctx-item.danger { color: var(--pi-danger); }
   .pi-ctx-hint { margin-left: auto; color: var(--pi-text-faint); font-size: 10px; padding-left: 12px; }
   .pi-prompt-backdrop {
@@ -444,16 +444,16 @@ export const SIDEBAR_HTML = `
     border: 1px solid var(--pi-border-strong); border-radius: var(--pi-radius-lg);
     box-shadow: var(--pi-shadow-2); padding: 16px;
   }
-  .pi-prompt-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .pi-prompt-title { font-size: var(--pi-fs-md); font-weight: 600; margin-bottom: 10px; }
   .pi-prompt-input {
     width: 100%; box-sizing: border-box; background: var(--pi-raised); color: var(--pi-text);
     border: 1px solid var(--pi-border-strong); border-radius: var(--pi-radius-sm);
-    padding: 8px 10px; font-family: var(--pi-font-ui); font-size: 13px; outline: none;
+    padding: 8px 10px; font-family: var(--pi-font-ui); font-size: var(--pi-fs-md); outline: none;
   }
   .pi-prompt-input:focus { border-color: var(--pi-accent); box-shadow: var(--pi-ring); }
   .pi-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   .pi-prompt-btn {
-    font-family: inherit; font-size: 12px; padding: 6px 14px; border-radius: var(--pi-radius-sm);
+    font-family: inherit; font-size: var(--pi-fs-sm); padding: 6px 14px; border-radius: var(--pi-radius-sm);
     background: var(--pi-raised); color: var(--pi-text); border: 1px solid var(--pi-border); cursor: pointer;
   }
   .pi-prompt-btn.primary { background: var(--pi-accent); color: #ffffff; border-color: var(--pi-accent); }

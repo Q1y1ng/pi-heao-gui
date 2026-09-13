@@ -296,14 +296,14 @@ export const PALETTE_CSS = `
 }
 .pi-palette-input {
   border: none; outline: none; background: var(--pi-raised); color: var(--pi-text);
-  font-family: var(--pi-font-ui); font-size: 14px; padding: 14px 16px;
+  font-family: var(--pi-font-ui); font-size: var(--pi-fs-lg); padding: 14px 16px;
   border-bottom: 1px solid var(--pi-border);
 }
 .pi-palette-input::placeholder { color: var(--pi-text-faint); }
 .pi-palette-list { overflow: auto; padding: 4px 0; }
 .pi-palette-item {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px; cursor: pointer;
-  font-size: 12.5px; border-left: 2px solid transparent;
+  font-size: var(--pi-fs-sm); border-left: 2px solid transparent;
 }
 .pi-palette-item.active { background: var(--pi-accent-soft); border-left-color: var(--pi-accent); }
 .pi-palette-kind {
@@ -314,18 +314,18 @@ export const PALETTE_CSS = `
 .pi-kind-hit { color: var(--pi-success); border-color: var(--pi-success); }
 .pi-palette-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-palette-sub {
-  color: var(--pi-text-faint); font-size: 11px; margin-left: auto;
+  color: var(--pi-text-faint); font-size: var(--pi-fs-xs); margin-left: auto;
   max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: var(--pi-font-mono);
 }
 .pi-palette-hint {
-  margin-left: auto; color: var(--pi-text-faint); font-size: 11px;
+  margin-left: auto; color: var(--pi-text-faint); font-size: var(--pi-fs-xs);
   font-family: var(--pi-font-mono);
 }
-.pi-palette-empty { padding: 18px; text-align: center; color: var(--pi-text-faint); font-size: 12px; }
+.pi-palette-empty { padding: 18px; text-align: center; color: var(--pi-text-faint); font-size: var(--pi-fs-sm); }
 .pi-palette-foot {
   display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--pi-border);
-  background: var(--pi-raised); font-size: 11px; color: var(--pi-text-faint);
+  background: var(--pi-raised); font-size: var(--pi-fs-xs); color: var(--pi-text-faint);
 }
 .pi-palette-foot b { color: var(--pi-text-dim); font-weight: 600; }
 .pi-palette-foot span:last-child { margin-left: auto; }

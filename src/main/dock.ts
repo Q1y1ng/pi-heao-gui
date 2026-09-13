@@ -93,19 +93,19 @@ export const DOCK_CSS = `
 }
 .pi-dock-tabs { display: flex; gap: 2px; }
 .pi-dock-tab {
-  font-family: inherit; font-size: 12px; padding: 5px 12px; cursor: pointer;
+  font-family: inherit; font-size: var(--pi-fs-sm); padding: 5px 12px; cursor: pointer;
   background: none; border: none; color: var(--pi-text-dim);
   border-bottom: 2px solid transparent;
 }
 .pi-dock-tab:hover { color: var(--pi-text); }
 .pi-dock-tab.active { color: var(--pi-text); border-bottom-color: var(--pi-accent); }
 .pi-dock-meta {
-  font-family: var(--pi-font-mono); font-size: 11px; color: var(--pi-text-faint);
+  font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); color: var(--pi-text-faint);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pi-dock-actions { margin-left: auto; display: flex; gap: 6px; }
 .pi-dock-btn {
-  font-family: inherit; font-size: 11px; padding: 3px 9px; cursor: pointer;
+  font-family: inherit; font-size: var(--pi-fs-xs); padding: 3px 9px; cursor: pointer;
   background: var(--pi-raised); color: var(--pi-text-dim);
   border: 1px solid var(--pi-border); border-radius: var(--pi-radius-sm);
 }
@@ -122,41 +122,41 @@ export const DOCK_CSS = `
 .pi-git-side { width: 280px; flex: none; border-right: 1px solid var(--pi-border); display: flex; flex-direction: column; gap: 6px; padding: 6px; }
 .pi-files-head {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px; flex: none;
-  font-family: var(--pi-font-mono); font-size: 11px; color: var(--pi-text-dim);
+  font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); color: var(--pi-text-dim);
   border-bottom: 1px solid var(--pi-border);
 }
 #pi-files-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #pi-files-list, #pi-git-list { flex: 1; overflow: auto; padding: 4px 0; }
 .pi-files-row {
   display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer;
-  font-size: 12px; color: var(--pi-text-dim); white-space: nowrap;
+  font-size: var(--pi-fs-sm); color: var(--pi-text-dim); white-space: nowrap;
 }
 .pi-files-row:hover { background: var(--pi-raised); color: var(--pi-text); }
 .pi-files-row.active { background: var(--pi-accent-soft); color: var(--pi-text); }
 .pi-files-row .pi-files-icon { width: 14px; text-align: center; opacity: 0.7; }
 .pi-files-bar {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; flex: none;
-  border-bottom: 1px solid var(--pi-border); font-size: 12px;
+  border-bottom: 1px solid var(--pi-border); font-size: var(--pi-fs-sm);
 }
 .pi-files-spacer { flex: 1; }
 #pi-files-editor, #pi-commit-msg {
   flex: 1; width: 100%; resize: none; border: none; outline: none;
   background: var(--pi-bg); color: var(--pi-text);
-  font-family: var(--pi-font-mono); font-size: 12.5px; line-height: 1.55; padding: 8px;
+  font-family: var(--pi-font-mono); font-size: var(--pi-fs-sm); line-height: 1.55; padding: 8px;
 }
 .pi-git-actions { display: flex; flex-direction: column; gap: 6px; padding: 0 0 4px; }
 .pi-git-actions input {
-  background: var(--pi-raised); color: var(--pi-text); font-family: inherit; font-size: 12px;
+  background: var(--pi-raised); color: var(--pi-text); font-family: inherit; font-size: var(--pi-fs-sm);
   border: 1px solid var(--pi-border); border-radius: var(--pi-radius-sm); padding: 5px 7px; outline: none;
 }
 .pi-git-actions input:focus { border-color: var(--pi-accent); box-shadow: var(--pi-ring); }
 .pi-git-hint { font-size: 10.5px; color: var(--pi-text-faint); line-height: 1.5; padding: 2px 0 4px; }
-.pi-git-file { display: flex; gap: 8px; align-items: center; padding: 3px 6px; font-size: 12px; }
-.pi-git-file .pi-git-add { color: var(--pi-success); font-family: var(--pi-font-mono); font-size: 11px; }
-.pi-git-file .pi-git-del { color: var(--pi-danger); font-family: var(--pi-font-mono); font-size: 11px; }
+.pi-git-file { display: flex; gap: 8px; align-items: center; padding: 3px 6px; font-size: var(--pi-fs-sm); }
+.pi-git-file .pi-git-add { color: var(--pi-success); font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); }
+.pi-git-file .pi-git-del { color: var(--pi-danger); font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); }
 .pi-git-file .pi-git-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-git-sec-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pi-text-faint); padding: 6px 6px 2px; }
-.CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: 12.5px !important; }
+.CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: var(--pi-fs-sm) !important; }
 `;
 
 export const DOCK_SCRIPT = `

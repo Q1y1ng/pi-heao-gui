@@ -553,7 +553,7 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
 
 /** Push the current token CSS to every chat window (live theme switching). */
 function broadcastTheme(): void {
-  const css = buildTokensCss(config.theme, config.accent);
+  const css = buildTokensCss(config.theme, config.accent, config.chatFontSize);
   const payload = { type: "theme", css, theme: config.theme, accent: config.accent };
   // The chat UI lives in a <webview>, which is not a BrowserWindow and therefore
   // never appeared in getAllWindows(). Its stylesheet tokens were never delivered,
@@ -901,7 +901,7 @@ ipcMain.handle("pi:get-commands", async (e) => {
 ipcMain.handle("pi:set-theme", async (_e, theme: string) => {
   const next = theme === "light" || theme === "dark" || theme === "system" ? theme : "dark";
   saveConfig({ ...config, theme: next });
-  return { ok: true, theme: next, css: buildTokensCss(next, config.accent) };
+  return { ok: true, theme: next, css: buildTokensCss(next, config.accent, config.chatFontSize) };
 });
 
 // ─── IPC: extension packages + provider auth (pi CLI one-shots) ───────

@@ -77,7 +77,7 @@
   content: "\eb51";
 }
 :root {
-  --chat-fs: 13px;
+  --chat-fs: var(--pi-fs-md, 13px);   /* 跟随应用的界面字号主控 */
   --chat-fs-8: calc(var(--chat-fs) * 8 / 13);
   --chat-fs-9: calc(var(--chat-fs) * 9 / 13);
   --chat-fs-10: calc(var(--chat-fs) * 10 / 13);

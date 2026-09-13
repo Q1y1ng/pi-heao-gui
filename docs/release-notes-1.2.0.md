@@ -59,12 +59,21 @@ npm install -g --ignore-scripts @earendil-works/pi-coding-agent
   点 **更多信息 → 仍要运行**；或先比对下方 SHA256。签名申请走
   [SignPath Foundation](https://signpath.org/foundation)，仓库侧已就绪。
 - 已安装的 1.1.x 会在启动约 20 秒后自动检查并下载本版；**便携版需手动换包**。
-- 发布前的门禁：`npm test` **127/127（0 跳过）**、`npm run verify`（真窗口）、
-  `npm run e2e`、`npm run e2e:isolated`、`npm run smoke`、`npm run check:package`
-  （打包产物含全部 13 条运行时依赖）。
+- 发布前的门禁（全部在冻结的 1.2.0 提交上跑过）：
+  `npm test` **127/127**、`npm run verify` **35/35**（真窗口）、`npm run e2e` **75/75**、
+  `npm run e2e:isolated` **85/85**（沙箱内破坏性流程）、`npm run smoke` ✓、
+  `npm run test:daily` **20/20**（真窗口 + 真模型 opencode-go / mimo-v2.5，一轮 8 秒跑完）、
+  `npm run check:package` ✓（产物含全部 13 条运行时依赖）✓。
+- 新增的**对比度门禁**就是在这轮审计里长出来的：它在浅色/深色各遍历一遍页面，自己找出了四个真缺陷
+  （`.pi-tb-brand` 2.2:1、`empty-hint` 4.31:1、`pi-dock-meta` 3.50:1、`pi-git-del` 4.20:1）✓，
+  全部修完并复验为 **0 失败** ✓。
+- 打包产物真的启动过一次 ✓（便携版解包后窗口为 `Pi Heao GUI` ✓）；并校对过 `latest.yml` 里的文件名与
+  磁盘上一致 ✓ —— 不一致会让自更新永久停在旧版 ✓。
 
 ## 校验和（SHA256）
 
 ```text
-<PENDING-DIST>
+b96a7fbe7dc8f62525b1c6d8a4b276b9284c32d2f710303195f3175a5765b825  Pi-Heao-GUI-Setup-1.2.0.exe
+27e5ac17c667f966d8cb71dfeb7f6542859b6de36a96918ecf9fe80af6c924b4  Pi-Heao-GUI-1.2.0-Portable.exe
+9d930177e7a2573f7075bf2c35b74eaf5e1c6346109b7fc49db55cd4c274118a  pi-heao-gui-1.2.0-source.zip
 ```

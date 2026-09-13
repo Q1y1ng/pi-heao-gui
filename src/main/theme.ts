@@ -176,10 +176,9 @@ function renderTokens(p: Palette, accentColor: string): string {
   --pi-code-bg: ${p.codeBg};
 
   /* type */
-  --pi-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system,
+  --pi-font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
     "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  --pi-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
-    Consolas, "Liberation Mono", Menlo, monospace;
+  --pi-font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace;
   --pi-fs-xs: 11px;
   --pi-fs-sm: 12px;
   --pi-fs-md: 13px;

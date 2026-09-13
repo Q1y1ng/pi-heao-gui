@@ -96,7 +96,7 @@ body {
   padding: 0;
 }
 body {
-  font-family: var(--vscode-font-family);
+  font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei UI", "微软雅黑", system-ui, sans-serif);
   font-size: var(--chat-fs);
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
@@ -265,7 +265,7 @@ body {
   border: 1px solid var(--vscode-widget-border, transparent);
   border-radius: 4px;
   font-size: var(--chat-fs-11);
-  font-family: var(--vscode-font-family);
+  font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei UI", "微软雅黑", system-ui, sans-serif);
   white-space: pre;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -910,7 +910,7 @@ body {
   color: var(--vscode-textBlockQuote-foreground, inherit);
 }
 .text-block code {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: 0.92em;
   background: var(--vscode-textCodeBlock-background, rgba(127, 127, 127, 0.1));
   padding: 1px 4px;
@@ -1210,7 +1210,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 }
 .tool-name {
   font-weight: 600;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
 }
 .tool-block.is-mcp > .tool-head .tool-name::before {
   content: "MCP";
@@ -1225,7 +1225,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   vertical-align: 1px;
 }
 .tool-summary {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   color: var(--vscode-foreground);
   opacity: 0.9;
   flex: 1 1 auto;
@@ -1276,7 +1276,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 .tool-result {
   margin: 0;
   padding: 6px 8px;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-12);
   white-space: pre-wrap;
   word-break: break-word;
@@ -1311,7 +1311,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 .diff-block {
   margin: 0;
   padding: 2px 0;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-12);
   line-height: 1.5;
   color: var(--vscode-foreground);
@@ -1457,7 +1457,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   opacity: 0.8;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
 }
 .sub-toolcall-name {
   font-weight: 600;
@@ -1516,7 +1516,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 }
 .code-block {
   margin: 0;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-12);
   line-height: 1.5;
   color: var(--vscode-foreground);
@@ -1599,7 +1599,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 }
 .autocomplete-item .ac-name {
   font-weight: 500;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-12);
 }
 .autocomplete-item .ac-desc {
@@ -1629,7 +1629,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   color: var(--vscode-input-foreground);
   border: none;
   border-radius: 8px 8px 0 0;
-  font-family: var(--vscode-font-family);
+  font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei UI", "微软雅黑", system-ui, sans-serif);
   font-size: var(--chat-fs);
   line-height: 1.5;
   outline: none;
@@ -1834,7 +1834,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border, var(--vscode-widget-border, transparent));
   border-radius: 4px;
-  font-family: var(--vscode-font-family);
+  font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei UI", "微软雅黑", system-ui, sans-serif);
   font-size: var(--chat-fs);
   outline: none;
 }
@@ -2006,7 +2006,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   min-width: 20px;
   height: 19px;
   padding: 0 6px;
-  font-family: var(--vscode-font-family);
+  font-family: var(--vscode-font-family, "Segoe UI", "Microsoft YaHei UI", "微软雅黑", system-ui, sans-serif);
   font-size: var(--chat-fs-11);
   line-height: 1;
   color: var(--vscode-foreground);
@@ -2118,7 +2118,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 }
 .widget-body {
   margin: 0;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-12);
   white-space: pre;
   line-height: 1.5;
@@ -2173,7 +2173,7 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
 }
 .todo-id {
   flex-shrink: 0;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--vscode-editor-font-family, "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace);
   font-size: var(--chat-fs-11);
   color: var(--vscode-textLink-foreground, var(--vscode-charts-blue, #3794ff));
   opacity: 0.8;

@@ -86,18 +86,24 @@ vendor/upstream/     byte-for-byte upstream copy — see docs/UPSTREAM.md
 
 ## Branch protection
 
-`main` is protected: force pushes and deletion are refused, for admins too, and
-three CI jobs must pass before a pull request can be merged —
-`lint + typecheck + unit tests`, `upstream fidelity (vendor matches the pinned tag)`
-and `packaged build contains its runtime dependencies`. The advisory `smoke` job is
+`main` is protected: force pushes and deletion are refused, and three CI jobs must
+pass before a pull request can be merged — `lint + typecheck + unit tests`,
+`upstream fidelity (vendor matches the pinned tag)` and
+`packaged build contains its runtime dependencies`. The advisory `smoke` job is
 deliberately not required, so a headless-runner hiccup cannot block a Dependabot
 merge.
 
-Direct pushes to `main` are still allowed, which suits a single maintainer. Note
-what that means: the checks run *after* the push, so a red run is "fix it in the
-next commit" rather than "the push was refused". That is worth remembering on the
-day a version bump quietly breaks a test — it happened, and nothing said so until
-CI, because CI was skipping the test in question at the time.
+`enforce_admins` is **off**, and that is load-bearing rather than lax. With it on,
+required status checks apply to direct pushes too — and no push can satisfy them,
+because the checks only run *after* it. Enabling it rejected the very next push
+with `protected branch hook declined`. So admins bypass, which keeps direct pushes
+alive; the checks still gate the Dependabot bot's pull requests, which is where
+they earn their keep anyway.
+
+Direct pushes therefore run their checks after the fact: a red run means the next
+commit has to fix it, not that the push was refused. That is how a version bump
+broke the watermark test with nobody the wiser — CI was skipping that test at the
+time.
 
 ## Conventions
 

@@ -179,6 +179,13 @@ export function getRpcLogPath(): string {
   return LOG_PATH;
 }
 const LOG_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Ceiling on one unterminated JSONL line. Requests and responses can be large
+ * (a file read, a long message), but a peer that never sends a newline would
+ * otherwise grow the reader's buffer until the process dies.
+ */
+const MAX_LINE_BYTES = 32 * 1024 * 1024;
 let logBytes = -1;
 let logWriteErrors = 0;
 
@@ -344,8 +351,18 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
     if (!stream) return;
     const decoder = new StringDecoder("utf8");
     let buffer = "";
-    stream.on("data", (chunk: Buffer | string) => {
+    const onData = (chunk: Buffer | string) => {
       buffer += typeof chunk === "string" ? chunk : decoder.write(chunk);
+      if (buffer.length > MAX_LINE_BYTES) {
+        // Refuse rather than accumulate: the protocol is desynchronised, so
+        // pending requests are failed and this stream stops being read.
+        buffer = "";
+        stream.removeListener("data", onData);
+        failAll(
+          `pi 输出的单行超过 ${Math.round(MAX_LINE_BYTES / 1024 / 1024)} MB，协议已失步，连接已中止`,
+        );
+        return;
+      }
       while (true) {
         const nl = buffer.indexOf("\n");
         if (nl === -1) break;
@@ -354,7 +371,8 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
         if (line.endsWith("\r")) line = line.slice(0, -1);
         if (line.length > 0) onLine(line);
       }
-    });
+    };
+    stream.on("data", onData);
     stream.on("end", () => {
       buffer += decoder.end();
       if (buffer.length > 0) {

@@ -3,7 +3,7 @@
  * per-day spend). One JSON file in userData, written lazily and bounded, so a
  * long-lived profile cannot grow it without limit.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { log, errText } from "./log";
 import type { DayUsage, TurnStats } from "./stats";
 
@@ -73,7 +73,12 @@ export function createStatsStore(path: string): StatsStore {
     dirty = false;
     const payload: StoreFile = { version: 1, sessions };
     try {
-      await writeFile(path, JSON.stringify(payload), "utf8");
+      // Write to a sibling temp file and rename over the target: a crash or a
+      // kill mid-write then leaves the previous stats intact instead of a
+      // truncated file. rename() replaces the destination on Windows too.
+      const tmp = `${path}.tmp`;
+      await writeFile(tmp, JSON.stringify(payload), "utf8");
+      await rename(tmp, path);
     } catch (e) {
       log.warn("stats store save:", errText(e));
     }

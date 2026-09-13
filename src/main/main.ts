@@ -211,10 +211,23 @@ function loadConfig(): StandaloneConfig {
  * config.json is hand-editable and the settings window sends `Partial` over IPC,
  * so the shape is never guaranteed — sanitizeConfig (./config) coerces it.
  */
+/**
+ * Write a file by writing a sibling temp file first and renaming it over the
+ * target. What matters is the crash case: an interrupted writeFileSync leaves a
+ * truncated file, and for config.json that means the user's workspace, theme,
+ * favourites and budgets are gone. rename() replaces the destination on Windows
+ * too, so the new content appears whole or not at all.
+ */
+function writeFileAtomic(target: string, content: string): void {
+  const tmp = `${target}.tmp-${randomUUID().slice(0, 8)}`;
+  writeFileSync(tmp, content, "utf8");
+  renameSync(tmp, target);
+}
+
 function saveConfig(next: StandaloneConfig): void {
   config = sanitizeConfig(next);
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf8");
+  writeFileAtomic(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
 let config = loadConfig();

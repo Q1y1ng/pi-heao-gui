@@ -483,10 +483,15 @@ export function applyTextCollapsible(b: any): void {
     const expanded = textEl.classList.toggle("is-expanded");
     btn.textContent = expanded ? t("Show less") : t("Show more");
   });
-  const host = b.el ? b.el.parentNode : textEl.parentNode;
-  const ref = b.el ? b.el.nextSibling : textEl.nextSibling;
-  host!.insertBefore(btn, ref);
+  // 按钮必须紧跟被截断的正文。此前插到整条消息行之后（b.el.nextSibling），
+  // 在长回答里就跑到很远的地方，用户看到的就是“回答被截断、没有展开入口”。
+  textEl.parentNode!.insertBefore(btn, textEl.nextSibling);
   textEl._expandBtn = btn;
+  textEl.addEventListener("click", function () {
+    if (!textEl.classList.contains("is-collapsible")) return;
+    const expanded = textEl.classList.toggle("is-expanded");
+    btn.textContent = expanded ? t("Show less") : t("Show more");
+  });
 }
 
 const MAX_INLINE = 12000;

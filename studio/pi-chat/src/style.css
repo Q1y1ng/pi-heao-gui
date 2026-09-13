@@ -852,6 +852,7 @@ body {
 .text-block.is-collapsible {
   max-height: 340px;
   overflow-y: auto;
+  cursor: pointer;
 }
 .text-block.is-collapsible.is-expanded {
   max-height: none;
@@ -1567,7 +1568,6 @@ body.ctrl-key .tool-block[data-has-file] > .tool-head:hover {
   flex-direction: column;
   gap: 4px;
   position: relative;
-  background: color-mix(in srgb, var(--vscode-editor-background) 50%, transparent);
 }
 .autocomplete {
   position: absolute;

@@ -776,15 +776,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   const candidates = [
     join(appPath, "studio", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
     join(appPath, "studio", "pi-chat", "dist", "index.html"),
-    join(
-      appPath,
-      "app.asar",
-      "studio",
-      "packages",
-      "pi-chat",
-      "dist",
-      "pi-chat-0.0.0.html",
-    ),
+    join(appPath, "app.asar", "studio", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
     join(appPath, "app.asar", "studio", "pi-chat", "dist", "index.html"),
   ];
   let src: string | null = null;

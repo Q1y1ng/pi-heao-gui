@@ -203,8 +203,7 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
   --vscode-input-foreground: var(--pi-text);
   --vscode-input-border: var(--pi-border-strong);
   --vscode-input-placeholderForeground: var(--pi-text-faint);
-  /* pi-chat references 56 --vscode-* variables; this bridge only defined 44, and an
-     undefined var() with no fallback is invalid, so those declarations dropped and the
+  /* pi-chat references 56 --vscode-* variables; this bridge only defined 44, and a var() that cannot be resolved takes its whole declaration with it, so those declarations dropped and the
      element fell back to pi-chat's own dark defaults. That is why a light theme produced a
      black code block and text that vanished into the background. */
   --vscode-textCodeBlock-background: var(--pi-code-bg);

@@ -350,11 +350,9 @@ async function createWindow(): Promise<void> {
     title: "Pi Heao GUI",
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#181818",
-      symbolColor: "#cccccc",
-      height: 32,
-    },
+    // The overlay draws the minimise / maximise / close buttons. Hardcoded dark values
+    // left a black block in the corner of an otherwise light window.
+    titleBarOverlay: overlayColors(config.theme),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,
@@ -410,7 +408,7 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
     title: `Pi — ${basename(sessionFile, ".jsonl")}`,
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
-    titleBarOverlay: { color: "#181818", symbolColor: "#cccccc", height: 32 },
+    titleBarOverlay: overlayColors(config.theme),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "preload.js"),
       contextIsolation: true,
@@ -561,6 +559,12 @@ ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   return config;
 });
 
+/** Windows title-bar overlay colours for the current theme (it is drawn by the OS). */
+function overlayColors(theme: "dark" | "light" | "system"): { color: string; symbolColor: string; height: number } {
+  const light = theme === "light";
+  return { color: light ? "#f6f7f9" : "#181818", symbolColor: light ? "#1c2027" : "#cccccc", height: 32 };
+}
+
 /** Push the current token CSS to every chat window (live theme switching). */
 function broadcastTheme(): void {
   const css = buildTokensCss(config.theme, config.accent, config.chatFontSize);
@@ -570,6 +574,13 @@ function broadcastTheme(): void {
   // so every appearance setting silently did nothing in the chat pane and the chat
   // fell back to the browser default CJK face. getAllWebContents() includes webview
   // guests; "window" keeps the app chrome covered by the same loop.
+  // The overlay is an OS-drawn strip; it does not read our CSS, so it has to be pushed.
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed() && typeof win.setTitleBarOverlay === "function") {
+      try { win.setTitleBarOverlay(overlayColors(config.theme)); } catch { /* older shell */ }
+    }
+  }
+
   for (const wc of webContents.getAllWebContents()) {
     const kind = wc.getType();
     if (!wc.isDestroyed() && (kind === "window" || kind === "webview")) {

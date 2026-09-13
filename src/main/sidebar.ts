@@ -307,7 +307,9 @@ export const SIDEBAR_HTML = `
     white-space: nowrap;
   }
   #pi-sidebar .pi-session-item.active .pi-session-name {
-    color: #fff;
+    /* Was a hardcoded #fff: on the light theme the active row's background is a pale
+       accent wash, so white on it was unreadable. */
+    color: var(--pi-text);
   }
   #pi-sidebar .pi-session-time {
     margin-top: 1px;
@@ -500,6 +502,30 @@ export const SIDEBAR_SCRIPT = `
    * seconds inside pi before anything comes back. Showing progress there is the
    * difference between "nothing happened" and "it's working".
    */
+  /**
+   * Mirror the active session's name into the shell title bar.
+   *
+   * chat-session posts sessionInfo once, and at that moment cwd / sessionName can both be
+   * unset (a restored session hydrates later), so the label arrives empty and the title
+   * sits on its "no session" placeholder for the whole session. The list this sidebar
+   * renders already has the name, so the title reads from the same place the user does.
+   */
+  function mirrorTitle() {
+    var el = document.getElementById('pi-title-text');
+    if (!el) return;
+    if (el.classList.contains('is-loading')) return;   // an in-flight switch owns the title
+    var active = document.querySelector('#pi-session-list .pi-session-item.active');
+    var name = active ? (active.querySelector('.pi-session-name') || {}).textContent : '';
+    name = (name || '').trim();
+    if (name) {
+      el.textContent = name;
+      el.classList.remove('is-empty');
+    } else {
+      el.textContent = '';
+      el.classList.add('is-empty');
+    }
+  }
+
   function setTitleLoading(text) {
     var el = document.getElementById('pi-title-text');
     if (!el) return;
@@ -685,6 +711,7 @@ export const SIDEBAR_SCRIPT = `
       if (switching) return;
       switching = true;
       setTitleLoading('载入会话…');
+      mirrorTitle();
       var prev = listEl.querySelector('.pi-session-item.active');
       if (prev) prev.classList.remove('active');
       item.classList.add('active', 'loading');

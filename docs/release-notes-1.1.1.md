@@ -48,3 +48,32 @@
 
 - 打包脚本显式加 `--publish never`：electron-builder 会因检测到 CI 而自动尝试发布到
   GitHub，并在缺少 `GH_TOKEN` 时让整个作业失败（本地跑不会触发，因此从未暴露）。
+
+## 安装
+
+需要 **Windows 10 / 11（x64）**、**Node.js ≥ 22**，以及 `pi` CLI：
+
+```bash
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+```
+
+再准备至少一个 provider 的凭据（写在 `~/.pi/agent/auth.json`，或让应用带你在内置终端里
+登录）。安装程序可自选目录，会自动创建桌面与开始菜单快捷方式；便携版免安装直接运行，
+但**不支持自更新**。
+
+## 注意
+
+- **本版仍未签名**：首次运行 Windows SmartScreen 会提示“已保护你的电脑”，
+  点 **更多信息 → 仍要运行**；或先比对下方 SHA256。签名申请走
+  [SignPath Foundation](https://signpath.org/foundation)，仓库侧已就绪。
+- 已安装的 1.1.0 会在启动约 20 秒后自动检查并下载本版；**便携版需手动换包**。
+- **建议升级**：本版修复了主聊天窗口未启用沙箱、文件面板可经符号链接逃出工作区、
+  以及崩溃时可能截断配置文件等问题。
+
+## 校验和（SHA256）
+
+```text
+ba26fc55e43dad3c5c7c1f11b0a5402dc95cbc4076bbb6552e5449b120dff2d1  Pi-Heao-GUI-Setup-1.1.1.exe
+e2108fb859fd35abcfd2db11f83661d6fe8871593c11441e6babdac08a3de6ad  Pi-Heao-GUI-1.1.1-Portable.exe
+e805906314520a87102afc7761cddd5706d7f23e824a025ac69c5fa70520dece  pi-heao-gui-1.1.1-source.zip
+```

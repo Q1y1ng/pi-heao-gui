@@ -132,8 +132,7 @@ export function resolveTheme(theme: ThemeName): "dark" | "light" {
 }
 
 /** Build the token block for a theme + accent colour. */
-export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff", chatFontSize = 13): string {
-  const fs = Math.min(32, Math.max(8, Math.round(chatFontSize || 13)));
+export function buildTokensCss(theme: ThemeName = "dark", accent = "#4c8dff"): string {
   const accentColor = /^#[0-9a-f]{6}$/i.test(accent.trim()) ? accent.trim() : "#4c8dff";
   const p = palette(resolveTheme(theme), accentColor);
   return renderTokens(p, accentColor);
@@ -180,12 +179,10 @@ function renderTokens(p: Palette, accentColor: string): string {
   --pi-font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
     "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --pi-font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "微软雅黑", monospace;
-  /* One master size. The appearance slider writes config.chatFontSize; every other
-     size in the app is a ratio of it, the same trick the chat stylesheet already uses. */
-  --pi-fs-md: ${fs}px;
-  --pi-fs-xs: calc(var(--pi-fs-md) * 11 / 13);
-  --pi-fs-sm: calc(var(--pi-fs-md) * 12 / 13);
-  --pi-fs-lg: calc(var(--pi-fs-md) * 14 / 13);
+  --pi-fs-xs: 11px;
+  --pi-fs-sm: 12px;
+  --pi-fs-md: 13px;
+  --pi-fs-lg: 14px;
 
   --pi-speed: 130ms;
 }

@@ -541,7 +541,9 @@ ipcMain.handle(IPC.GET_CONFIG, () => config);
 ipcMain.handle(IPC.SET_CONFIG, (_e, partial: Partial<StandaloneConfig>) => {
   saveConfig({ ...config, ...partial });
   applyConfigSideEffects();
-  if (partial.theme !== undefined || partial.accent !== undefined) broadcastTheme();
+  // chatFontSize belongs here too: it is what --pi-fs-md is built from, so a size change
+  // that does not broadcast leaves the slider writing a value nothing ever reads.
+  if (partial.theme !== undefined || partial.accent !== undefined || partial.chatFontSize !== undefined) broadcastTheme();
   // The settings document is generated per language; rebuild it on switch.
   if (partial.uiLanguage !== undefined && settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.close();

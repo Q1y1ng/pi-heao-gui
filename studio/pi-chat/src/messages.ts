@@ -487,11 +487,8 @@ export function applyTextCollapsible(b: any): void {
   // 在长回答里就跑到很远的地方，用户看到的就是“回答被截断、没有展开入口”。
   textEl.parentNode!.insertBefore(btn, textEl.nextSibling);
   textEl._expandBtn = btn;
-  textEl.addEventListener("click", function () {
-    if (!textEl.classList.contains("is-collapsible")) return;
-    const expanded = textEl.classList.toggle("is-expanded");
-    btn.textContent = expanded ? t("Show less") : t("Show more");
-  });
+  // The collapsed body is not a click target any more: it made the pointer cursor follow
+  // the text, and a drag-select toggled the expansion, so selecting text collapsed it again.
 }
 
 const MAX_INLINE = 12000;

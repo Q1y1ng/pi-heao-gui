@@ -868,7 +868,8 @@ body {
 .text-block.is-collapsible {
   max-height: 340px;
   overflow-y: auto;
-  cursor: pointer;
+  /* Not a click target any more, so not a pointer either. */
+  cursor: text;
 }
 .text-block.is-collapsible.is-expanded {
   max-height: none;

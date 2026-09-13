@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload the unsigned artifacts
         id: unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows
           path: dist-electron/*.exe
@@ -90,7 +90,7 @@ jobs:
           output-artifact-directory: signed
 
       - name: Upload the signed artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: signed-windows
           path: signed/*.exe
@@ -107,7 +107,7 @@ jobs:
           Get-Content signed/SHA256SUMS.txt
 
       - name: Upload the checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: signed-checksums
           path: signed/SHA256SUMS.txt

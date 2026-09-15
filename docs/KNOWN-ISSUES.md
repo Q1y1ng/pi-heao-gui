@@ -4,6 +4,32 @@ Open defects with their measured evidence, so the next person can continue inste
 
 ---
 
+## The stripped child shell does not load the session
+
+**Status:** open · the feature is parked · child windows use the full shell (1.2.2).
+
+`buildChatHtml(appPath, config, { minimal: true })` builds a shell with only a title bar and the chat
+— no sidebar, no dock, no palette, no token chip. Wired into `openSessionWindow` in 1.2.1, it produced a
+window that opened, carried the right title, and **showed no session at all**. Child windows went back to
+the full shell in 1.2.2 (`main.ts`, `chatShellFile("full")`).
+
+**Ruled out by measurement, not by taste:**
+
+- **Layout / CSS.** The three skipped stylesheets (`STATS_CSS`, `PALETTE_CSS`, `DOCK_CSS`) were scanned
+  for selectors touching the chat or the document at large — `body`, `html`, `:root`, `*`, `.app`,
+  `.root`, `.messages`, `.msg`, `.composer`, `.toolbar`, `#app`, `#root`, `#input`: **zero hits**.
+  `#pi-main`'s own layout lives in `CHROME_CSS`, which the stripped shell keeps.
+- **The bootstrap signal.** The re-parent and paste-undo scripts are both kept, and the vendored UI still
+  sends `webviewReady` on its own (`studio/pi-chat/src/main.ts:63`).
+
+**Next step is measurement.** Add `SIDEBAR_SCRIPT`, `TITLEBAR_SCRIPT`, `TOKENS_SCRIPT`, `STATS_SCRIPT`,
+`PALETTE_SCRIPT`, `DOCK_SCRIPT` back one at a time until the session appears — or log from each at load
+and diff what actually runs. The pass/fail signal already exists: the e2e assertion *"the session window
+actually shows the conversation"*, which was added because every earlier check passed while the window was
+empty.
+
+---
+
 ## The font-size setting does not resize chat text
 
 **Status:** open as of 1.2.0 · reproducible · root cause measured · two fix attempts reverted.

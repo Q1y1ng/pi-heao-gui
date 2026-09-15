@@ -199,7 +199,13 @@ async function waitFor(fn, timeoutMs, label) {
   }
 }
 
-const allWindows = () => BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+// The app's own alert notifier is a hidden window loading a data: URL. It must never
+// be mistaken for the chat window: it has no preload, so any invoke inside it throws.
+// It is short-lived, but "short-lived" is not something a test can rely on.
+const allWindows = () =>
+  BrowserWindow.getAllWindows().filter(
+    (w) => !w.isDestroyed() && !String(w.webContents.getURL()).startsWith("data:"),
+  );
 const byTitle = (re) => allWindows().find((w) => re.test(w.getTitle()));
 const chatWindow = () => allWindows()[0];
 const js = (win, code) => win.webContents.executeJavaScript(code, true);
@@ -1200,6 +1206,73 @@ app.whenReady().then(async () => {
         /* best effort */
       }
     }
+    await section("Alerts: config round-trip and the sound path", async () => {
+      const sw = byTitle(/设置|Settings/);
+      if (!sw) {
+        check("settings window is available for the alert checks", false, "no settings window");
+        return;
+      }
+
+      const before = await js(sw, "window.pi.invoke('pi:get-config')");
+
+      // A real round trip through the settings bridge: that window is the only one
+      // allowed to write the config, and the alert rules read straight from it.
+      await js(
+        sw,
+        "window.pi.invoke('pi:set-config',{alerts:{enabled:true,sound:'chime',volume:0.4,onTurnEnd:true,onApproval:true,minIntervalMs:1200}})",
+      );
+      await sleep(400);
+      const after = await js(sw, "window.pi.invoke('pi:get-config')");
+      check(
+        "alert settings round-trip through the settings bridge",
+        after?.alerts?.sound === "chime" &&
+          after?.alerts?.volume === 0.4 &&
+          after?.alerts?.minIntervalMs === 1200,
+        JSON.stringify(after?.alerts),
+      );
+
+      // The chime: the handler creates the hidden notifier window, loads it and asks
+      // it to play. `ok` means an AudioContext actually started. A machine with no
+      // audio device can legitimately answer false, so this asserts that the path
+      // answers at all (a throw would already have failed the call) and reports the
+      // value instead of failing the suite on a silent box.
+      const played = await js(sw, "window.pi.invoke('pi:alert-test','turnEnd')");
+      check(
+        "the alert-test channel answers with a boolean",
+        !!played && typeof played.ok === "boolean",
+        JSON.stringify(played),
+      );
+      if (played && played.ok === false) {
+        console.log(`  NOTE  the chime reported no usable audio: ${played.error || ""}`);
+      }
+
+      // The window that renders untrusted agent output must not be able to make noise.
+      // Selected by URL rather than by "the first window": by this point the settings
+      // window exists too, and it is *supposed* to be allowed to call this.
+      const chatWin =
+        allWindows().find((x) => /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL()))) ||
+        chatWindow();
+      const blocked = await js(
+        chatWin,
+        "window.pi.invoke('pi:alert-test','turnEnd').then(r => 'allowed:' + JSON.stringify(r)).catch(e => 'blocked:' + e.message)",
+      );
+      check(
+        "the chat window cannot reach the alert channel",
+        typeof blocked === "string" && blocked.startsWith("blocked:"),
+        String(blocked),
+      );
+
+      // Put back what was there, so the rest of the run (and a human watching) does
+      // not inherit this section's settings.
+      if (before && before.alerts) {
+        await js(
+          sw,
+          `window.pi.invoke('pi:set-config',{alerts:${JSON.stringify(before.alerts)}})`,
+        );
+        await sleep(300);
+      }
+    });
+
     await section("Accessibility: text contrast in both themes", async () => {
       // Regression guard. Shipped defects this would have caught on the spot:
       //   .msg h1/h2/h3 pinned to #f2f4f8 -> 1.1:1 on a light background;

@@ -863,6 +863,39 @@ body {
       <label class="switch"><input type="checkbox" id="cfg-showArchived"><span class="slider"></span></label>
       <label for="cfg-showArchived">侧栏显示已归档会话</label>
     </div>
+    <div class="section-title">提醒</div>
+    <div class="hint">任务结束时、以及 agent 需要你**确权**或**提权**时发出提示音。声音由程序现场合成，
+      不占用磁盘素材；确认对话被应答后不再重复。</div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-alerts-enabled"><span class="slider"></span></label>
+      <label for="cfg-alerts-enabled">启用操作提醒（提示音）</label>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>提示音</label>
+        <select id="cfg-alerts-sound">
+          <option value="chime">合成音（结束上行三音 / 需决策下行两音）</option>
+          <option value="system">系统提示音</option>
+          <option value="off">静音</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>音量</label>
+        <input type="range" id="cfg-alerts-volume" min="0" max="1" step="0.05">
+      </div>
+    </div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-alerts-turnEnd"><span class="slider"></span></label>
+      <label for="cfg-alerts-turnEnd">任务结束时提醒（仅当该窗口不在前台）</label>
+    </div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-alerts-approval"><span class="slider"></span></label>
+      <label for="cfg-alerts-approval">需要确权 / 提权时提醒（无论是否在前台）</label>
+    </div>
+    <div class="row">
+      <div class="field"><button class="btn" id="cfg-alerts-test-turn">试听：任务结束</button></div>
+      <div class="field"><button class="btn" id="cfg-alerts-test-decision">试听：需要决策</button></div>
+    </div>
     <div class="section-title">预算</div>
     <div class="row">
       <div class="field">
@@ -1579,6 +1612,51 @@ $('cfg-showArchived').onchange = async () => {
   }
 };
 
+// ── General: 操作提醒（提示音）──
+// Plain JS on purpose — this block is emitted verbatim into the settings
+// document, so a TypeScript annotation here would become a syntax error in the
+// page (test/injected-parse.test.cjs exists because that mistake was made).
+// The three fields save on change rather than waiting for 保存, because the
+// preview buttons play whatever is currently on disk.
+function alertSound() {
+  const v = $('cfg-alerts-sound').value;
+  return v === 'system' || v === 'off' ? v : 'chime';
+}
+
+async function saveAlerts(message = '提醒设置已保存') {
+  try {
+    await applyPartial(
+      {
+        alerts: {
+          enabled: $('cfg-alerts-enabled').checked,
+          sound: alertSound(),
+          volume: Math.min(1, Math.max(0, Number($('cfg-alerts-volume').value) || 0)),
+          onTurnEnd: $('cfg-alerts-turnEnd').checked,
+          onApproval: $('cfg-alerts-approval').checked,
+          minIntervalMs: currentConfig.alerts?.minIntervalMs ?? 1500,
+        },
+      },
+      message,
+    );
+  } catch (err) {
+    setStatus('保存提醒设置失败: ' + err.message, false);
+  }
+}
+
+async function previewAlert(kind) {
+  const res = await window.pi.invoke('pi:alert-test', kind);
+  if (res && res.ok === false) setStatus(res.error || '提示音未能播放', false);
+}
+
+$('cfg-alerts-enabled').onchange = () =>
+  void saveAlerts($('cfg-alerts-enabled').checked ? '提醒已开启' : '提醒已关闭');
+$('cfg-alerts-sound').onchange = () => void saveAlerts();
+$('cfg-alerts-turnEnd').onchange = () => void saveAlerts();
+$('cfg-alerts-approval').onchange = () => void saveAlerts();
+$('cfg-alerts-volume').onchange = () => void saveAlerts('音量已保存');
+$('cfg-alerts-test-turn').onclick = () => void previewAlert('turnEnd');
+$('cfg-alerts-test-decision').onclick = () => void previewAlert('decision');
+
 async function saveBudget() {
   const daily = Math.max(0, Number($('cfg-budgetDailyUsd').value) || 0);
   const monthly = Math.max(0, Number($('cfg-budgetMonthlyUsd').value) || 0);
@@ -1836,6 +1914,11 @@ async function loadAll() {
 
     $('cfg-openAtLogin').checked = !!currentConfig.openAtLogin;
     $('cfg-showArchived').checked = !!currentConfig.showArchived;
+    $('cfg-alerts-enabled').checked = !!currentConfig.alerts?.enabled;
+    $('cfg-alerts-sound').value = currentConfig.alerts?.sound ?? 'chime';
+    $('cfg-alerts-volume').value = String(currentConfig.alerts?.volume ?? 0.6);
+    $('cfg-alerts-turnEnd').checked = !!currentConfig.alerts?.onTurnEnd;
+    $('cfg-alerts-approval').checked = !!currentConfig.alerts?.onApproval;
     $('cfg-budgetDailyUsd').value = Number(currentConfig.budgetDailyUsd) || 0;
     $('cfg-budgetMonthlyUsd').value = Number(currentConfig.budgetMonthlyUsd) || 0;
     renderAppearance();
@@ -1892,6 +1975,14 @@ async function saveAll() {
       disabledTools,
       openAtLogin: $('cfg-openAtLogin').checked,
       showArchived: $('cfg-showArchived').checked,
+      alerts: {
+        enabled: $('cfg-alerts-enabled').checked,
+        sound: alertSound(),
+        volume: Math.min(1, Math.max(0, Number($('cfg-alerts-volume').value) || 0)),
+        onTurnEnd: $('cfg-alerts-turnEnd').checked,
+        onApproval: $('cfg-alerts-approval').checked,
+        minIntervalMs: currentConfig.alerts?.minIntervalMs ?? 1500,
+      },
       budgetDailyUsd: Math.max(0, Number($('cfg-budgetDailyUsd').value) || 0),
       budgetMonthlyUsd: Math.max(0, Number($('cfg-budgetMonthlyUsd').value) || 0),
     };

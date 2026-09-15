@@ -5,7 +5,7 @@
  * directly (see test/config.test.cjs) — main.ts keeps only the I/O around it.
  */
 import { extname, isAbsolute, resolve } from "node:path";
-import { DEFAULT_CONFIG, type StandaloneConfig } from "../shared/types";
+import { DEFAULT_CONFIG, type AlertSettings, type StandaloneConfig } from "../shared/types";
 
 // ─── JSON boundary ────────────────────────────────────────────────────
 
@@ -30,6 +30,30 @@ export function parseJsonObject(raw: string): JsonObject {
 }
 
 // ─── Config shape ─────────────────────────────────────────────────────
+
+/**
+ * Alert settings get the same treatment as the rest of the config: coerce, never
+ * trust. Exported so the coercion can be pinned by a unit test.
+ */
+export function sanitizeAlerts(input: unknown): AlertSettings {
+  const raw: Record<string, unknown> =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+  const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
+  const num = (v: unknown, fallback: number, min: number, max: number): number => {
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+  return {
+    enabled: bool(raw.enabled, DEFAULT_CONFIG.alerts.enabled),
+    sound: raw.sound === "system" || raw.sound === "off" ? raw.sound : "chime",
+    volume: num(raw.volume, DEFAULT_CONFIG.alerts.volume, 0, 1),
+    onTurnEnd: bool(raw.onTurnEnd, DEFAULT_CONFIG.alerts.onTurnEnd),
+    onApproval: bool(raw.onApproval, DEFAULT_CONFIG.alerts.onApproval),
+    minIntervalMs: num(raw.minIntervalMs, DEFAULT_CONFIG.alerts.minIntervalMs, 0, 60_000),
+  };
+}
 
 /**
  * config.json is hand-editable and the settings window sends `Partial` over IPC,
@@ -107,6 +131,7 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
       0,
       8000,
     ),
+    alerts: sanitizeAlerts(raw.alerts),
   };
 }
 

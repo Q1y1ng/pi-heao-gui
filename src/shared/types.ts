@@ -1,5 +1,24 @@
 /** Shared types between main, preload, and renderer. */
 
+/** Desktop alerts. The rules that read these fields live in src/main/alerts.ts. */
+export interface AlertSettings {
+  /** Master switch for every sound this app makes on its own. */
+  enabled: boolean;
+  /**
+   * "chime" = the synthesized arpeggio (our own sound, toast silenced),
+   * "system" = the notification's own sound, "off" = silent.
+   */
+  sound: "chime" | "system" | "off";
+  /** Chime level, 0–1. */
+  volume: number;
+  /** Sound when a turn finishes in a window that is not focused. */
+  onTurnEnd: boolean;
+  /** Sound when the agent needs a decision (permission, elevation, confirmation). */
+  onApproval: boolean;
+  /** Minimum gap between two sounds, so several sessions cannot stack up. */
+  minIntervalMs: number;
+}
+
 export interface StandaloneConfig {
   piPath: string;
   language: "auto" | "en" | "zh-cn";
@@ -43,6 +62,8 @@ export interface StandaloneConfig {
   commitLanguage: string;
   /** Override for the commit-message system prompt (empty = upstream default). */
   commitMessagePrompt: string;
+  /** Desktop alert settings (sound on turn end / when a decision is needed). */
+  alerts: AlertSettings;
 }
 
 export const DEFAULT_CONFIG: StandaloneConfig = {
@@ -76,6 +97,14 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   lastOnboardedVersion: "",
   commitLanguage: "English",
   commitMessagePrompt: "",
+  alerts: {
+    enabled: true,
+    sound: "chime",
+    volume: 0.6,
+    onTurnEnd: true,
+    onApproval: true,
+    minIntervalMs: 1500,
+  },
 };
 
 /** ChatHost abstraction — replaces vscode.Disposable with a plain unsubscribe fn. */
@@ -121,6 +150,8 @@ export const IPC = {
   GET_CONFIG: "pi:get-config",
   SET_CONFIG: "pi:set-config",
   OPEN_SETTINGS: "pi:open-settings",
+  /** Settings window only: play an alert sound on demand (the "试听" buttons). */
+  ALERT_TEST: "pi:alert-test",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",

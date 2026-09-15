@@ -69,6 +69,7 @@ import {
 import { log, errText } from "./log";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
+import { disposeAlerts, fireAlert, playChime } from "./alerts";
 import { createUpdateController, type UpdateController, type UpdaterLike } from "./updater";
 
 // ─── Updates ────────────────────────────────────────────────────────────────
@@ -505,15 +506,18 @@ function sessionHost(win: BrowserWindow): {
       // Desktop notification + unread counter when a turn finishes while the
       // window is not focused (the window may be hidden in the tray).
       const m = msg as { type?: string; event?: { type?: string } };
-      if (
-        m?.type === "event" &&
-        m.event?.type === "agent_settled" &&
-        !win.isDestroyed() &&
-        !win.isFocused()
-      ) {
-        showNotification("Pi Heao GUI", "Agent 已完成回复");
-        setUnreadCount(getUnreadCount() + 1);
-        win.flashFrame(true);
+      if (m?.type === "event" && m.event?.type === "agent_settled" && !win.isDestroyed()) {
+        const focused = win.isFocused();
+        // Two separate decisions that happen to share a moment: the chime has its
+        // own rules (alerts.ts) and the toast is about the window being in the
+        // background — which is also what the unread counter tracks. `toastSilent`
+        // is what keeps the two from making a sound each.
+        const sound = fireAlert("turnEnd", config.alerts, focused);
+        if (!focused) {
+          showNotification("Pi Heao GUI", "Agent 已完成回复", { silent: sound.toastSilent });
+          setUnreadCount(getUnreadCount() + 1);
+          win.flashFrame(true);
+        }
       }
       postToWindow(win, msg);
     },
@@ -538,6 +542,16 @@ ipcMain.handle("pi:open-session-window", async (_e, sessionFile: string) => {
   if (!existsSync(f)) return { ok: false, error: "会话文件不存在" };
   await openSessionWindow(f);
   return { ok: true };
+});
+
+/**
+ * Play a chime on demand. Settings-window only: it skips the rule table because
+ * the person just asked for it, but it still reports whether a sound came out.
+ */
+ipcMain.handle(IPC.ALERT_TEST, async (_e, kind: unknown) => {
+  const k = kind === "decision" ? "decision" : "turnEnd";
+  const played = await playChime(k, config.alerts.volume);
+  return { ok: played, error: played ? "" : "音频不可用（提示音未能播放）" };
 });
 
 // ─── IPC: Config ──────────────────────────────────────────────────────
@@ -1916,6 +1930,7 @@ app.on("before-quit", () => {
 app.on("will-quit", () => {
   for (const id of [...terminals.keys()]) disposeTerminalFor(id);
   destroyTray();
+  disposeAlerts();
   cleanupTempFiles();
 });
 

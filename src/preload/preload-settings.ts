@@ -27,6 +27,9 @@ const ALLOWED = new Set<string>([
   "pi:read-skill",
   "pi:write-skill",
   "pi:delete-skill",
+  // Settings-only: plays an alert sound on demand for the 试听 buttons. The chat
+  // window must not reach this — it renders untrusted agent output.
+  "pi:alert-test",
 ]);
 
 contextBridge.exposeInMainWorld("pi", {

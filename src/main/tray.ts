@@ -205,9 +205,13 @@ export function createTray(hooksIn: TrayHooks, lang: UiLang = "zh-cn"): boolean 
   }
 }
 
-export function showNotification(title: string, body: string): void {
+/**
+ * Desktop notification. `silent` suppresses the OS notification sound — used when
+ * the app plays its own chime, so the user hears one sound instead of two.
+ */
+export function showNotification(title: string, body: string, opts: { silent?: boolean } = {}): void {
   if (!Notification.isSupported()) return;
-  const n = new Notification({ title, body, silent: false });
+  const n = new Notification({ title, body, silent: opts.silent ?? false });
   n.show();
 }
 

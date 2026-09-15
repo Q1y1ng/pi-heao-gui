@@ -1055,9 +1055,26 @@ export const SIDEBAR_SCRIPT = `
     }
   }
   requestSessions();
-  // The main process caches parsed metadata, but there is no reason to poll often
-  // — refresh on demand, on focus, and every 15s as a safety net.
-  setInterval(requestSessions, 15000);
+  // The main process caches parsed metadata, but a window left open overnight should
+  // not be scanning a session directory every 15 seconds. This is the only periodic
+  // disk work a window does, so it now follows the window's state: 15s while it is the
+  // one being used, 30s while it is merely visible, and no timer at all while hidden —
+  // the visibilitychange listener restarts it and refreshes on the way back in.
+  var pollTimer = null;
+  function scheduleSessionPoll() {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    var delay = document.hidden ? 0 : (document.hasFocus() ? 15000 : 30000);
+    if (!delay) return;
+    pollTimer = setTimeout(function() {
+      pollTimer = null;
+      requestSessions();
+      scheduleSessionPoll();
+    }, delay);
+  }
+  scheduleSessionPoll();
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) { requestSessions(); scheduleSessionPoll(); }
+  });
   window.addEventListener('focus', requestSessions);
 
   // Drag & drop files -> composer

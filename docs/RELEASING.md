@@ -27,6 +27,13 @@ Also confirm by hand, in a real window:
 ## 2. Version and notes
 
 - `package.json` → `version`.
+- **Which digit moves.** The minor digit is reserved for **major updates**: features and fixes ship as a
+  patch bump (`1.2.0` → `1.2.1`), or as no bump at all when nothing user-visible changed. Adding a feature
+  is not, by itself, a reason to go from `1.2.x` to `1.3.0`.
+- **Then look at it with your eyes, not just in package.json.** The version a person sees lives in the
+  settings window and the About dialog, so after a bump build once and check it landed:
+  `grep -c "V1.2.1" dist/main/settings-window.js` (expect 3). A build that still carries the old string
+  looks exactly like a bump that never happened — that is how a stale 1.3.0 ended up in front of a user.
 - Version strings live in `src/main/{chat-adapter,settings-window,tray,main}.ts` —
   nine occurrences; grep for them rather than for a literal version, so this line
   cannot go stale:

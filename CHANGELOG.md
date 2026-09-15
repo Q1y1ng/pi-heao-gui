@@ -4,7 +4,7 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## 1.3.0 — 2026-09-15
+## 1.2.1 — 2026-09-15
 
 多窗口从「有一个右键菜单」变成真正可用，并补上「需要你确认」的提示音。
 

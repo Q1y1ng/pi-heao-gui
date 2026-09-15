@@ -6,6 +6,30 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.2.1 — multi-window, alerts, and a lighter shell
+
+Released 2026-09-15 · [release notes](docs/release-notes-1.2.1.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.1)
+
+- **Drag a session out of the sidebar** and it opens in its own window, at the pointer, clamped to the
+  display it lands on. Electron has no native API for that gesture, so this one is ours.
+- **The window that comes out is stripped**: a title bar with the session name, and the chat. No sidebar,
+  no dock, no palette — one window, one session. The main window stays the control centre.
+- **It makes a sound when it needs you.** Rising three notes when a turn finishes, a falling pair when the
+  agent is waiting on a decision (permission, elevation, confirmation) — synthesized in a hidden renderer,
+  so there are no audio assets and no reliance on the OS notification sound Focus Assist silences. A
+  decision is heard even when its window has focus, because the turn is blocked until someone answers.
+- **Windows come back on restart**, the tray lists them, and Ctrl+Shift+N opens a fresh session in a window
+  of its own. Session windows are capped at six, with the reason shown instead of a drag that does nothing.
+
+### What this round measured
+
+- **0 dependency vulnerabilities**; Electron 43.7.0, the newest of its line; **0 blocking findings** in this
+  project's own code under a full security and engineering scan.
+- **0% idle CPU**, no leak over 45 seconds (+3.9 MB drift), **631 MB** idle for one window — of which the
+  pi process is 247 MB. Hence the honest summary of the shell trim: cleaner, not much lighter.
+- Session-list polling backs off with the window (15 s focused → 30 s background → nothing while hidden),
+  and the temp-directory sweep now happens after first paint instead of in front of it.
+
 ## 1.2.0 — the readability release
 
 Released 2026-09-14 · [release notes](docs/release-notes-1.2.0.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.0)
@@ -29,15 +53,12 @@ colours hardcoded to the dark one, and appearance settings that only applied onc
 
 Installed copies self-update; the portable build needs a manual swap.
 
-A **Windows desktop client for the [pi](https://github.com/earendil-works/pi) coding agent** — the same chat UI
-as the `pi-agent-studio` VS Code extension, in a standalone Electron shell, with a built-in terminal, file
-browser, git panel, command palette, auto-update, and a Chinese/English interface.
+A **Windows desktop client for the [pi](https://github.com/earendil-works/pi) coding agent**: chat, a real
+terminal, file browser, git panel, command palette, auto-update and a Chinese/English interface, in one
+standalone Electron shell.
 
-The chat UI is not a reimplementation: it is the MIT-licensed
-[`pi-agent-studio`](https://github.com/JohnnyZ93/pi-agent-studio) UI, now **maintained in this repository**
-(`studio/`) as our own code. [docs/FIDELITY.md](docs/FIDELITY.md) records what was kept when it was first
-split out of the extension — **143 of 253 symbols (57%)**; what was dropped was almost entirely VS Code
-host API surface that cannot exist outside an extension.
+The chat interface in `studio/` is **this project's own code** — it can be changed like anything else
+here. Its origin, and the MIT notice it carries, are recorded in [NOTICE.md](NOTICE.md).
 
 ![Feature tour](docs/images/tour.gif)
 

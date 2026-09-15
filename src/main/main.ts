@@ -2088,7 +2088,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V1.3.0",
+              message: "Pi Heao GUI V1.2.1",
               detail,
               buttons: ["好"],
             };
@@ -2136,9 +2136,12 @@ async function checkPiAvailable(): Promise<void> {
 
 app.whenReady().then(async () => {
   if (!singleInstance) return;
-  sweepStaleTempFiles();
   setupChineseMenu();
   await createWindow();
+  // Sweeping %TEMP% is a readdir plus a stat per entry, and on Windows that directory
+  // can hold thousands of them. None of it is needed for first paint, so it runs after
+  // the window is up — and unref'd, because housekeeping must never hold the process.
+  setTimeout(() => sweepStaleTempFiles(), 4000).unref?.();
   void restoreWindowState();
   const trayReady = createTray(
     {

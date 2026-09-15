@@ -316,25 +316,25 @@ function writeTempHtml(prefix: string, html: string): string {
 const chatShellFiles = new Map<string, string>();
 
 function chatShellFile(variant: "full" | "minimal"): string | null {
-const key = `${variant}|${JSON.stringify([
-config.chatFontSize,
-config.workspaceRoot,
-config.language,
-config.theme,
-config.accent,
-config.uiLanguage,
-config.chatBackgroundImage,
-config.chatBackgroundOpacity,
-config.chatMermaidTheme,
-config.chatSendShortcut,
-])}`;
-const cached = chatShellFiles.get(key);
-if (cached && existsSync(cached)) return cached;
-const html = buildChatHtml(app.getAppPath(), config, { minimal: variant === "minimal" });
-if (!html) return null;
-const file = writeTempHtml(variant === "minimal" ? "pi-heao-child" : "pi-heao-chat", html);
-chatShellFiles.set(key, file);
-return file;
+  const key = `${variant}|${JSON.stringify([
+    config.chatFontSize,
+    config.workspaceRoot,
+    config.language,
+    config.theme,
+    config.accent,
+    config.uiLanguage,
+    config.chatBackgroundImage,
+    config.chatBackgroundOpacity,
+    config.chatMermaidTheme,
+    config.chatSendShortcut,
+  ])}`;
+  const cached = chatShellFiles.get(key);
+  if (cached && existsSync(cached)) return cached;
+  const html = buildChatHtml(app.getAppPath(), config, { minimal: variant === "minimal" });
+  if (!html) return null;
+  const file = writeTempHtml(variant === "minimal" ? "pi-heao-child" : "pi-heao-chat", html);
+  chatShellFiles.set(key, file);
+  return file;
 }
 
 /** Remove the files we wrote; also sweep leftovers from earlier runs (older than 1h). */

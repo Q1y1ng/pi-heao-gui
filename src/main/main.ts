@@ -685,7 +685,14 @@ async function openSessionWindow(
   // The stripped shell: a drag bar with the session name, and the chat. No sidebar,
   // no dock, no palette — this window is a place to watch one session, while the main
   // window stays the control centre for switching, terminals and everything else.
-  const tmpHtml = chatShellFile("minimal");
+  //
+  // NOT WIRED UP. With the stripped shell the window opened, was titled correctly, and
+  // showed no session at all — the panels' scripts are gone, and one of them does
+  // something the chat core needs that the CSS audit did not reveal (the panel
+  // stylesheets contain no global or chat selectors, so it is not layout). Until that is
+  // found by measurement rather than guesswork, child windows use the full shell, which
+  // is known to load the session. See docs/KNOWN-ISSUES.md.
+  const tmpHtml = chatShellFile("full");
   if (tmpHtml) await win.loadFile(tmpHtml);
 
   // Create a dedicated chat session for this window
@@ -2088,7 +2095,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V1.2.1",
+              message: "Pi Heao GUI V1.2.2",
               detail,
               buttons: ["好"],
             };

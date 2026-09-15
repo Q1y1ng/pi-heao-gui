@@ -1251,6 +1251,32 @@ app.whenReady().then(async () => {
       check("a session opens in its own window", !!child, `${allWindows().length} windows`);
       if (!child) return;
 
+      // The window existing is not the point — it has to show the session. This assertion
+      // exists because the first version of the stripped child shell opened a window with
+      // the right title, the right bounds and no messages in it at all, and every check
+      // around it was happy. Spawning pi and reading the history takes seconds, so it polls.
+      let nodes = -1;
+      let nodesDetail = "";
+      for (let i = 0; i < 12 && nodes <= 0; i++) {
+        await sleep(2500);
+        try {
+          nodes = await js(
+            child,
+            "document.querySelectorAll('.msg, .text-block, .user-bubble, .msg-body').length",
+          );
+          if (nodes <= 0)
+            nodesDetail = await js(child, "(document.body.innerText || '').slice(0, 60)");
+        } catch (e) {
+          nodes = -1;
+          nodesDetail = String(e && e.message).slice(0, 60);
+        }
+      }
+      check(
+        "the session window actually shows the conversation",
+        typeof nodes === "number" && nodes > 0,
+        `conversation nodes: ${nodes}  ${nodesDetail}`,
+      );
+
       check(
         "the new window is titled after the session",
         /Pi — /.test(child.getTitle()),

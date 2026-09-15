@@ -102,7 +102,7 @@ function totalUnread(): number {
   return n;
 }
 
-const BASE_TOOLTIP = "Pi Heao GUI V1.2.0 — made by HEAOZIE";
+const BASE_TOOLTIP = "Pi Heao GUI V1.3.0 — made by HEAOZIE";
 
 function showMain(): void {
   const win = hooks?.getMainWindow();
@@ -114,7 +114,7 @@ function showMain(): void {
 
 function aboutDialog(): void {
   const detail = [
-    "Pi Heao GUI V1.2.0",
+    "Pi Heao GUI V1.3.0",
     "made by HEAOZIE",
     "",
     "Electron shell for `pi --mode rpc` (JSONL over stdio).",
@@ -124,7 +124,7 @@ function aboutDialog(): void {
   const options = {
     type: "info" as const,
     title: t("tray.aboutTitle", uiLang),
-    message: "Pi Heao GUI V1.2.0",
+    message: "Pi Heao GUI V1.3.0",
     detail,
     buttons: [t("tray.ok", uiLang)],
   };

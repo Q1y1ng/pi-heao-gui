@@ -456,6 +456,56 @@ function styleTag(id: string, css: string): string {
 
 import { t, resolveUiLang, translateFragment, type UiLang } from "./i18n";
 
+/**
+ * The stripped shell a dragged-out session window uses: a drag bar with the session
+ * name, and the chat. Nothing else.
+ *
+ * The main window stays the control centre — session list, dock, palette — because
+ * those are exactly the parts that make a window heavy and busy. A window opened
+ * from one row of that list is a place to watch and drive that one session, so it
+ * keeps only the hooks the re-parent script and the title bar need: #pi-shell,
+ * #pi-titlebar, #pi-title-text and the empty #pi-main the chat is moved into.
+ */
+function buildMinimalChromeHtml(lang: UiLang): string {
+  return `
+<div id="pi-shell" class="pi-shell-minimal">
+  <header class="pi-titlebar" id="pi-titlebar">
+    <div class="pi-tb-center">
+      <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
+    </div>
+  </header>
+  <div class="pi-body">
+    <div id="pi-main"></div>
+  </div>
+</div>
+`;
+}
+
+/**
+ * The one thing a stripped window still needs from the message stream: the session
+ * name for its title bar. The sidebar script normally does this, and there is no
+ * sidebar here.
+ */
+const MINIMAL_TITLE_SCRIPT = `<script>
+(function () {
+  function setTitle(label) {
+    var el = document.getElementById('pi-title-text');
+    if (!el) return;
+    el.textContent = label || '';
+    if (label) el.classList.remove('is-empty');
+    else el.classList.add('is-empty');
+  }
+  function attach() {
+    if (!window.pi || !window.pi.onMessage) { setTimeout(attach, 50); return; }
+    window.pi.onMessage(function (msg) {
+      if (msg && msg.type === 'sessionInfo') setTitle(msg.label);
+    });
+    console.log('[pi-chrome] minimal title bridge ready');
+  }
+  attach();
+})();
+</script>`;
+
 function buildChromeHtml(lang: UiLang): string {
   return `
 <div id="pi-shell">
@@ -772,7 +822,12 @@ const TOKENS_SCRIPT = `
 </script>
 `;
 
-export function buildChatHtml(appPath: string, config: StandaloneConfig): string | null {
+export function buildChatHtml(
+  appPath: string,
+  config: StandaloneConfig,
+  opts: { minimal?: boolean } = {},
+): string | null {
+  const minimal = opts.minimal === true;
   const candidates = [
     join(appPath, "studio", "packages", "pi-chat", "dist", "pi-chat-0.0.0.html"),
     join(appPath, "studio", "pi-chat", "dist", "index.html"),
@@ -824,14 +879,20 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
     }
   }
   if (headLineIdx !== -1) {
+    // A stripped window carries none of the panels, so it does not pay for their CSS.
+    const panelCss = minimal
+      ? []
+      : [
+          styleTag("pi-stats", STATS_CSS),
+          styleTag("pi-palette", PALETTE_CSS),
+          styleTag("pi-dock-css", DOCK_CSS),
+        ];
     lines.splice(
       headLineIdx,
       0,
       buildThemeCss(config.theme, config.accent, config.chatFontSize),
       CHROME_CSS,
-      styleTag("pi-stats", STATS_CSS),
-      styleTag("pi-palette", PALETTE_CSS),
-      styleTag("pi-dock-css", DOCK_CSS),
+      ...panelCss,
       vendorAssets().css,
       SHIM_SCRIPT,
       configScript,
@@ -886,7 +947,7 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   // Our injected fragments are translated by exact phrase substitution; the
   // vendored upstream bundle is left untouched.
   const T = (fragment: string): string => translateFragment(fragment, lang);
-  const chromeHtml = T(buildChromeHtml(lang));
+  const chromeHtml = T(minimal ? buildMinimalChromeHtml(lang) : buildChromeHtml(lang));
   if (bodyOpenIdx !== -1) {
     allLines.splice(bodyOpenIdx + 1, 0, chromeHtml);
   } else {
@@ -900,19 +961,28 @@ export function buildChatHtml(appPath: string, config: StandaloneConfig): string
   // Inject re-parent + sidebar script before structural </body>
   for (let i = allLines.length - 1; i >= 0; i--) {
     if (allLines[i].trim() === "</body>") {
+      // The stripped shell keeps only what the chat itself needs: re-parent and
+      // paste undo, plus its own title bridge. Sidebar, dock, palette, token stats
+      // and titlebar wiring all drive controls it does not have — and their
+      // timers are the kind of thing that later shows up as idle CPU.
+      const chromeScripts = minimal
+        ? [T(MINIMAL_TITLE_SCRIPT)]
+        : [
+            T(SIDEBAR_SCRIPT),
+            T(TITLEBAR_SCRIPT),
+            T(TOKENS_SCRIPT),
+            T(STATS_SCRIPT),
+            T(PALETTE_SCRIPT),
+          ];
       allLines.splice(
         i,
         0,
         T(REPARENT_SCRIPT),
         T(PASTE_UNDO_SCRIPT),
-        T(SIDEBAR_SCRIPT),
-        T(TITLEBAR_SCRIPT),
-        T(TOKENS_SCRIPT),
-        T(STATS_SCRIPT),
-        T(PALETTE_SCRIPT),
+        ...chromeScripts,
         // The vendored upstream bundle keeps its own locales: never translated here.
         vendorAssets().js,
-        T(DOCK_SCRIPT),
+        ...(minimal ? [] : [T(DOCK_SCRIPT)]),
       );
       break;
     }

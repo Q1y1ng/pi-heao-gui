@@ -1237,7 +1237,11 @@ app.whenReady().then(async () => {
           screenY: bounds.y + 120,
         })})`,
       );
-      check("the open-in-a-window request is accepted", opened?.ok === true, JSON.stringify(opened));
+      check(
+        "the open-in-a-window request is accepted",
+        opened?.ok === true,
+        JSON.stringify(opened),
+      );
 
       const child = await waitFor(
         () => allWindows().find((w) => !beforeIds.has(w.id)) ?? null,
@@ -1271,7 +1275,11 @@ app.whenReady().then(async () => {
         allWindows().length === before + 1,
         `${allWindows().length} windows, expected ${before + 1}`,
       );
-      check("the repeat request reports that it focused a window", again?.focused === true, JSON.stringify(again));
+      check(
+        "the repeat request reports that it focused a window",
+        again?.focused === true,
+        JSON.stringify(again),
+      );
 
       child.close();
       await sleep(900);
@@ -1410,17 +1418,17 @@ app.whenReady().then(async () => {
       return JSON.stringify(bad.slice(0, 6));
     })()`;
 
-        // The theme is switched through the SETTINGS window: the chat window's preload
-        // refuses pi:set-config (the security section above asserts exactly that), so
-        // asking the chat window to change the theme only rejected and took the whole
-        // section down with it. The chat window is used here to measure, nothing else.
-        const settingsWin = byTitle(/设置|Settings/);
-        check("the settings window is available to switch themes", !!settingsWin);
-        for (const theme of ["light", "dark"]) {
-          if (settingsWin) {
-            await js(settingsWin, `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
-          }
-          await sleep(1200);
+      // The theme is switched through the SETTINGS window: the chat window's preload
+      // refuses pi:set-config (the security section above asserts exactly that), so
+      // asking the chat window to change the theme only rejected and took the whole
+      // section down with it. The chat window is used here to measure, nothing else.
+      const settingsWin = byTitle(/设置|Settings/);
+      check("the settings window is available to switch themes", !!settingsWin);
+      for (const theme of ["light", "dark"]) {
+        if (settingsWin) {
+          await js(settingsWin, `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
+        }
+        await sleep(1200);
         const w =
           allWindows().find((x) =>
             /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
@@ -1443,10 +1451,10 @@ app.whenReady().then(async () => {
           worst ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel}` : undefined,
         );
       }
-        if (settingsWin) {
-          await js(settingsWin, "window.pi.invoke('pi:set-config',{theme:'light'})");
-        }
-        await sleep(600);
+      if (settingsWin) {
+        await js(settingsWin, "window.pi.invoke('pi:set-config',{theme:'light'})");
+      }
+      await sleep(600);
     });
 
     // Let the app run its own shutdown path (will-quit disposes the PTYs); a

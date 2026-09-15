@@ -196,9 +196,7 @@ export function refreshTrayMenu(): void {
   if (!tray || tray.isDestroyed()) return;
   try {
     tray.setContextMenu(Menu.buildFromTemplate(buildTemplate()));
-    tray.setToolTip(
-    totalUnread() > 0 ? `${BASE_TOOLTIP} — ${totalUnread()} 条未读` : BASE_TOOLTIP,
-  );
+    tray.setToolTip(totalUnread() > 0 ? `${BASE_TOOLTIP} — ${totalUnread()} 条未读` : BASE_TOOLTIP);
   } catch (e) {
     log.warn("tray menu refresh:", errText(e));
   }

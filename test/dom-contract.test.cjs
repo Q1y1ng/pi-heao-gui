@@ -72,3 +72,38 @@ test("the generated document still has every hook we depend on", { skip: !hasUi 
     `hooks missing from the generated page (renamed upstream, or dropped by us?):\n  ${missing.join("\n  ")}`,
   );
 });
+
+test("the stripped shell keeps the chat hooks and drops every panel", { skip: !hasUi }, () => {
+  const minimal = buildChatHtml(ROOT, DEFAULT_CONFIG, { minimal: true });
+  assert.ok(minimal, "the stripped shell must build from the same bundle");
+
+  // What the chat and the title bar need to find their way in.
+  for (const id of ["pi-shell", "pi-titlebar", "pi-title-text", "pi-main"]) {
+    assert.ok(minimal.includes(`id="${id}"`), `${id} must exist in the stripped shell`);
+  }
+
+  // What a window showing one session must not carry: neither the markup nor the
+  // scripts that drive it. A panel's polling is exactly what turns up as idle CPU
+  // later, so a script re-included by accident is a real regression, not cosmetics.
+  for (const id of ["pi-sidebar", "pi-session-list", "pi-dock", "pi-token-stats", "pi-palette"]) {
+    assert.equal(minimal.includes(`id="${id}"`), false, `${id} must not be in the stripped shell`);
+  }
+  // Markers are the panels' own function names, not their class names: `pi-session-item`
+  // also lives in the shared chrome CSS and in theme.ts, so a class-name check passes
+  // or fails for the wrong reason. Each of these is present in the full shell and
+  // absent here — verified both ways when this test was written.
+  for (const marker of [
+    "function itemEl", // sidebar
+    "function fmtTime", // sidebar
+    "function ensureTerm", // dock
+    "function gitRows", // dock
+    "function refreshData", // palette
+  ]) {
+    assert.equal(minimal.includes(marker), false, `${marker} must not be in the stripped shell`);
+  }
+
+  // The one script it does get, so its title bar can say which session it shows.
+  assert.ok(minimal.includes("[pi-chrome] minimal title bridge ready"), "title bridge missing");
+  // …and it is genuinely smaller, because it skipped the panel stylesheets.
+  assert.ok(minimal.length < html.length, "the stripped shell should be smaller than the full one");
+});

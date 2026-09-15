@@ -19,7 +19,8 @@ const ICON = {
   export:
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
-  archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
+  archive:
+    '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
 };
 
 function svg(paths: string, size = 14): string {
@@ -687,9 +688,11 @@ export const SIDEBAR_SCRIPT = `
       window.pi.invoke('pi:open-session-window', {
         file: s.file, screenX: e.screenX, screenY: e.screenY,
       }).then(function(res) {
-        // The main process refuses to give one session two writers; it focuses the
-        // window that already has it instead, and the user should know why.
-        if (res && res.focused) sideToast('该会话已在另一个窗口打开，已为你切到那个窗口');
+        // The main process refuses a second writer for a session, and refuses past the
+        // window cap. Both come back as an error the user should see rather than a
+        // drag that silently did nothing.
+        if (res && res.ok === false && res.error) sideToast(res.error);
+        else if (res && res.focused) sideToast('该会话已在另一个窗口打开，已为你切到那个窗口');
       });
     });
     item.innerHTML =

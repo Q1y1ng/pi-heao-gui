@@ -66,13 +66,7 @@ import {
 } from "./pi-cli";
 import { getRpcLogPath } from "./rpc-client";
 import { buildTokensCss } from "./theme";
-import {
-  refreshTrayMenu,
-  setRecentSessions,
-  setWindowList,
-  bumpUnread,
-  clearUnread,
-} from "./tray";
+import { refreshTrayMenu, setRecentSessions, setWindowList, bumpUnread, clearUnread } from "./tray";
 import { createSessionLister, type SessionLister } from "./sessions";
 import {
   authToPublic,
@@ -314,6 +308,35 @@ function writeTempHtml(prefix: string, html: string): string {
   return file;
 }
 
+// One shell file per (variant, baked-in config), reused by every window. The page is
+// ~5.7 MB of inlined UI: building and writing it once per window was pure waste — in
+// bytes on disk and in the time it takes a window to appear. Theme and accent are
+// applied live by the shim, so only the values compiled into the document are part of
+// the key; changing the font size simply produces the next key.
+const chatShellFiles = new Map<string, string>();
+
+function chatShellFile(variant: "full" | "minimal"): string | null {
+const key = `${variant}|${JSON.stringify([
+config.chatFontSize,
+config.workspaceRoot,
+config.language,
+config.theme,
+config.accent,
+config.uiLanguage,
+config.chatBackgroundImage,
+config.chatBackgroundOpacity,
+config.chatMermaidTheme,
+config.chatSendShortcut,
+])}`;
+const cached = chatShellFiles.get(key);
+if (cached && existsSync(cached)) return cached;
+const html = buildChatHtml(app.getAppPath(), config, { minimal: variant === "minimal" });
+if (!html) return null;
+const file = writeTempHtml(variant === "minimal" ? "pi-heao-child" : "pi-heao-chat", html);
+chatShellFiles.set(key, file);
+return file;
+}
+
 /** Remove the files we wrote; also sweep leftovers from earlier runs (older than 1h). */
 function sweepStaleTempFiles(): void {
   const cutoff = Date.now() - 60 * 60 * 1000;
@@ -436,10 +459,8 @@ async function createWindow(): Promise<void> {
     },
   });
 
-  // Unique temp file per launch — avoids stale-cache when old instance holds the file
-  const chatHtml = buildChatHtml(app.getAppPath(), config);
-  if (chatHtml) {
-    const tmpHtml = writeTempHtml("pi-heao-chat", chatHtml);
+  const tmpHtml = chatShellFile("full");
+  if (tmpHtml) {
     await mainWindow.loadFile(tmpHtml);
   } else {
     const candidates = [
@@ -598,6 +619,12 @@ function registerShortcuts(win: BrowserWindow): void {
   });
 }
 
+/**
+ * Each session window runs its own pi process (~250 MB) and its own renderer
+ * (~130 MB), so an unbounded number of them is a memory leak with a nicer name.
+ */
+const MAX_SESSION_WINDOWS = 6;
+
 async function openSessionWindow(
   sessionFile?: string,
   where?: { screenX?: number; screenY?: number; bounds?: Electron.Rectangle },
@@ -612,6 +639,16 @@ async function openSessionWindow(
       return { ok: true, focused: true };
     }
   }
+  // Each window runs its own pi process and renderer — the two biggest things this
+  // app allocates — so the cap is enforced rather than discovered by the OOM killer.
+  const liveChildren = [...childWindows].filter((w) => !w.isDestroyed());
+  if (liveChildren.length >= MAX_SESSION_WINDOWS) {
+    return {
+      ok: false,
+      error: `会话窗口已达上限 ${MAX_SESSION_WINDOWS} 个（每个窗口都会独立启动 pi，约需 380 MB 内存）；请先关掉一个`,
+    };
+  }
+
   const placement = where?.bounds ?? boundsNear(where);
   const win = new BrowserWindow({
     ...placement,
@@ -645,11 +682,11 @@ async function openSessionWindow(
 
   // Each child window gets a cloned config with the target session
   const childConfig: StandaloneConfig = { ...config };
-  const chatHtml = buildChatHtml(app.getAppPath(), childConfig);
-  if (chatHtml) {
-    const tmpHtml = writeTempHtml("pi-heao-child", chatHtml);
-    await win.loadFile(tmpHtml);
-  }
+  // The stripped shell: a drag bar with the session name, and the chat. No sidebar,
+  // no dock, no palette — this window is a place to watch one session, while the main
+  // window stays the control centre for switching, terminals and everything else.
+  const tmpHtml = chatShellFile("minimal");
+  if (tmpHtml) await win.loadFile(tmpHtml);
 
   // Create a dedicated chat session for this window
   let childSession: ChatSession | null = null;
@@ -1899,13 +1936,13 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
       log.warn(`ipc ${channel}: no session for renderer`);
       return { ok: false, error: "会话未就绪" };
     }
-      try {
-        const senderWindow = BrowserWindow.fromWebContents(e.sender);
-        if (msgType === "dialogResponse") {
-          // Answered: stop repeating that window's alert.
-          if (senderWindow) cancelDecisionAlerts(senderWindow.id);
-        }
-        if (msgType === "switchSession") {
+    try {
+      const senderWindow = BrowserWindow.fromWebContents(e.sender);
+      if (msgType === "dialogResponse") {
+        // Answered: stop repeating that window's alert.
+        if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+      }
+      if (msgType === "switchSession") {
         const file = String(msg?.sessionFile || msg?.file || "");
         if (!file) {
           log.warn("ipc switchSession: no file", msg);
@@ -1915,16 +1952,16 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
           log.warn("ipc switchSession: refused path", file);
           return { ok: false, error: "会话文件无效（必须在 ~/.pi/agent/sessions 下）" };
         }
-          log.info("ipc switchSession ->", file);
-          // The dialog belonged to the session being left: stop reminding about it.
-          if (senderWindow) cancelDecisionAlerts(senderWindow.id);
-          await session.switchTo(file);
-          // A window's title should say which session it is showing.
-          if (senderWindow && !senderWindow.isDestroyed()) {
-            senderWindow.setTitle(`Pi — ${basename(file, ".jsonl")}`);
-            refreshWindowList();
-          }
-          return { ok: true };
+        log.info("ipc switchSession ->", file);
+        // The dialog belonged to the session being left: stop reminding about it.
+        if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+        await session.switchTo(file);
+        // A window's title should say which session it is showing.
+        if (senderWindow && !senderWindow.isDestroyed()) {
+          senderWindow.setTitle(`Pi — ${basename(file, ".jsonl")}`);
+          refreshWindowList();
+        }
+        return { ok: true };
       } else if (msgType === "newSession") {
         await session.newSession();
         return { ok: true };

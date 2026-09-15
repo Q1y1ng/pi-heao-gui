@@ -9,7 +9,12 @@ import { t, type UiLang } from "./i18n";
  * Styling: the legacy rules above are kept for layout, and a design layer that
  * consumes the shared --pi-* tokens is appended last so it wins.
  */
-export function buildSettingsHtml(lang: UiLang = "zh-cn", theme: ThemeName, accent: string, chatFontSize: number): string {
+export function buildSettingsHtml(
+  lang: UiLang = "zh-cn",
+  theme: ThemeName,
+  accent: string,
+  chatFontSize: number,
+): string {
   return `<!DOCTYPE html>
 <!-- Pi Heao GUI V1.2.0 · made by HEAOZIE -->
 <html lang="zh-CN">
@@ -863,6 +868,10 @@ body {
       <label class="switch"><input type="checkbox" id="cfg-showArchived"><span class="slider"></span></label>
       <label for="cfg-showArchived">侧栏显示已归档会话</label>
     </div>
+    <div class="checkbox-row">
+      <label class="switch"><input type="checkbox" id="cfg-restoreWindows"><span class="slider"></span></label>
+      <label for="cfg-restoreWindows">启动时恢复上次打开的子窗口</label>
+    </div>
     <div class="section-title">提醒</div>
     <div class="hint">任务结束时、以及 agent 需要你**确权**或**提权**时发出提示音。声音由程序现场合成，
       不占用磁盘素材；确认对话被应答后不再重复。</div>
@@ -1612,6 +1621,19 @@ $('cfg-showArchived').onchange = async () => {
   }
 };
 
+$('cfg-restoreWindows').onchange = async () => {
+  const on = $('cfg-restoreWindows').checked;
+  try {
+    await applyPartial(
+      { restoreWindows: on },
+      on ? '下次启动将恢复这次打开的子窗口' : '下次启动不再恢复子窗口',
+    );
+  } catch (err) {
+    setStatus('设置失败: ' + err.message, false);
+    $('cfg-restoreWindows').checked = !on;
+  }
+};
+
 // ── General: 操作提醒（提示音）──
 // Plain JS on purpose — this block is emitted verbatim into the settings
 // document, so a TypeScript annotation here would become a syntax error in the
@@ -1914,6 +1936,7 @@ async function loadAll() {
 
     $('cfg-openAtLogin').checked = !!currentConfig.openAtLogin;
     $('cfg-showArchived').checked = !!currentConfig.showArchived;
+    $('cfg-restoreWindows').checked = currentConfig.restoreWindows !== false;
     $('cfg-alerts-enabled').checked = !!currentConfig.alerts?.enabled;
     $('cfg-alerts-sound').value = currentConfig.alerts?.sound ?? 'chime';
     $('cfg-alerts-volume').value = String(currentConfig.alerts?.volume ?? 0.6);
@@ -1975,6 +1998,7 @@ async function saveAll() {
       disabledTools,
       openAtLogin: $('cfg-openAtLogin').checked,
       showArchived: $('cfg-showArchived').checked,
+      restoreWindows: $('cfg-restoreWindows').checked,
       alerts: {
         enabled: $('cfg-alerts-enabled').checked,
         sound: alertSound(),

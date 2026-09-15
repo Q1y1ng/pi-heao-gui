@@ -46,8 +46,14 @@ test("decideAlert: a decision is heard even when its window has focus", () => {
 });
 
 test("decideAlert: the two events switch off independently", () => {
-  assert.equal(decideAlert("turnEnd", { ...base, onTurnEnd: false }, state()).reason, "turn-end-off");
-  assert.equal(decideAlert("decision", { ...base, onApproval: false }, state()).reason, "approval-off");
+  assert.equal(
+    decideAlert("turnEnd", { ...base, onTurnEnd: false }, state()).reason,
+    "turn-end-off",
+  );
+  assert.equal(
+    decideAlert("decision", { ...base, onApproval: false }, state()).reason,
+    "approval-off",
+  );
   assert.equal(decideAlert("decision", { ...base, onTurnEnd: false }, state()).audible, true);
   assert.equal(decideAlert("turnEnd", { ...base, onApproval: false }, state()).audible, true);
 });

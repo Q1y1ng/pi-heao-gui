@@ -76,6 +76,7 @@ export const UI_STRINGS: Record<string, Entry> = {
   "tray.showUnread": { "zh-cn": "显示主窗口（{n} 条未读）", en: "Show window ({n} unread)" },
   "tray.newSession": { "zh-cn": "新建会话", en: "New session" },
   "tray.recent": { "zh-cn": "最近会话", en: "Recent sessions" },
+  "tray.windows": { "zh-cn": "窗口", en: "Windows" },
   "tray.settings": { "zh-cn": "设置", en: "Settings" },
   "tray.about": { "zh-cn": "关于 Pi Heao GUI", en: "About Pi Heao GUI" },
   "tray.quit": { "zh-cn": "退出", en: "Quit" },
@@ -160,6 +161,9 @@ export const CHAT_STRINGS: Record<string, string> = {
   "删除该会话文件？此操作不可撤销。": "Delete this session file? This cannot be undone.",
   复制会话路径: "Copy the session path",
   在新窗口打开: "Open in a new window",
+  "拖动到窗口外，可在独立窗口中打开": "Drag outside the window to open it in its own",
+  "该会话已在另一个窗口打开，已为你切到那个窗口":
+    "That session is already open in another window — switched to it",
   "导出对话为 Markdown": "Export the conversation as Markdown",
   "载入会话…": "Loading the session…",
   "切换失败: ": "Switch failed: ",

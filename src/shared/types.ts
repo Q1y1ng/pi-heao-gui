@@ -50,6 +50,8 @@ export interface StandaloneConfig {
   openAtLogin: boolean;
   /** Sidebar: also list archived sessions. */
   showArchived: boolean;
+  /** Reopen the session windows that were open when the app last quit. */
+  restoreWindows: boolean;
   /** Check GitHub releases for a newer build in the background (packaged runs). */
   autoCheckUpdates: boolean;
   /** Most-recently used workspaces (per-window workspace switcher). */
@@ -91,6 +93,7 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   budgetMonthlyUsd: 0,
   openAtLogin: false,
   showArchived: false,
+  restoreWindows: true,
   autoCheckUpdates: true,
   recentWorkspaces: [],
   uiLanguage: "auto",

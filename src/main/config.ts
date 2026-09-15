@@ -116,6 +116,7 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     budgetMonthlyUsd: num(raw.budgetMonthlyUsd, DEFAULT_CONFIG.budgetMonthlyUsd, 0, 1000000),
     openAtLogin: bool(raw.openAtLogin, DEFAULT_CONFIG.openAtLogin),
     showArchived: bool(raw.showArchived, DEFAULT_CONFIG.showArchived),
+    restoreWindows: bool(raw.restoreWindows, DEFAULT_CONFIG.restoreWindows),
     autoCheckUpdates: bool(raw.autoCheckUpdates, DEFAULT_CONFIG.autoCheckUpdates),
     recentWorkspaces: strArray(raw.recentWorkspaces).slice(0, 8),
     uiLanguage:

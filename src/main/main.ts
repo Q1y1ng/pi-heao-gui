@@ -1,5 +1,15 @@
-import { app, BrowserWindow, ipcMain, clipboard, dialog, shell, Menu, webContents } from "electron";
-import { join, sep, basename, dirname } from "node:path";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  clipboard,
+  dialog,
+  shell,
+  Menu,
+  webContents,
+  screen,
+} from "electron";
+import { join, sep, basename, dirname, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import {
   existsSync,
@@ -56,7 +66,13 @@ import {
 } from "./pi-cli";
 import { getRpcLogPath } from "./rpc-client";
 import { buildTokensCss } from "./theme";
-import { refreshTrayMenu, setRecentSessions, setUnreadCount, getUnreadCount } from "./tray";
+import {
+  refreshTrayMenu,
+  setRecentSessions,
+  setWindowList,
+  bumpUnread,
+  clearUnread,
+} from "./tray";
 import { createSessionLister, type SessionLister } from "./sessions";
 import {
   authToPublic,
@@ -69,7 +85,7 @@ import {
 import { log, errText } from "./log";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
-import { disposeAlerts, fireAlert, playChime } from "./alerts";
+import { disposeAlerts, fireAlert, isAlertNotifierWindow, playChime } from "./alerts";
 import { createUpdateController, type UpdateController, type UpdaterLike } from "./updater";
 
 // ─── Updates ────────────────────────────────────────────────────────────────
@@ -173,6 +189,53 @@ const MSG_TYPE_TO_CHANNEL: Record<string, string> = {
   turnStats: "pi:turn-stats",
   stats: "pi:stats",
 };
+
+// ─── Alerts: "a person is required" ────────────────────────────────────
+
+/** A dialog nobody has answered is repeated this many times in total. */
+const DECISION_ALERT_ATTEMPTS = 3;
+const DECISION_ALERT_REPEAT_MS = 5000;
+/** window id -> pending repeat timers */
+const decisionAlerts = new Map<number, NodeJS.Timeout[]>();
+
+function fireDecisionAlert(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  fireAlert("decision", config.alerts, win.isFocused());
+}
+
+/**
+ * A dialog is the one signal that a person is required — a permission, an
+ * elevation, a confirmation. It is heard even when its window has focus, because
+ * the turn is blocked until someone answers; the repeats only happen while that
+ * window stays in the background, so watching it does not mean hearing it three
+ * times. Answering, focusing, switching session or closing the window all stop it.
+ */
+function scheduleDecisionAlerts(win: BrowserWindow): void {
+  cancelDecisionAlerts(win.id);
+  fireDecisionAlert(win);
+  const timers: NodeJS.Timeout[] = [];
+  for (let i = 1; i < DECISION_ALERT_ATTEMPTS; i++) {
+    const t = setTimeout(() => {
+      if (win.isDestroyed() || win.isFocused()) return;
+      fireDecisionAlert(win);
+    }, i * DECISION_ALERT_REPEAT_MS);
+    // A pending reminder is never a reason to keep the process alive.
+    t.unref?.();
+    timers.push(t);
+  }
+  decisionAlerts.set(win.id, timers);
+}
+
+function cancelDecisionAlerts(windowId: number): void {
+  const timers = decisionAlerts.get(windowId);
+  if (!timers) return;
+  for (const t of timers) clearTimeout(t);
+  decisionAlerts.delete(windowId);
+}
+
+function cancelAllDecisionAlerts(): void {
+  for (const id of [...decisionAlerts.keys()]) cancelDecisionAlerts(id);
+}
 
 function postToWindow(win: BrowserWindow, msg: unknown): void {
   if (win.isDestroyed()) return;
@@ -391,10 +454,15 @@ async function createWindow(): Promise<void> {
     }
   }
 
+  registerShortcuts(mainWindow);
+  refreshWindowList();
+
   mainWindow.on("closed", () => {
     if (mainWindowId >= 0) {
       windowSessions.delete(mainWindowId);
       disposeTerminalFor(mainWindowId);
+      clearUnread(mainWindowId);
+      cancelDecisionAlerts(mainWindowId);
     }
     mainWindowId = -1;
     mainWindow = null;
@@ -407,13 +475,149 @@ async function createWindow(): Promise<void> {
 
 // ─── Multi-window: open session in new window ─────────────────────────
 
-async function openSessionWindow(sessionFile: string): Promise<void> {
+/**
+ * Which window drives which session file. One session must have exactly one
+ * writer: pi appends to a single .jsonl per session, so two windows running the
+ * same one would interleave their turns and leave behind a history neither wrote.
+ */
+const windowsBySession = new Map<string, BrowserWindow>();
+
+const sessionKey = (file: string): string => resolve(file).toLowerCase();
+
+function windowForWebContentsId(id: number): BrowserWindow | null {
+  const wc = webContents.fromId(id);
+  return wc && !wc.isDestroyed() ? BrowserWindow.fromWebContents(wc) : null;
+}
+
+/** The window already driving this session, if any — child or main. */
+function windowDrivingSession(file: string): BrowserWindow | null {
+  const key = sessionKey(file);
+  const known = windowsBySession.get(key);
+  if (known) {
+    if (!known.isDestroyed()) return known;
+    windowsBySession.delete(key);
+  }
+  // The main window's session is created through createWindow, not through this
+  // path, so it is only visible through its chat session's live state.
+  for (const [wcId, session] of windowSessions) {
+    const current = session.statsSnapshot().sessionFile;
+    if (current && sessionKey(current) === key) return windowForWebContentsId(wcId);
+  }
+  return null;
+}
+
+/**
+ * Where a dragged-out window should land: at the pointer, on the display the
+ * pointer is on, clamped so its title bar stays reachable. The renderer's
+ * screenX/screenY are CSS pixels and Electron's work area is in DIP, which on
+ * Windows are the same unit — so no scale conversion is involved.
+ */
+function boundsNear(where?: { screenX?: number; screenY?: number }): Electron.Rectangle {
+  const width = 1000;
+  const height = 720;
+  const x0 = Number(where?.screenX);
+  const y0 = Number(where?.screenY);
+  const dropped = Number.isFinite(x0) && Number.isFinite(y0);
+  const area = dropped
+    ? screen.getDisplayNearestPoint({ x: Math.round(x0), y: Math.round(y0) }).workArea
+    : screen.getPrimaryDisplay().workArea;
+  // Centred on that display when there is no drop point (menu, Ctrl+Shift+N).
+  const cx = dropped ? x0 : area.x + (area.width - width) / 2;
+  const cy = dropped ? y0 : area.y + (area.height - height) / 2;
+  return {
+    x: Math.round(Math.min(Math.max(cx - width / 2, area.x), area.x + area.width - width)),
+    y: Math.round(Math.min(Math.max(cy - 30, area.y), area.y + area.height - height)),
+    width,
+    height,
+  };
+}
+
+/**
+ * The tray's window list. Only interesting with more than one window, which is why
+ * setWindowList ignores a single entry.
+ */
+function refreshWindowList(): void {
+  setWindowList(
+    BrowserWindow.getAllWindows()
+      .filter((w) => !w.isDestroyed() && !isAlertNotifierWindow(w))
+      .map((w) => ({ id: w.id, label: w.getTitle() || "Pi Heao GUI" })),
+  );
+}
+
+// ─── Window state: reopen what was open ───────────────────────────────
+
+interface RestoredWindow {
+  file: string;
+  bounds: Electron.Rectangle;
+}
+
+const windowsStatePath = (): string => join(app.getPath("userData"), "session-windows.json");
+
+/** Remember which sessions had their own window, for the next launch. */
+function saveWindowState(): void {
+  const items: RestoredWindow[] = [];
+  for (const [file, win] of windowsBySession) {
+    if (win.isDestroyed()) continue;
+    items.push({ file, bounds: win.getBounds() });
+  }
+  try {
+    writeFileSync(windowsStatePath(), JSON.stringify({ windows: items.slice(0, 8) }, null, 2));
+  } catch (e) {
+    log.warn("window state not saved:", errText(e));
+  }
+}
+
+/**
+ * Reopen the windows the last run left behind. Opt-out via config, and skipped
+ * outright when a test harness sets PI_NO_RESTORE=1 — a restored window appearing
+ * mid-run would change what the e2e sees without it having asked for one.
+ */
+async function restoreWindowState(): Promise<void> {
+  if (!config.restoreWindows || process.env.PI_NO_RESTORE === "1") return;
+  let parsed: { windows?: RestoredWindow[] } = {};
+  try {
+    parsed = JSON.parse(readFileSync(windowsStatePath(), "utf8")) as { windows?: RestoredWindow[] };
+  } catch {
+    return; // never saved, or unreadable: nothing to restore
+  }
+  const items = Array.isArray(parsed.windows) ? parsed.windows.slice(0, 8) : [];
+  for (const item of items) {
+    const file = String(item?.file || "");
+    if (!file || !isSessionFile(file) || !existsSync(file)) continue;
+    await openSessionWindow(file, { bounds: item.bounds });
+  }
+}
+
+/** Ctrl+Shift+N opens a fresh session in its own window. */
+function registerShortcuts(win: BrowserWindow): void {
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.control || !input.shift) return;
+    if (String(input.key).toLowerCase() !== "n") return;
+    event.preventDefault();
+    void openSessionWindow();
+  });
+}
+
+async function openSessionWindow(
+  sessionFile?: string,
+  where?: { screenX?: number; screenY?: number; bounds?: Electron.Rectangle },
+): Promise<{ ok: boolean; focused?: boolean; error?: string }> {
+  if (sessionFile) {
+    // Focusing the window that already drives this session is the whole point of
+    // the guard: a second writer would corrupt the session file.
+    const existing = windowDrivingSession(sessionFile);
+    if (existing) {
+      if (existing.isMinimized()) existing.restore();
+      existing.focus();
+      return { ok: true, focused: true };
+    }
+  }
+  const placement = where?.bounds ?? boundsNear(where);
   const win = new BrowserWindow({
-    width: 1000,
-    height: 720,
+    ...placement,
     minWidth: 700,
     minHeight: 450,
-    title: `Pi — ${basename(sessionFile, ".jsonl")}`,
+    title: sessionFile ? `Pi — ${basename(sessionFile, ".jsonl")}` : "Pi Heao GUI",
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
     titleBarOverlay: overlayColors(config.theme),
@@ -426,7 +630,18 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
     },
   });
   childWindows.add(win);
+  // The chat page sets its own <title> ("Pi Heao GUI"), and Electron copies a page
+  // title over the window title — which is how a window about one session ended up
+  // indistinguishable from the main one. For these windows the session name wins.
+  win.on("page-title-updated", (event) => {
+    event.preventDefault();
+    win.setTitle(sessionFile ? `Pi — ${basename(sessionFile, ".jsonl")}` : "Pi Heao GUI");
+    refreshWindowList();
+  });
+  registerShortcuts(win);
   const childWinId = win.webContents.id;
+  if (sessionFile) windowsBySession.set(sessionKey(sessionFile), win);
+  refreshWindowList();
 
   // Each child window gets a cloned config with the target session
   const childConfig: StandaloneConfig = { ...config };
@@ -467,14 +682,25 @@ async function openSessionWindow(sessionFile: string): Promise<void> {
 
   if (childSession) windowSessions.set(childWinId, childSession);
 
+  win.on("focus", () => {
+    clearUnread(win.id);
+    cancelDecisionAlerts(win.id);
+    win.flashFrame(false);
+  });
+
   win.on("closed", () => {
     windowSessions.delete(childWinId);
     childWindows.delete(win);
+    if (sessionFile) windowsBySession.delete(sessionKey(sessionFile));
+    clearUnread(win.id);
+    cancelDecisionAlerts(win.id);
     if (childSession) {
       childSession.dispose();
       childSession = null;
     }
+    refreshWindowList();
   });
+  return { ok: true, focused: false };
 }
 
 /** Sessions may only be opened from the pi sessions directory. */
@@ -505,7 +731,7 @@ function sessionHost(win: BrowserWindow): {
     postToRenderer: (msg) => {
       // Desktop notification + unread counter when a turn finishes while the
       // window is not focused (the window may be hidden in the tray).
-      const m = msg as { type?: string; event?: { type?: string } };
+      const m = msg as { type?: string; event?: { type?: string }; request?: unknown };
       if (m?.type === "event" && m.event?.type === "agent_settled" && !win.isDestroyed()) {
         const focused = win.isFocused();
         // Two separate decisions that happen to share a moment: the chime has its
@@ -515,10 +741,13 @@ function sessionHost(win: BrowserWindow): {
         const sound = fireAlert("turnEnd", config.alerts, focused);
         if (!focused) {
           showNotification("Pi Heao GUI", "Agent 已完成回复", { silent: sound.toastSilent });
-          setUnreadCount(getUnreadCount() + 1);
+          bumpUnread(win.id);
           win.flashFrame(true);
         }
       }
+      // Permission, elevation or a confirmation: someone has to answer, so this is
+      // the one alert that is allowed to interrupt.
+      if (m?.type === "dialog" && m.request && !win.isDestroyed()) scheduleDecisionAlerts(win);
       postToWindow(win, msg);
     },
     saveStats: (sessionFile, data) => {
@@ -536,12 +765,18 @@ function sessionHost(win: BrowserWindow): {
   };
 }
 
-ipcMain.handle("pi:open-session-window", async (_e, sessionFile: string) => {
-  const f = String(sessionFile || "");
+ipcMain.handle("pi:open-session-window", async (_e, arg: unknown) => {
+  // Two shapes: a plain path (the context menu) or an object carrying where the
+  // drag was released. Keeping the string form means the existing caller and the
+  // preload tests do not have to change.
+  const payload =
+    typeof arg === "string"
+      ? { file: arg }
+      : ((arg ?? {}) as { file?: string; screenX?: number; screenY?: number });
+  const f = String(payload.file || "");
   if (!isSessionFile(f)) return { ok: false, error: "会话文件无效" };
   if (!existsSync(f)) return { ok: false, error: "会话文件不存在" };
-  await openSessionWindow(f);
-  return { ok: true };
+  return openSessionWindow(f, { screenX: payload.screenX, screenY: payload.screenY });
 });
 
 /**
@@ -1664,8 +1899,13 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
       log.warn(`ipc ${channel}: no session for renderer`);
       return { ok: false, error: "会话未就绪" };
     }
-    try {
-      if (msgType === "switchSession") {
+      try {
+        const senderWindow = BrowserWindow.fromWebContents(e.sender);
+        if (msgType === "dialogResponse") {
+          // Answered: stop repeating that window's alert.
+          if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+        }
+        if (msgType === "switchSession") {
         const file = String(msg?.sessionFile || msg?.file || "");
         if (!file) {
           log.warn("ipc switchSession: no file", msg);
@@ -1675,9 +1915,16 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
           log.warn("ipc switchSession: refused path", file);
           return { ok: false, error: "会话文件无效（必须在 ~/.pi/agent/sessions 下）" };
         }
-        log.info("ipc switchSession ->", file);
-        await session.switchTo(file);
-        return { ok: true };
+          log.info("ipc switchSession ->", file);
+          // The dialog belonged to the session being left: stop reminding about it.
+          if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+          await session.switchTo(file);
+          // A window's title should say which session it is showing.
+          if (senderWindow && !senderWindow.isDestroyed()) {
+            senderWindow.setTitle(`Pi — ${basename(file, ".jsonl")}`);
+            refreshWindowList();
+          }
+          return { ok: true };
       } else if (msgType === "newSession") {
         await session.newSession();
         return { ok: true };
@@ -1855,6 +2102,7 @@ app.whenReady().then(async () => {
   sweepStaleTempFiles();
   setupChineseMenu();
   await createWindow();
+  void restoreWindowState();
   const trayReady = createTray(
     {
       getMainWindow: () => mainWindow,
@@ -1870,6 +2118,13 @@ app.whenReady().then(async () => {
         postToWindow(win, { type: "newSession" });
       },
       openSettings: () => openSettingsWindow(),
+      focusWindow: (id) => {
+        const w = BrowserWindow.fromId(id);
+        if (!w || w.isDestroyed()) return;
+        if (w.isMinimized()) w.restore();
+        w.show();
+        w.focus();
+      },
     },
     resolveUiLang(config.uiLanguage ?? "auto"),
   );
@@ -1882,7 +2137,10 @@ app.whenReady().then(async () => {
 
   // Unread counter: clearing happens whenever the window regains focus.
   mainWindow?.on("focus", () => {
-    setUnreadCount(0);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      clearUnread(mainWindow.id);
+      cancelDecisionAlerts(mainWindow.id);
+    }
     mainWindow?.flashFrame(false);
   });
 
@@ -1923,12 +2181,14 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   markQuitting();
+  saveWindowState();
   for (const session of windowSessions.values()) session.dispose();
   windowSessions.clear();
 });
 
 app.on("will-quit", () => {
   for (const id of [...terminals.keys()]) disposeTerminalFor(id);
+  cancelAllDecisionAlerts();
   destroyTray();
   disposeAlerts();
   cleanupTempFiles();

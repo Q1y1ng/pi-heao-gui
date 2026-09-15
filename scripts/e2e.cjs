@@ -24,6 +24,10 @@ const REPO_ROOT = path.join(__dirname, "..");
 // ── Isolated home ────────────────────────────────────────────────────────────
 // Must happen before anything reads homedir(). Auth/config are copied so pi is
 // actually usable; sessions, snapshots and the app's own state stay throwaway.
+// A restored window appearing mid-run would change what this test sees without it
+// having asked for one, so the app is told not to reopen the last session's windows.
+process.env.PI_NO_RESTORE = "1";
+
 let SANDBOX = null;
 if (ISOLATED) {
   SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "pi-e2e-home-"));
@@ -1206,6 +1210,78 @@ app.whenReady().then(async () => {
         /* best effort */
       }
     }
+    await section("Multi-window: a session opens in its own window, once", async () => {
+      const chatWin =
+        allWindows().find((x) => /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL()))) ||
+        chatWindow();
+      const sessions = await js(chatWin, "window.pi.invoke('pi:list-sessions')");
+      const file = Array.isArray(sessions) && sessions.length ? sessions[0].file : "";
+      if (!file) {
+        check("a session is available to open in its own window", false, "none listed");
+        return;
+      }
+
+      const bounds = chatWin.getBounds();
+      // Identify the new window by id, not by "the last one in the array": the app
+      // opens its own windows (the alert notifier, the settings window) and a test
+      // that assumes ordering fails for the wrong reason.
+      const before = allWindows().length;
+      const beforeIds = new Set(allWindows().map((w) => w.id));
+      // Coordinates to the left of the window: outside its bounds, which is exactly
+      // what a drag-out gesture reports on dragend.
+      const opened = await js(
+        chatWin,
+        `window.pi.invoke('pi:open-session-window', ${JSON.stringify({
+          file,
+          screenX: bounds.x - 400,
+          screenY: bounds.y + 120,
+        })})`,
+      );
+      check("the open-in-a-window request is accepted", opened?.ok === true, JSON.stringify(opened));
+
+      const child = await waitFor(
+        () => allWindows().find((w) => !beforeIds.has(w.id)) ?? null,
+        40_000,
+        "session window",
+      );
+      check("a session opens in its own window", !!child, `${allWindows().length} windows`);
+      if (!child) return;
+
+      check(
+        "the new window is titled after the session",
+        /Pi — /.test(child.getTitle()),
+        child.getTitle(),
+      );
+      check(
+        "the new window did not land on top of the one it came from",
+        child.getBounds().x !== chatWin.getBounds().x ||
+          child.getBounds().y !== chatWin.getBounds().y,
+        JSON.stringify(child.getBounds()),
+      );
+
+      // The same session again: focusing the existing window is the rule, because two
+      // writers on one session file would interleave their turns.
+      const again = await js(
+        chatWin,
+        `window.pi.invoke('pi:open-session-window', ${JSON.stringify({ file })})`,
+      );
+      await sleep(1500);
+      check(
+        "the same session is not given a second window",
+        allWindows().length === before + 1,
+        `${allWindows().length} windows, expected ${before + 1}`,
+      );
+      check("the repeat request reports that it focused a window", again?.focused === true, JSON.stringify(again));
+
+      child.close();
+      await sleep(900);
+      check(
+        "closing the window brings the count back",
+        allWindows().length === before,
+        `${allWindows().length} windows, expected ${before}`,
+      );
+    });
+
     await section("Alerts: config round-trip and the sound path", async () => {
       const sw = byTitle(/设置|Settings/);
       if (!sw) {
@@ -1265,10 +1341,7 @@ app.whenReady().then(async () => {
       // Put back what was there, so the rest of the run (and a human watching) does
       // not inherit this section's settings.
       if (before && before.alerts) {
-        await js(
-          sw,
-          `window.pi.invoke('pi:set-config',{alerts:${JSON.stringify(before.alerts)}})`,
-        );
+        await js(sw, `window.pi.invoke('pi:set-config',{alerts:${JSON.stringify(before.alerts)}})`);
         await sleep(300);
       }
     });
@@ -1337,9 +1410,17 @@ app.whenReady().then(async () => {
       return JSON.stringify(bad.slice(0, 6));
     })()`;
 
-      for (const theme of ["light", "dark"]) {
-        await js(chatWindow(), `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
-        await sleep(1200);
+        // The theme is switched through the SETTINGS window: the chat window's preload
+        // refuses pi:set-config (the security section above asserts exactly that), so
+        // asking the chat window to change the theme only rejected and took the whole
+        // section down with it. The chat window is used here to measure, nothing else.
+        const settingsWin = byTitle(/设置|Settings/);
+        check("the settings window is available to switch themes", !!settingsWin);
+        for (const theme of ["light", "dark"]) {
+          if (settingsWin) {
+            await js(settingsWin, `window.pi.invoke('pi:set-config',{theme:'${theme}'})`);
+          }
+          await sleep(1200);
         const w =
           allWindows().find((x) =>
             /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
@@ -1362,8 +1443,10 @@ app.whenReady().then(async () => {
           worst ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel}` : undefined,
         );
       }
-      await js(chatWindow(), "window.pi.invoke('pi:set-config',{theme:'light'})");
-      await sleep(600);
+        if (settingsWin) {
+          await js(settingsWin, "window.pi.invoke('pi:set-config',{theme:'light'})");
+        }
+        await sleep(600);
     });
 
     // Let the app run its own shutdown path (will-quit disposes the PTYs); a

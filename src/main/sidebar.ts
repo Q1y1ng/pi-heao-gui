@@ -264,6 +264,9 @@ export const SIDEBAR_HTML = `
     pointer-events: auto !important;
     transition: background var(--pi-speed), border-color var(--pi-speed);
   }
+  #pi-sidebar .pi-session-item.pi-dragging {
+    opacity: 0.55;
+  }
   #pi-sidebar .pi-session-item:hover {
     background: var(--pi-raised);
     border-color: var(--pi-border);
@@ -641,12 +644,54 @@ export const SIDEBAR_SCRIPT = `
     return '更早';
   }
 
+  function insideWindow(x, y) {
+    var left = window.screenX, top = window.screenY;
+    return x >= left && x <= left + window.outerWidth && y >= top && y <= top + window.outerHeight;
+  }
+
+  function sideToast(msg) {
+    var toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.className = 'toast show success';
+    setTimeout(function() { toast.className = 'toast'; }, 3000);
+  }
+
   function itemEl(s, idx) {
     var item = document.createElement('div');
     item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '') + (s.file === currentFile ? ' active' : '');
     item.setAttribute('data-idx', String(idx));
     item.setAttribute('data-file', s.file || '');
     item.setAttribute('role', 'listitem');
+    // Drag a session out of the window to open it in its own — the browser-tab
+    // gesture. Electron has no native API for this (electron#47854 is still open,
+    // and the tabbing APIs are macOS-only), so this is HTML5 drag and drop, and the
+    // "did the pointer leave the window" test happens here, where the coordinates are.
+    item.draggable = true;
+    item.title = '拖动到窗口外，可在独立窗口中打开';
+    item.addEventListener('dragstart', function(e) {
+      if (!e.dataTransfer || !s.file) return;
+      e.dataTransfer.setData('application/x-pi-session', s.file);
+      e.dataTransfer.setData('text/plain', s.name || s.sessionId || s.file);
+      e.dataTransfer.effectAllowed = 'copy';
+      item.classList.add('pi-dragging');
+    });
+    item.addEventListener('dragend', function(e) {
+      item.classList.remove('pi-dragging');
+      if (!s.file) return;
+      // A cancelled drag reports 0,0, and a drop back inside the window is a stray
+      // gesture — neither is a request for a new window.
+      if (!e.screenX && !e.screenY) return;
+      if (insideWindow(e.screenX, e.screenY)) return;
+      if (!window.pi) return;
+      window.pi.invoke('pi:open-session-window', {
+        file: s.file, screenX: e.screenX, screenY: e.screenY,
+      }).then(function(res) {
+        // The main process refuses to give one session two writers; it focuses the
+        // window that already has it instead, and the user should know why.
+        if (res && res.focused) sideToast('该会话已在另一个窗口打开，已为你切到那个窗口');
+      });
+    });
     item.innerHTML =
       '<span class="pi-session-dot' + (s.running ? ' running' : '') + '"></span>' +
       '<div class="pi-session-main">' +

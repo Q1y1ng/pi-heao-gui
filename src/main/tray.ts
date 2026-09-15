@@ -81,11 +81,26 @@ export interface TrayHooks {
   openSession?: (file: string) => void;
   newSession?: () => void;
   openSettings?: () => void;
+  /** Bring an already-open window to the front (the window list submenu). */
+  focusWindow?: (id: number) => void;
 }
 
 let hooks: TrayHooks | null = null;
 let recent: Array<{ label: string; file: string }> = [];
-let unread = 0;
+/** Open windows, in creation order — the tray's "which window am I looking for" list. */
+let windowsOpen: Array<{ id: number; label: string }> = [];
+/**
+ * Unread turn-ends, per window. This used to be a single counter, which meant a
+ * child window finishing while you were reading another one bumped the same
+ * number — with several sessions open the indicator stops meaning anything.
+ */
+const unreadByWindow = new Map<number, number>();
+
+function totalUnread(): number {
+  let n = 0;
+  for (const v of unreadByWindow.values()) n += v;
+  return n;
+}
 
 const BASE_TOOLTIP = "Pi Heao GUI V1.2.0 — made by HEAOZIE";
 
@@ -117,6 +132,17 @@ function aboutDialog(): void {
   else void dialog.showMessageBox(options);
 }
 
+/** The list is only worth showing once there is more than one window. */
+export function setWindowList(items: Array<{ id: number; label: string }>): void {
+  const next = items.slice(0, 12);
+  const same =
+    next.length === windowsOpen.length &&
+    next.every((w, i) => w.id === windowsOpen[i].id && w.label === windowsOpen[i].label);
+  if (same) return;
+  windowsOpen = next;
+  refreshTrayMenu();
+}
+
 function buildTemplate(): MenuItemConstructorOptions[] {
   const recentItems: MenuItemConstructorOptions[] = recent.length
     ? recent.map((item) => ({
@@ -132,12 +158,25 @@ function buildTemplate(): MenuItemConstructorOptions[] {
   return [
     {
       label:
-        unread > 0 ? tParams("tray.showUnread", uiLang, { n: unread }) : t("tray.show", uiLang),
+        totalUnread() > 0
+          ? tParams("tray.showUnread", uiLang, { n: totalUnread() })
+          : t("tray.show", uiLang),
       click: showMain,
     },
     { label: t("tray.newSession", uiLang), click: () => hooks?.newSession?.() },
     { type: "separator" },
     { label: t("tray.recent", uiLang), submenu: recentItems },
+    ...(windowsOpen.length > 1
+      ? [
+          {
+            label: t("tray.windows", uiLang),
+            submenu: windowsOpen.map((w) => ({
+              label: w.label.length > 48 ? `${w.label.slice(0, 48)}…` : w.label,
+              click: () => hooks?.focusWindow?.(w.id),
+            })),
+          },
+        ]
+      : []),
     { label: t("tray.settings", uiLang), click: () => hooks?.openSettings?.() },
     { type: "separator" },
     { label: t("tray.about", uiLang), click: aboutDialog },
@@ -157,7 +196,9 @@ export function refreshTrayMenu(): void {
   if (!tray || tray.isDestroyed()) return;
   try {
     tray.setContextMenu(Menu.buildFromTemplate(buildTemplate()));
-    tray.setToolTip(unread > 0 ? `${BASE_TOOLTIP} — ${unread} 条未读` : BASE_TOOLTIP);
+    tray.setToolTip(
+    totalUnread() > 0 ? `${BASE_TOOLTIP} — ${totalUnread()} 条未读` : BASE_TOOLTIP,
+  );
   } catch (e) {
     log.warn("tray menu refresh:", errText(e));
   }
@@ -173,14 +214,25 @@ export function setRecentSessions(items: Array<{ label: string; file: string }>)
  * Unread indicator: the window is often hidden when a turn finishes, and hiding
  * to the tray means there is no taskbar button to flash.
  */
-export function setUnreadCount(count: number): void {
-  if (count === unread) return;
-  unread = Math.max(0, count);
+export function bumpUnread(windowId: number): void {
+  unreadByWindow.set(windowId, (unreadByWindow.get(windowId) ?? 0) + 1);
+  refreshTrayMenu();
+}
+
+/** Clear one window's unread marks, or every window's when no id is given. */
+export function clearUnread(windowId?: number): void {
+  if (windowId === undefined) {
+    unreadByWindow.clear();
+    refreshTrayMenu();
+    return;
+  }
+  // Nothing was marked for that window — leave the menu alone.
+  if (!unreadByWindow.delete(windowId)) return;
   refreshTrayMenu();
 }
 
 export function getUnreadCount(): number {
-  return unread;
+  return totalUnread();
 }
 
 /**
@@ -209,7 +261,11 @@ export function createTray(hooksIn: TrayHooks, lang: UiLang = "zh-cn"): boolean 
  * Desktop notification. `silent` suppresses the OS notification sound — used when
  * the app plays its own chime, so the user hears one sound instead of two.
  */
-export function showNotification(title: string, body: string, opts: { silent?: boolean } = {}): void {
+export function showNotification(
+  title: string,
+  body: string,
+  opts: { silent?: boolean } = {},
+): void {
   if (!Notification.isSupported()) return;
   const n = new Notification({ title, body, silent: opts.silent ?? false });
   n.show();

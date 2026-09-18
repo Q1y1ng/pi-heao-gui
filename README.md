@@ -6,6 +6,27 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.2.3 — the child shell, and a font size that finally moves
+
+Released 2026-09-18 · [release notes](docs/release-notes-1.2.3.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.3)
+
+- **The font-size setting now resizes the chat, live.** It had been recorded as a known defect since 1.2.0,
+  and the earlier explanation was wrong: it was not a stylesheet outranking ours. The last layer is an
+  inline `--chat-fs` written by the vendored chat at boot from `window.__PI_FONTSIZE__`, and an inline
+  custom property beats every stylesheet — so the copy that won the cascade was the one written once and
+  never again. The shell now re-points it at the master token. Measured: 16 gives 16px on a real message
+  node, 22 gives 22px, and changing it while the app runs follows immediately. The e2e asserts it.
+- **A dragged-out session window shows its conversation again.** `preload`'s `onMessage` is a single
+  listener; the shell's own title script registered on the same channel and displaced the shim that
+  forwards every host message, so the window was titled correctly and stayed empty — with no error
+  anywhere. The stripped child shell is the default again, and `PI_MINIMAL_CHILD=0` brings back the full
+  shell for comparison.
+- **Worktrees are switchable from the Changes panel**: the dropdown lists every working copy (detached
+  HEAD included) and switching moves the workspace, the terminal and new sessions with it.
+- **`PI_DEBUG_WINDOW=1`** prints the child window's console, preload errors, load failures, a DOM
+  fingerprint and a time series — off by default, for the next time something needs looking at rather
+  than guessing about.
+
 ## 1.2.1 — multi-window, alerts, and a lighter shell
 
 Released 2026-09-15 · [release notes](docs/release-notes-1.2.1.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.1)
@@ -48,8 +69,8 @@ colours hardcoded to the dark one, and appearance settings that only applied onc
   that ignored it, and the accent only ever applied on the first change. Both fixed.
 - **Answers start expanded**, with a Show less toggle, and the reply body is no longer a click target —
   selecting text in it no longer collapses the block.
-- **Known issue, with measurements:** the font-size setting still does not resize chat text. See
-  [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) for the evidence and the next measurement to run.
+- **Known issue, with measurements:** the font-size setting still does not resize chat text — **fixed in
+  1.2.3**. See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) for the evidence.
 
 Installed copies self-update; the portable build needs a manual swap.
 
@@ -206,7 +227,7 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (127, none skipped)
+npm test              # unit tests (150, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
 npm run verify        # 35 DOM assertions against a real window
@@ -226,10 +247,9 @@ runtime dependency) as **blocking** jobs, with `smoke` advisory.
 - **Agent stops mid-turn** — usually a provider error surfaced in the transcript; the app does not retry
   silently.
 - **SmartScreen** — expected; see the signing note above.
-- **The font-size setting does not resize chat text** — a known, measured limitation of 1.2.0. The vendored
-  chat stylesheet declares `--chat-fs` in its own `:root`, sits after everything this project injects, and a
-  custom-property declaration cannot be forced with `!important`. Evidence and the next measurement to run:
-  [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+- **Font size not resizing chat text** — fixed in 1.2.3. The vendored chat writes an inline `--chat-fs` on
+  `<html>` at boot, and an inline custom property beats every stylesheet; the shell now re-points that copy
+  at the master token. Measurements and the trail: [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Security model
 

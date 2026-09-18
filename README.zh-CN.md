@@ -7,6 +7,23 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 
+## 1.2.3 更新报告
+
+发布于 2026-09-18 · [完整发布说明](docs/release-notes-1.2.3.md) · [下载 1.2.3](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.3)
+
+- **字号设置现在真的会改变聊天文字，而且是实时的。** 这条从 1.2.0 起就挂在“已知缺陷”里，而当时写的解释是错的：
+  并不是有哪张样式表压过了我们。最后一层是内置聊天 UI 启动时写在 `<html>` 上的**内联 `--chat-fs`**（取自
+  `window.__PI_FONTSIZE__`）—— **内联样式赢过所有样式表**，所以“赢下层叠的那一份”就是加载时写下、此后再不
+  改写的那份。现在由应用侧的 shim 把它重新指向主控 token。实测：设为 16 时真消息节点 16px、22 时 22px，
+  **运行中改当场跟随**；e2e 已断言这一条。
+- **拖出来的会话窗口重新显示对话了。** `preload` 的 `onMessage` 是**单监听器**：外壳自己的标题脚本在**同一
+  通道**上又注册了一次，把负责转发宿主消息的 shim 顶掉 —— 窗口标题正确、内容全空，而且**哪里都不报错**。
+  本版起精简子窗口恢复为默认，`PI_MINIMAL_CHILD=0` 可切回完整外壳对照。
+- **变更面板可以直接切换 git 工作副本（worktree）**：下拉列出所有工作副本（含分离 HEAD 的），选中即切换工作区，
+  终端与新会话一起跟随。
+- **`PI_DEBUG_WINDOW=1`** 会打印子窗口的 console、preload 错误、加载失败、DOM 指纹与时间序列 —— 默认关闭，
+  留给下一次“要看不要猜”的排查。
+
 ## 1.2.1 更新报告
 
 发布于 2026-09-15 · [完整发布说明](docs/release-notes-1.2.1.md) · [下载 1.2.1](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.1)
@@ -43,7 +60,7 @@
 - **外观改动现在实时生效。** 启动之后改主题、强调色或字号，过去会落在一个忽略它们的文档上；
   强调色则只有第一次改动有效。两者都已修好。
 - **回答默认展开**，按钮为「收起」；正文不再是点击区，选中文字不会再折叠整段。
-- **已知问题（已实测定位，未修）**：字号设置仍不会改变聊天文字大小。证据与下一步该做的测量见
+- **已知问题（1.2.3 已修）**：字号设置当时不会改变聊天文字大小。证据与下一步该做的测量见
   [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md)。
 
 安装版会自动更新；便携版需要手动换包。
@@ -220,7 +237,7 @@ MIT 声明记录在 [NOTICE.md](NOTICE.md)。
 git clone https://github.com/Q1y1ng/pi-heao-gui.git
 cd pi-heao-gui
 npm ci
-npm run build:renderer   # 构建我们那份 pi-chat UI（5.4 MB 产物不入库，首次需联网）
+npm run build:renderer   # 构建我们那份 pi-chat UI（5.7 MB 产物不入库，首次需联网）
 npm run build            # 编译 TypeScript + 内联 xterm/CodeMirror
 npm start                # 开发模式运行
 npm run dist             # 打包：便携版 + NSIS 安装包（输出到 dist-electron/）
@@ -329,7 +346,7 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 | 首次运行被 SmartScreen 拦住 | 包未签名（见上）。点"更多信息 → 仍要运行"，或先比对 Release 页面上的 SHA256 |
 | 提示找不到 `pi` | 按应用内指引安装，或在 设置 → 常规 里指定 `piPath` |
 | 终端面板起不来 | 需要绝对可执行路径；若 `piPath` 指向 shim（`.cmd`）请留空让应用自行解析。面板的 meta 行会显示实际使用的 shell |
-| **改了字号，聊天文字大小不变** | 已知问题（1.2.0）：内置聊天 UI 自己的样式表远在注入点之后，而且 **CSS 变量声明无法用 `!important` 压制**。实测数据、两条已排除的修法与下一步测量见 [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) |
+| **改了字号，聊天文字大小不变** | **1.2.3 已修**：真凶是内置聊天 UI 启动时写在 `<html>` 上的**内联 `--chat-fs`**（内联赢过所有样式表），应用侧 shim 现在把它重新指向主控；证据见 [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) |
 | 会话很多时启动慢 | 会话元数据是异步 + 缓存的；首次仍会较慢（要读一遍 session 文件） |
 | 想彻底卸载 | 卸载程序只删程序本体。会话在 `~/.pi/agent/sessions/`，应用数据在 `%APPDATA%\pi-heao-gui`，配置在 `~/.pi/standalone/config.json` |
 

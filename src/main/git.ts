@@ -141,3 +141,52 @@ export async function git(
     return { ok: false, stdout: "", stderr: errText(e) };
   }
 }
+
+export interface WorktreeEntry {
+  path: string;
+  head?: string;
+  branch?: string;
+  bare: boolean;
+  detached: boolean;
+  locked?: string;
+  prunable?: string;
+}
+
+/**
+ * Parse `git worktree list --porcelain`: one blank-line-separated record per worktree, each a set
+ * of `key [value]` lines — `worktree <path>`, then `HEAD`, `branch` or `detached`, plus `bare`,
+ * `locked [reason]` and `prunable [reason]` when they apply. Order is kept as git prints it, which
+ * puts the main worktree first; that is the one people expect to see at the top of the list.
+ */
+export function parseWorktrees(raw: string): WorktreeEntry[] {
+  const out: WorktreeEntry[] = [];
+  for (const block of raw.split("\n\n")) {
+    let entry: WorktreeEntry | null = null;
+    for (const line of block.split("\n")) {
+      const text = line.trim();
+      if (!text) continue;
+      const space = text.indexOf(" ");
+      const key = space === -1 ? text : text.slice(0, space);
+      const value = space === -1 ? "" : text.slice(space + 1);
+      if (key === "worktree") {
+        entry = { path: value, bare: false, detached: false };
+        out.push(entry);
+        continue;
+      }
+      if (!entry) continue;
+      if (key === "HEAD") entry.head = value;
+      else if (key === "branch") entry.branch = value.replace(/^refs\/heads\//, "");
+      else if (key === "detached") entry.detached = true;
+      else if (key === "bare") entry.bare = true;
+      else if (key === "locked") entry.locked = value || "locked";
+      else if (key === "prunable") entry.prunable = value || "prunable";
+    }
+  }
+  return out;
+}
+
+/** Every worktree of the repository that contains `cwd` (empty when it is not a repository). */
+export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
+  const res = await git(["worktree", "list", "--porcelain"], cwd);
+  return res.ok ? parseWorktrees(res.stdout) : [];
+}

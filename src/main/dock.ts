@@ -46,6 +46,7 @@ export const DOCK_HTML = `
     <div class="pi-dock-pane" id="pi-pane-changes">
       <div class="pi-git-side">
         <div class="pi-files-head"><span id="pi-git-branch">git</span>
+            <select id="pi-worktree" title="选择工作副本"></select>
           <button class="pi-dock-btn" id="pi-git-refresh" type="button" title="刷新">刷新</button>
         </div>
         <div id="pi-git-list"></div>
@@ -127,6 +128,17 @@ export const DOCK_CSS = `
 }
 #pi-files-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #pi-files-list, #pi-git-list { flex: 1; overflow: auto; padding: 4px 0; }
+#pi-worktree {
+  display: none;
+  max-width: 190px;
+  background: var(--pi-surface, #14171c);
+  color: var(--pi-text, #e6e9ef);
+  border: 1px solid var(--pi-border, #252a32);
+  border-radius: var(--pi-radius, 6px);
+  font-size: var(--pi-fs-sm, 12px);
+  font-family: inherit;
+  padding: 2px 4px;
+}
 .pi-files-row {
   display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer;
   font-size: var(--pi-fs-sm); color: var(--pi-text-dim); white-space: nowrap;
@@ -405,6 +417,44 @@ export const DOCK_SCRIPT = `
   }
 
   document.getElementById('pi-git-refresh').addEventListener('click', refreshGit);
+
+  // Worktrees of the same repository. Picking one switches the workspace, so the git pane, the
+  // file list, the terminal and the next session all land in that working copy — the same concept
+  // the workspace picker already uses, not a new one. Hidden unless there is more than one, since
+  // a one-entry dropdown is noise.
+  async function refreshWorktrees() {
+    var sel = document.getElementById('pi-worktree');
+    if (!sel) return;
+    var res = await window.pi.invoke('pi:worktree-list');
+    var list = (res && res.worktrees) || [];
+    sel.innerHTML = '';
+    if (list.length < 2) { sel.style.display = 'none'; return; }
+    list.forEach(function (wt) {
+      var opt = document.createElement('option');
+      opt.value = wt.path;
+      opt.textContent = wt.label;
+      opt.title = wt.path + (wt.locked ? ' · 已锁定' : '') + (wt.prunable ? ' · 可清理' : '');
+      if (res.current && wt.path === res.current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.style.display = 'inline-block';
+  }
+
+  var worktreeSel = document.getElementById('pi-worktree');
+  if (worktreeSel) {
+    worktreeSel.addEventListener('change', async function () {
+      var res = await window.pi.invoke('pi:worktree-use', worktreeSel.value);
+      if (!res || !res.ok) {
+        var hint = document.getElementById('pi-git-hint');
+        if (hint) hint.textContent = (res && res.error) || '切换失败';
+        refreshWorktrees();
+        return;
+      }
+      refreshGit();
+      refreshWorktrees();
+    });
+    refreshWorktrees();
+  }
   document.getElementById('pi-git-generate').addEventListener('click', async function () {
     var btn = this;
     btn.disabled = true;

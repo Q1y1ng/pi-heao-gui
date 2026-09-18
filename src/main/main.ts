@@ -43,7 +43,7 @@ import {
   buildEnv,
 } from "./chat-session";
 import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
-import { generateCommitMessage, git } from "./git";
+import { generateCommitMessage, git, listWorktrees } from "./git";
 import { readPiChangelog } from "./changelog";
 import { resolveUiLang } from "./i18n";
 import {
@@ -1669,6 +1669,35 @@ ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string 
 });
 
 // ─── IPC: git (branch, diff, commit message) ─────────────────────────
+
+ipcMain.handle("pi:worktree-list", async (): Promise<{ ok: boolean; worktrees: unknown[]; current: string }> => {
+  const cwd = workspaceRootDir();
+  const worktrees = (await listWorktrees(cwd)).map((wt) => ({
+    ...wt,
+    // The dock labels the entry the way a person names a working copy: the branch if it is on
+    // one, the directory name otherwise.
+    label: wt.branch || (wt.detached ? "detached HEAD" : basename(wt.path) || wt.path),
+  }));
+  return { ok: true, worktrees, current: cwd };
+});
+
+/**
+ * Switch the workspace to another worktree of the same repository. A worktree is just a directory,
+ * so nothing new has to be invented: everything that follows the workspace — the git pane, the
+ * file list, the terminal, the next session — follows it, and the chat session is rebound exactly
+ * the way the workspace picker rebinds it.
+ */
+ipcMain.handle("pi:worktree-use", async (e, dir: unknown): Promise<{ ok: boolean; error?: string }> => {
+  const target = String(dir || "").trim();
+  if (!target || !existsSync(target)) return { ok: false, error: "找不到该 worktree 目录" };
+  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(0, 8);
+  saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const session = sessionFor(e.sender);
+  if (win && session && win.id === mainWindowId) await rebindMainSession(target);
+  else if (win) postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
+  return { ok: true };
+});
 
 ipcMain.handle("pi:git-info", async () => {
   const cwd = workspaceRootDir();

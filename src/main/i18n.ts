@@ -135,6 +135,11 @@ export function translateAll(lang: UiLang): Record<string, string> {
  * leaving "(Ctrl+N)" orphaned behind "新建会话".
  */
 export const CHAT_STRINGS: Record<string, string> = {
+  // ── dock: the worktree switcher in the changelist header
+  选择工作副本: "Choose a working copy",
+  已锁定: "locked",
+  可清理: "prunable",
+  切换失败: "Switch failed",
   // ── sidebar
   会话: "Sessions",
   新建会话: "New session",

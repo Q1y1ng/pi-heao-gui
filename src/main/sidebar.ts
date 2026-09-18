@@ -394,9 +394,14 @@ export const SIDEBAR_HTML = `
     padding: 6px 8px;
     border: 1px solid var(--pi-border);
     border-radius: var(--pi-radius);
-    background: transparent;
-    color: var(--pi-text-dim);
-    font-size: var(--pi-fs-sm);
+      background: transparent;
+      /* Measured, not picked by eye: --pi-text-dim is rgb(91,100,114) against this sidebar's
+         rgb(20,23,28) in the dark theme — 3:1, below the 4.5:1 the accessibility gate requires
+         for text. It is the only place that token carries real button text, so the button gets
+         the full-contrast tone instead of moving the token for the whole theme; it still reads as
+         a ghost button (transparent background, thin border) and hover lifts it further. */
+      color: var(--pi-text);
+      font-size: var(--pi-fs-sm);
     font-family: inherit;
     cursor: pointer;
     transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);

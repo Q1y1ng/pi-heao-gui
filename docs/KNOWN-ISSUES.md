@@ -4,9 +4,32 @@ Open defects with their measured evidence, so the next person can continue inste
 
 ---
 
-## The stripped child shell does not load the session
+## The stripped child shell did not load the session — **fixed in 1.2.3**
 
-**Status:** open · the feature is parked · child windows use the full shell (1.2.2).
+**Status:** fixed · the root cause was found by measurement, after two code-reading guesses turned out wrong.
+
+**Cause.** `preload.ts`'s `onMessage` is a **single** listener. The shim holds it and re-emits every
+host message as a window `"message"` event — which is what the vendored chat app listens to. This
+shell's own `MINIMAL_TITLE_SCRIPT` registered on that same channel, so it **replaced the shim** and
+the app received nothing at all: the window opened with the correct title and an empty conversation,
+and nothing logged an error. The title worked precisely because the script that took the channel was
+the one reading `sessionInfo` from it. The title script now listens for the forwarded event, like the
+app and every other chrome script.
+
+**Ruled out by measurement — both were plausible from the code, both were wrong:** a missing global
+or a thrown error (there were no console errors, the bridge reported ready, the re-parent had put the
+app exactly where it belonged), and the host never pushing state (the host pushed the **same 16
+messages** to both shells, `messages` and `sessionInfo` included).
+
+**What decided it:** sampling the child's DOM over time — `#pi-main` stayed at 5470 bytes from 6 s to
+26 s with every conversation selector at zero, i.e. the app never re-rendered — plus the preload's own
+"single listener" note. The instrumentation is kept behind `PI_DEBUG_WINDOW=1` (child console, load
+failures, DOM fingerprint, time series) and `PI_MINIMAL_CHILD=0` (compare against the full shell).
+
+**Proof:** the e2e assertion *"the session window actually shows the conversation"* failed on the
+stripped shell before the fix and passes after it (87/0), with the full shell still at 87/0.
+
+> The original investigation is kept below, as the record of what was tried and ruled out.
 
 `buildChatHtml(appPath, config, { minimal: true })` builds a shell with only a title bar and the chat
 — no sidebar, no dock, no palette, no token chip. Wired into `openSessionWindow` in 1.2.1, it produced a

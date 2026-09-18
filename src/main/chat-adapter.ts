@@ -495,14 +495,16 @@ const MINIMAL_TITLE_SCRIPT = `<script>
     if (label) el.classList.remove('is-empty');
     else el.classList.add('is-empty');
   }
-  function attach() {
-    if (!window.pi || !window.pi.onMessage) { setTimeout(attach, 50); return; }
-    window.pi.onMessage(function (msg) {
-      if (msg && msg.type === 'sessionInfo') setTitle(msg.label);
-    });
-    console.log('[pi-chrome] minimal title bridge ready');
-  }
-  attach();
+  // The preload's onMessage is a SINGLE listener (see preload.ts), and the shim already holds
+  // it, re-dispatching everything as a window "message" event — which is exactly what the
+  // vendored chat app listens to. Registering on that channel from here replaced the shim, so
+  // the app received nothing at all: the window opened with the correct title and an empty
+  // conversation, and no error was ever logged. Listen for the forwarded event instead.
+  window.addEventListener('message', function (e) {
+    var msg = e.data;
+    if (msg && msg.type === 'sessionInfo') setTitle(msg.label);
+  });
+  console.log('[pi-chrome] minimal title bridge ready');
 })();
 </script>`;
 
@@ -513,7 +515,7 @@ function buildChromeHtml(lang: UiLang): string {
     <div class="pi-tb-left">
       <div class="pi-tb-logo" aria-hidden="true">π</div>
       <span class="pi-tb-app">Pi Heao GUI</span>
-      <span class="pi-tb-brand" title="Pi Heao GUI V1.2.2 — made by HEAOZIE">made by HEAOZIE</span>
+      <span class="pi-tb-brand" title="Pi Heao GUI V1.2.3 — made by HEAOZIE">made by HEAOZIE</span>
     </div>
     <div class="pi-tb-center">
       <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
@@ -988,5 +990,5 @@ export function buildChatHtml(
     }
   }
 
-  return `<!-- Pi Heao GUI V1.2.2 · made by HEAOZIE -->\n${allLines.join("\n")}`;
+  return `<!-- Pi Heao GUI V1.2.3 · made by HEAOZIE -->\n${allLines.join("\n")}`;
 }

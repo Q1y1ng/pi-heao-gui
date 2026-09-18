@@ -236,7 +236,14 @@ function postToWindow(win: BrowserWindow, msg: unknown): void {
   const type = (msg as { type?: string } | null)?.type;
   const channel = type ? MSG_TYPE_TO_CHANNEL[type] : undefined;
   if (channel) win.webContents.send(channel, msg);
-  else log.warn("unknown msg type for renderer:", type);
+  // PI_DEBUG_WINDOW counts what the host actually sends to a window: the child shell with all
+  // its panels stripped renders a full page and then shows no session, and the question is
+  // whether the host ever sends it anything at all. See docs/KNOWN-ISSUES.md.
+  if (process.env.PI_DEBUG_WINDOW === "1") {
+    console.error(
+      `[host->${win.webContents.id}] ${String((msg as { type?: string })?.type ?? "?")}`,
+    );
+  } else log.warn("unknown msg type for renderer:", type);
 }
 
 /** The chat session that owns a given renderer. */
@@ -686,13 +693,124 @@ async function openSessionWindow(
   // no dock, no palette — this window is a place to watch one session, while the main
   // window stays the control centre for switching, terminals and everything else.
   //
-  // NOT WIRED UP. With the stripped shell the window opened, was titled correctly, and
-  // showed no session at all — the panels' scripts are gone, and one of them does
-  // something the chat core needs that the CSS audit did not reveal (the panel
-  // stylesheets contain no global or chat selectors, so it is not layout). Until that is
-  // found by measurement rather than guesswork, child windows use the full shell, which
-  // is known to load the session. See docs/KNOWN-ISSUES.md.
-  const tmpHtml = chatShellFile("full");
+  // It opened empty once, for a reason worth keeping in mind: preload's onMessage is a SINGLE
+  // listener (see preload.ts), the shim holds it and re-emits every host message as a window
+  // "message" event, and this shell's own title script registered on that same channel — replacing
+  // the shim, so the vendored chat app received nothing and the window showed the right title with
+  // an empty conversation and no error logged. The title script now listens for the forwarded
+  // event instead. See docs/KNOWN-ISSUES.md.
+  //
+  // Diagnostics: PI_MINIMAL_CHILD=0 puts a child on the full shell for comparison, and
+  // PI_DEBUG_WINDOW=1 prints what the child renderer says — console output, preload errors, load
+  // failures, renderer death — plus a DOM fingerprint and a time series, to the main process
+  // stdout. Both are off by default; the shell choice defaults to the stripped one.
+  if (process.env.PI_DEBUG_WINDOW === "1") {
+    const tag = `[child ${win.webContents.id}]`;
+    win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+      // SAFETY: Electron has two shapes for this event — the event object with the message
+      // on it (current) and the older positional arguments — so the fields are read from
+      // whichever is present. The cast keeps the handler assignable to the declared overload.
+      const e = event as unknown as {
+        level?: string;
+        message?: string;
+        lineNumber?: number;
+        sourceId?: string;
+      };
+      const text = e?.message ?? message;
+      const where = e?.sourceId ?? sourceId;
+      const at = e?.lineNumber ?? line;
+      console.error(`${tag} console.${e?.level ?? level}: ${text} (${where}:${at})`);
+    });
+    win.webContents.on("preload-error", (_event, path, error) => {
+      console.error(`${tag} preload-error ${path}: ${error?.message ?? String(error)}`);
+    });
+    win.webContents.on("render-process-gone", (_event, details) => {
+      console.error(`${tag} render-process-gone ${JSON.stringify(details)}`);
+    });
+    win.webContents.on("did-fail-load", (_event, code, description, url) => {
+      console.error(`${tag} did-fail-load ${code} ${description} ${url}`);
+    });
+    const probe = setTimeout(() => {
+      if (win.isDestroyed()) return;
+      void win.webContents
+        .executeJavaScript(
+          `JSON.stringify({
+               shell: !!document.getElementById('pi-shell'),
+               main: !!document.getElementById('pi-main'),
+               msgs: document.querySelectorAll('.msg').length,
+               mainChars: (document.getElementById('pi-main') || { innerHTML: '' }).innerHTML.length,
+               bodyChars: (document.body || { innerHTML: '' }).innerHTML.length,
+               globals: ['piChrome','piShell','piSidebar','piDock','piStats','piPalette','piTokens','piHost']
+                 .filter((k) => k in window),
+               top: Array.from(document.body.children)
+                 .slice(0, 8)
+                 .map((el) => ({
+                   tag: el.tagName.toLowerCase(),
+                   id: el.id,
+                   cls: String(el.className || '').slice(0, 100),
+                   n: el.children.length,
+                   chars: el.innerHTML.length,
+                   text: (el.textContent || '').replace(/[ \n\r\t]+/g, ' ').trim().slice(0, 70),
+                 })),
+               // The class vocabulary of whatever is actually rendered. The earlier selectors
+               // for "does the conversation show up" were guesses, and a guess that misses is
+               // indistinguishable from an empty window — this is how the real names get read
+               // off the page instead. See docs/KNOWN-ISSUES.md.
+               chatish: (() => {
+                 const out = [];
+                 for (const el of document.querySelectorAll('div,section,ul,ol,main')) {
+                   const cls = String(el.className || '');
+                   if (/msg|message|chat|turn|bubble|conversation|transcript/i.test(cls) && el.children.length) {
+                     out.push(cls.slice(0, 70) + '#' + el.children.length);
+                     if (out.length >= 12) break;
+                   }
+                 }
+                 return out;
+               })(),
+               bodyText: (document.body.textContent || '').replace(/[ \n\r\t]+/g, ' ').trim().slice(0, 200),
+               msgSelectors: ['.msg', '.text-block', '.user-bubble', '.msg-body', '[data-role="user"]']
+                 .map((s) => s + '=' + document.querySelectorAll(s).length),
+             })`,
+        )
+        .then((result) => console.error(`${tag} dom ${String(result)}`))
+        .catch((error) => console.error(`${tag} dom probe failed: ${String(error)}`));
+    }, 8000);
+    probe.unref();
+    win.on("closed", () => clearTimeout(probe));
+    // Samples over time, not once: at 8s both shells report zero conversation nodes and the
+    // assertion only passes in one of them, so the question is which selector lights up and
+    // when. The ancestor chain says where the chat actually rendered relative to #pi-shell,
+    // which the byte counts alone cannot answer.
+    const samples = [6000, 10000, 14000, 18000, 22000, 26000];
+    const probes = samples.map((ms) =>
+      setTimeout(() => {
+        if (win.isDestroyed()) return;
+        const script = `JSON.stringify({
+             t: ${ms},
+             sel: ['.msg', '.text-block', '.user-bubble', '.msg-body'].map((s) => s + '=' + document.querySelectorAll(s).length),
+             mainChars: (document.getElementById('pi-main') || { innerHTML: '' }).innerHTML.length,
+             shellChars: (document.getElementById('pi-shell') || { innerHTML: '' }).innerHTML.length,
+             path: (() => {
+               const el = document.querySelector('.messages-wrap, .messages, .messages-inner');
+               const out = [];
+               for (let n = el; n && n !== document.documentElement && out.length < 7; n = n.parentElement) {
+                 out.push(n.tagName.toLowerCase() + (n.id ? '#' + n.id : '') + (n.className ? '.' + String(n.className).split(' ')[0] : ''));
+               }
+               return out.join(' < ');
+             })(),
+           })`;
+        void win.webContents
+          .executeJavaScript(script)
+          .then((result) => console.error(`${tag} sample ${String(result)}`))
+          .catch((error) => console.error(`${tag} sample failed: ${String(error)}`));
+      }, ms),
+    );
+    for (const timer of probes) timer.unref();
+    win.on("closed", () => {
+      for (const timer of probes) clearTimeout(timer);
+    });
+  }
+  const tmpHtml = chatShellFile(process.env.PI_MINIMAL_CHILD === "0" ? "full" : "minimal");
   if (tmpHtml) await win.loadFile(tmpHtml);
 
   // Create a dedicated chat session for this window
@@ -2095,7 +2213,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V1.2.2",
+              message: "Pi Heao GUI V1.2.3",
               detail,
               buttons: ["好"],
             };

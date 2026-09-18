@@ -1211,8 +1211,16 @@ app.whenReady().then(async () => {
       }
     }
     await section("Multi-window: a session opens in its own window, once", async () => {
+      // The main window owns the sidebar and accepts the app's own invokes. A stripped child
+      // window is a different shell — it does not even have a sidebar — so it must not be picked
+      // up here: the old fallback handed this section a child, it reported "none listed", and the
+      // error banner that put on screen failed the contrast gate too.
+      const strippedChild = (x) => /pi-heao-child/i.test(String(x.webContents.getURL()));
       const chatWin =
-        allWindows().find((x) => /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL()))) ||
+        allWindows().find(
+          (x) => !strippedChild(x) && /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
+        ) ||
+        allWindows().find((x) => !strippedChild(x)) ||
         chatWindow();
       const sessions = await js(chatWin, "window.pi.invoke('pi:list-sessions')");
       const file = Array.isArray(sessions) && sessions.length ? sessions[0].file : "";
@@ -1359,8 +1367,12 @@ app.whenReady().then(async () => {
       // The window that renders untrusted agent output must not be able to make noise.
       // Selected by URL rather than by "the first window": by this point the settings
       // window exists too, and it is *supposed* to be allowed to call this.
+      const strippedChild = (x) => /pi-heao-child/i.test(String(x.webContents.getURL()));
       const chatWin =
-        allWindows().find((x) => /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL()))) ||
+        allWindows().find(
+          (x) => !strippedChild(x) && /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
+        ) ||
+        allWindows().find((x) => !strippedChild(x)) ||
         chatWindow();
       const blocked = await js(
         chatWin,

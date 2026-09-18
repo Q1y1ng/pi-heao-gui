@@ -85,7 +85,7 @@ empty.
 
 ---
 
-## The font-size setting does not resize chat text — **measured working in 1.2.3**
+## The font-size setting does not resize chat text — **fixed in 1.2.3**
 
 **The chat text follows the setting. Verified by measuring a real message node in a running app.**
 
@@ -108,22 +108,20 @@ never delivered and every appearance setting silently did nothing in the chat pa
 stats panel's paragraph, whose 11px briefly looked like a broken cascade. And the second read the
 tokens off our own chrome, where they are healthy and say nothing about the text.
 
-The live path is **not** the same story, and the e2e now measures exactly where it stops. Setting
-the size from the settings window, in the chat's own document:
+The live path is **fixed as well**, and the cause was one line in the vendored chat. Both halves are
+now asserted by the e2e, through the settings window:
 
-- `--pi-fs-md` **does** follow the setting — 16px becomes 24px — so the tokens do reach a running
-  chat. An earlier note in this file guessed otherwise.
-- `--chat-fs` does **not** follow: it stayed at 16px, and at 13px in the sandbox. pi-chat sizes its
-  text from `--chat-fs`, and our renderer block is the last stylesheet in the document, so the
-  declaration that wins the cascade is **not** the one this app writes. Changing that block to derive
-  the chain (`--chat-fs: var(--pi-fs-md)`) was therefore necessary and **not sufficient**.
-- The message text stays put (16px) as a result, while a **restart** with a changed config works — the
-  table at the top is from exactly that.
+- `studio/pi-chat/src/main.ts` sets `--chat-fs` **inline** on boot, from `window.__PI_FONTSIZE__`, which
+  this app fills in with `config.chatFontSize` when it builds the chat HTML.
+- An inline custom property beats every stylesheet, so the copy that won the cascade was the one written
+  **once at load and never again**. Our tokens did arrive — measured: `--pi-fs-md` went 16px to 24px in
+  the chat's own document — and changed nothing, because `--chat-fs` never moved.
+- Deriving the chain in our renderer block, which the previous round did, could not have helped: that
+  block loses to the inline copy whatever it says.
 
-The next step is to find which declaration wins `--chat-fs` in the chat document: `getMatchedCSSRules`
-is gone, so walk `document.styleSheets` for the variable and check whether pi-chat sets it inline. The
-e2e asserts the half that works ("the chat's document receives the font token while the app runs") and
-skips the text half with these numbers, so the split stays visible instead of hiding in a red check.
+The fix is in our shim, next to the bridge that delivers `theme` messages: when the token element is
+replaced it re-points the inline property at the master (`--chat-fs: var(--pi-fs-md, 13px)`), so the
+winning copy is a reference that follows. The vendored upstream is left untouched.
 
 **Status:** open as of 1.2.0 · reproducible · root cause measured · two fix attempts reverted.
 

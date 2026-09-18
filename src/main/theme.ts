@@ -248,7 +248,10 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
   --vscode-inputOption-activeBackground: var(--pi-accent-soft);
   --vscode-inputOption-activeForeground: var(--pi-text);
   --vscode-inputValidation-errorBackground: color-mix(in srgb, var(--pi-danger) 14%, transparent);
-  --vscode-inputValidation-errorForeground: var(--pi-danger);
+  /* The body colour, not the danger hue: the hue measured 4.0:1 on this very tint in the light theme,
+     just under the 4.5:1 floor. The red background is what makes the banner read as an error — the
+     text on top of it only has to stay readable. */
+  --vscode-inputValidation-errorForeground: var(--pi-text);
   --vscode-editorError-foreground: var(--pi-danger);
   --vscode-editorWarning-foreground: var(--pi-warn);
   --vscode-list-highlightForeground: var(--pi-accent);

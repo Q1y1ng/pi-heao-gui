@@ -719,7 +719,10 @@ app.whenReady().then(async () => {
         // workspace; the real one is configured with the user's parent folder, so the repository is a
         // row to open. Ask the tree which one this is instead of assuming — and assert the outcome
         // (the fixtures are reachable), not the route taken to them.
-        await js(win, "(() => { const b = document.getElementById('pi-files-up'); if (b) b.click(); return true; })()");
+        await js(
+          win,
+          "(() => { const b = document.getElementById('pi-files-up'); if (b) b.click(); return true; })()",
+        );
         await sleep(900);
         if ((await fixturesVisible()) !== true) {
           await js(win, openByName(path.basename(REPO_ROOT)));
@@ -763,7 +766,9 @@ app.whenReady().then(async () => {
           waitFor(
             async () => {
               const s = await js(win, READ_MEDIA);
-              return s.imageTag === want || s.audioTag === want || String(s.name).includes("_e2e-preview")
+              return s.imageTag === want ||
+                s.audioTag === want ||
+                String(s.name).includes("_e2e-preview")
                 ? s
                 : null;
             },
@@ -774,13 +779,21 @@ app.whenReady().then(async () => {
         const imgState = await waitForMedia("IMG");
         check(
           "a PNG opens as an image, not as text",
-          imgOpen.ok === true && imgState.imageTag === "IMG" && imgState.imageHead === "data:image/png;base64,",
+          imgOpen.ok === true &&
+            imgState.imageTag === "IMG" &&
+            imgState.imageHead === "data:image/png;base64,",
           `open=${JSON.stringify(imgOpen)} state=${JSON.stringify(imgState)}`,
         );
-        check("the image actually decoded", imgState.natural > 0, `naturalWidth=${imgState.natural}`);
+        check(
+          "the image actually decoded",
+          imgState.natural > 0,
+          `naturalWidth=${imgState.natural}`,
+        );
         check(
           "the editor and its save button step aside for media",
-          imgState.hostVisible === true && imgState.saveHidden === true && imgState.editorHidden === true,
+          imgState.hostVisible === true &&
+            imgState.saveHidden === true &&
+            imgState.editorHidden === true,
           JSON.stringify(imgState),
         );
 
@@ -792,8 +805,15 @@ app.whenReady().then(async () => {
         );
         await sleep(700);
         const unchanged = fs.readFileSync(pngFixture).toString("base64") === pngBytes;
-        const refusal = await js(win, "(document.getElementById('pi-dock-meta')||{}).textContent || ''");
-        check("Ctrl+S cannot overwrite a media file", unchanged, `meta="${String(refusal).slice(0, 60)}"`);
+        const refusal = await js(
+          win,
+          "(document.getElementById('pi-dock-meta')||{}).textContent || ''",
+        );
+        check(
+          "Ctrl+S cannot overwrite a media file",
+          unchanged,
+          `meta="${String(refusal).slice(0, 60)}"`,
+        );
 
         const wavOpen = await js(win, openByName("_e2e-preview.wav"));
         await sleep(1200);
@@ -801,7 +821,10 @@ app.whenReady().then(async () => {
         const wavStacked = await js(win, "!!document.getElementById('pi-files-image')");
         check(
           "a WAV opens as an audio element with controls",
-          wavOpen.ok === true && wavState.audioTag === "AUDIO" && wavState.controls === true && wavState.audioHead === "data:audio/wav;base64,",
+          wavOpen.ok === true &&
+            wavState.audioTag === "AUDIO" &&
+            wavState.controls === true &&
+            wavState.audioHead === "data:audio/wav;base64,",
           `open=${JSON.stringify(wavOpen)} state=${JSON.stringify(wavState)}`,
         );
         check(
@@ -821,7 +844,9 @@ app.whenReady().then(async () => {
           8_000,
           "text file in the editor",
         ).catch(async () => js(win, READ_MEDIA));
-        const textChrome = await js(win, `(() => {
+        const textChrome = await js(
+          win,
+          `(() => {
           const host = document.getElementById('pi-files-media');
           const save = document.getElementById('pi-files-save');
           return {
@@ -831,7 +856,8 @@ app.whenReady().then(async () => {
             hostVisible: !!host && host.hidden === false,
             saveVisible: !!save && save.hidden === false,
           };
-        })()`);
+        })()`,
+        );
         check(
           "a JSON file still opens in the editor",
           textOpen.ok === true &&
@@ -843,7 +869,9 @@ app.whenReady().then(async () => {
         // the host is hidden again and the save button is back with the editor.
         check(
           "the media host is hidden again for text",
-          textChrome.hostHidden === true && textChrome.saveVisible === true && textChrome.hostVisible === false,
+          textChrome.hostHidden === true &&
+            textChrome.saveVisible === true &&
+            textChrome.hostVisible === false,
           JSON.stringify(textChrome),
         );
       } finally {
@@ -873,6 +901,153 @@ app.whenReady().then(async () => {
         JSON.stringify(git),
       );
     });
+
+    // ══ 6b. Worktrees ════════════════════════════════════════════════
+    // Isolated only: this creates a real second working copy of the repository and switches the app
+    // to it. The finally removes the worktree, prunes the record and deletes the branch it made, so
+    // the repository is left exactly as it was found.
+    if (ISOLATED) {
+      await section("Worktrees: switching moves the workspace", async () => {
+        const { execFileSync } = require("node:child_process");
+        const gitIn = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+        const wtHome = fs.mkdtempSync(path.join(os.tmpdir(), "pi-e2e-wt-"));
+        const wtPath = path.join(wtHome, "copy");
+        // git reports its paths with forward slashes; path.join gives backslashes on Windows. Compare
+        // normalised, or the option is never found and the switch silently never happens.
+        const norm = (p) => String(p).replace(/\\/g, "/").toLowerCase();
+        const wtKey = norm(wtPath);
+        const branch = `e2e-worktree-${Date.now().toString(36)}`;
+        const mainBranch = gitIn(["rev-parse", "--abbrev-ref", "HEAD"], REPO_ROOT);
+        try {
+          gitIn(["worktree", "add", "-b", branch, wtPath, "HEAD"], REPO_ROOT);
+          // A file that exists only in the new working copy: it is how the file tree proves which
+          // directory the panel is actually looking at (the tracked files are identical in both).
+          fs.writeFileSync(path.join(wtPath, "_e2e-worktree-marker.txt"), "marker\n", "utf8");
+
+          // The changes pane holds the dropdown; refresh is what makes a worktree created while the
+          // app is running appear there.
+          await js(
+            win,
+            "(() => { const b = document.querySelector('.pi-dock-tab[data-dock=\"changes\"]'); if (b) b.click(); return true; })()",
+          );
+          await sleep(400);
+          await js(
+            win,
+            "(() => { const b = document.getElementById('pi-git-refresh'); if (b) b.click(); return true; })()",
+          );
+          await sleep(1000);
+          const listed = await js(win, `(() => {
+            const sel = document.getElementById('pi-worktree');
+            return {
+              hidden: !sel || sel.hidden === true || sel.style.display === 'none',
+              values: sel ? Array.from(sel.options).map((o) => o.value) : [],
+              labels: sel ? Array.from(sel.options).map((o) => o.textContent) : [],
+            };
+          })()`);
+          const wtIndex = listed.values.findIndex((v) => norm(v) === wtKey);
+          // The main working copy is always first (parseWorktrees documents that), so "back" is the
+          // other entry — no path comparison is needed on the renderer side, where a backslash would
+          // have to be escaped twice inside the injected snippet.
+          const backIndex = wtIndex === 0 ? 1 : 0;
+          check(
+            "the worktree dropdown appears once there is a second working copy",
+            listed.hidden === false && wtIndex >= 0,
+            `wtIndex=${wtIndex} ${JSON.stringify(listed)}`,
+          );
+
+          // Pick it the way a person does — set the value and let the change handler run.
+          const picked = await js(win, `(() => {
+            const sel = document.getElementById('pi-worktree');
+            const opt = sel.options[${wtIndex}];
+            if (!opt) return { ok: false, values: Array.from(sel.options).map((o) => o.value) };
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change'));
+            return { ok: true };
+          })()`);
+          await sleep(1800);
+          const moved = await js(win, "window.pi.invoke('pi:worktree-list')");
+          check(
+            "the app treats the chosen working copy as the workspace",
+            picked.ok === true && norm(moved.current) === wtKey,
+            `picked=${JSON.stringify(picked)} current=${moved.current}`,
+          );
+          const branchNow = await js(
+            win,
+            "(document.getElementById('pi-git-branch')||{}).textContent || ''",
+          );
+          check(
+            "the git pane reports the branch of the new working copy",
+            String(branchNow).includes(branch),
+            `panel="${branchNow}" expected="${branch}"`,
+          );
+
+          // The file tree follows the workspace: reload it and look for the marker.
+          await js(
+            win,
+            "(() => { const b = document.querySelector('.pi-dock-tab[data-dock=\"files\"]'); if (b) b.click(); return true; })()",
+          );
+          await sleep(400);
+          await js(
+            win,
+            "(() => { const b = document.getElementById('pi-files-up'); if (b) b.click(); return true; })()",
+          );
+          await sleep(1000);
+          const marker = await js(
+            win,
+            "!!Array.from(document.querySelectorAll('#pi-files-list .pi-files-row')).find((r) => (r.textContent || '').includes('_e2e-worktree-marker'))",
+          );
+          check(
+            "the file tree follows the workspace switch",
+            marker === true,
+            `marker visible in the tree = ${marker}`,
+          );
+
+          // Back to the main working copy, so the sections after this one run where they expect to.
+          const back = await js(win, `(() => {
+            const sel = document.getElementById('pi-worktree');
+            const opt = sel.options[${backIndex}];
+            if (!opt) return { ok: false };
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change'));
+            return { ok: true, to: opt.value };
+          })()`);
+          await sleep(1800);
+          const info = await js(win, "window.pi.invoke('pi:git-info')");
+          check(
+            "switching back restores the repository as the workspace",
+            back.ok === true && String(info.branch) === mainBranch,
+            `back=${JSON.stringify(back)} branch="${info.branch}" expected="${mainBranch}"`,
+          );
+        } finally {
+          // Go back first, and do it here rather than only in the happy path: the repository is about
+          // to lose that working copy, and every section after this one expects the workspace to be the
+          // repository. Selecting an option is a no-op switch when we are already back.
+          try {
+            await js(win, `(() => {
+              const sel = document.getElementById('pi-worktree');
+              const opt = sel && sel.options[${backIndex}];
+              if (!opt) return false;
+              sel.value = opt.value;
+              sel.dispatchEvent(new Event('change'));
+              return true;
+            })()`);
+            await sleep(1500);
+          } catch {}
+          try {
+            gitIn(["worktree", "remove", "--force", wtPath], REPO_ROOT);
+          } catch {}
+          try {
+            gitIn(["worktree", "prune"], REPO_ROOT);
+          } catch {}
+          try {
+            gitIn(["branch", "-D", branch], REPO_ROOT);
+          } catch {}
+          try {
+            fs.rmSync(wtHome, { recursive: true, force: true });
+          } catch {}
+        }
+      });
+    }
 
     // ══ 7. Diff window ═══════════════════════════════════════════════════
     await section("Diff window", async () => {

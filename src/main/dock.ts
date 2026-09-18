@@ -148,7 +148,10 @@ export const DOCK_CSS = `
 }
 .pi-files-row:hover { background: var(--pi-raised); color: var(--pi-text); }
 .pi-files-row.active { background: var(--pi-accent-soft); color: var(--pi-text); }
-.pi-files-row .pi-files-icon { width: 14px; text-align: center; opacity: 0.7; }
+  /* No opacity on the arrow/dot glyph. The contrast gate composites opacity into the ratio, and 0.7
+     pulled this to 2.99:1 in the light theme even though the colour itself measures 5.59:1 there.
+     The token already carries the hierarchy — an opacity on top of it only costs readability. */
+  .pi-files-row .pi-files-icon { width: 14px; text-align: center; }
 .pi-files-bar {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; flex: none;
   border-bottom: 1px solid var(--pi-border); font-size: var(--pi-fs-sm);
@@ -177,7 +180,20 @@ overflow: auto; background: var(--pi-bg); padding: 8px;
 .pi-git-file .pi-git-del { color: var(--pi-danger); font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); }
 .pi-git-file .pi-git-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-git-sec-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pi-text-faint); padding: 6px 6px 2px; }
-.CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: var(--pi-fs-sm) !important; }
+  .CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: var(--pi-fs-sm) !important; }
+  /* CodeMirror ships a palette chosen for a white background, and on our two themes half of it is
+     unreadable: the accessibility gate measured a gutter number at 2.85:1 in the light theme and a
+     string at 2.59:1 in the dark one, as soon as an open file put the editor on screen. These follow
+     the same tokens as every other surface in the dock. Where the palette has no hue to spare that
+     stays readable, the distinction comes from weight instead of colour. */
+  .CodeMirror-gutters { background: var(--pi-surface) !important; border-right: 1px solid var(--pi-border) !important; }
+  .CodeMirror-linenumber { color: var(--pi-text-dim) !important; }
+  .CodeMirror-cursor { border-left-color: var(--pi-text) !important; }
+  .CodeMirror-selected, .CodeMirror-focused .CodeMirror-selected { background: var(--pi-raised) !important; }
+  .CodeMirror-matchingbracket { color: var(--pi-text) !important; border-bottom: 1px solid var(--pi-text-dim) !important; }
+  .cm-comment { color: var(--pi-text-dim) !important; font-style: italic; }
+  .cm-keyword, .cm-operator, .cm-def, .cm-builtin, .cm-meta, .cm-tag, .cm-attribute, .cm-qualifier, .cm-type { color: var(--pi-text) !important; font-weight: 600; }
+  .cm-string, .cm-string-2, .cm-number, .cm-atom, .cm-property, .cm-variable, .cm-variable-2, .cm-variable-3, .cm-bracket, .cm-link { color: var(--pi-text) !important; }
 `;
 
 export const DOCK_SCRIPT = `
@@ -490,7 +506,13 @@ export const DOCK_SCRIPT = `
       '<div class="pi-git-sec-title">未暂存 (' + (res.unstaged || []).length + ')</div>' + gitRows(res.unstaged, '-');
   }
 
-  document.getElementById('pi-git-refresh').addEventListener('click', refreshGit);
+  // The refresh button belongs to the whole pane, and the worktree dropdown is part of it: a working
+  // copy created with "git worktree add" while the app is running used to stay invisible until the
+  // page was reloaded, which is a strange thing for a button labelled "refresh" to do.
+  document.getElementById('pi-git-refresh').addEventListener('click', function () {
+    refreshGit();
+    refreshWorktrees();
+  });
 
   // Worktrees of the same repository. Picking one switches the workspace, so the git pane, the
   // file list, the terminal and the next session all land in that working copy — the same concept

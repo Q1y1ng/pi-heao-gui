@@ -1719,16 +1719,19 @@ ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string 
 
 // ─── IPC: git (branch, diff, commit message) ─────────────────────────
 
-ipcMain.handle("pi:worktree-list", async (): Promise<{ ok: boolean; worktrees: unknown[]; current: string }> => {
-  const cwd = workspaceRootDir();
-  const worktrees = (await listWorktrees(cwd)).map((wt) => ({
-    ...wt,
-    // The dock labels the entry the way a person names a working copy: the branch if it is on
-    // one, the directory name otherwise.
-    label: wt.branch || (wt.detached ? "detached HEAD" : basename(wt.path) || wt.path),
-  }));
-  return { ok: true, worktrees, current: cwd };
-});
+ipcMain.handle(
+  "pi:worktree-list",
+  async (): Promise<{ ok: boolean; worktrees: unknown[]; current: string }> => {
+    const cwd = workspaceRootDir();
+    const worktrees = (await listWorktrees(cwd)).map((wt) => ({
+      ...wt,
+      // The dock labels the entry the way a person names a working copy: the branch if it is on
+      // one, the directory name otherwise.
+      label: wt.branch || (wt.detached ? "detached HEAD" : basename(wt.path) || wt.path),
+    }));
+    return { ok: true, worktrees, current: cwd };
+  },
+);
 
 /**
  * Switch the workspace to another worktree of the same repository. A worktree is just a directory,
@@ -1736,17 +1739,24 @@ ipcMain.handle("pi:worktree-list", async (): Promise<{ ok: boolean; worktrees: u
  * file list, the terminal, the next session — follows it, and the chat session is rebound exactly
  * the way the workspace picker rebinds it.
  */
-ipcMain.handle("pi:worktree-use", async (e, dir: unknown): Promise<{ ok: boolean; error?: string }> => {
-  const target = String(dir || "").trim();
-  if (!target || !existsSync(target)) return { ok: false, error: "找不到该 worktree 目录" };
-  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(0, 8);
-  saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
-  const win = BrowserWindow.fromWebContents(e.sender);
-  const session = sessionFor(e.sender);
-  if (win && session && win.id === mainWindowId) await rebindMainSession(target);
-  else if (win) postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
-  return { ok: true };
-});
+ipcMain.handle(
+  "pi:worktree-use",
+  async (e, dir: unknown): Promise<{ ok: boolean; error?: string }> => {
+    const target = String(dir || "").trim();
+    if (!target || !existsSync(target)) return { ok: false, error: "找不到该 worktree 目录" };
+    const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(
+      0,
+      8,
+    );
+    saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const session = sessionFor(e.sender);
+    if (win && session && win.id === mainWindowId) await rebindMainSession(target);
+    else if (win)
+      postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
+    return { ok: true };
+  },
+);
 
 ipcMain.handle("pi:git-info", async () => {
   const cwd = workspaceRootDir();
@@ -2399,18 +2409,18 @@ app.whenReady().then(async () => {
   // Create chat session after window is ready
   if (mainWindow) {
     mainWindowId = mainWindow.webContents.id;
-  // Font-size measurement, behind the same switch as the child-window diagnostics. The appearance
-  // setting has never actually resized chat text, and two attempts at fixing it were ruled out
-  // (setting the variable with !important cannot work — it is a custom-property declaration — and
-  // injecting a later <style> did not win either). The question the code cannot answer is which
-  // stylesheet the cascade actually resolves, and what the variables end up as, so this asks the
-  // document. See docs/KNOWN-ISSUES.md.
-  if (process.env.PI_DEBUG_WINDOW === "1") {
-    const fontProbe = setTimeout(() => {
-      if (!mainWindow || mainWindow.isDestroyed()) return;
-      void mainWindow.webContents
-        .executeJavaScript(
-          `JSON.stringify({
+    // Font-size measurement, behind the same switch as the child-window diagnostics. The appearance
+    // setting has never actually resized chat text, and two attempts at fixing it were ruled out
+    // (setting the variable with !important cannot work — it is a custom-property declaration — and
+    // injecting a later <style> did not win either). The question the code cannot answer is which
+    // stylesheet the cascade actually resolves, and what the variables end up as, so this asks the
+    // document. See docs/KNOWN-ISSUES.md.
+    if (process.env.PI_DEBUG_WINDOW === "1") {
+      const fontProbe = setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        void mainWindow.webContents
+          .executeJavaScript(
+            `JSON.stringify({
              rootFsMd: getComputedStyle(document.documentElement).getPropertyValue('--pi-fs-md').trim(),
              rootChatFs: getComputedStyle(document.documentElement).getPropertyValue('--chat-fs').trim(),
              msgFontSize: (() => {
@@ -2448,13 +2458,13 @@ app.whenReady().then(async () => {
                mentionsFsMd: (el.textContent || '').includes('--pi-fs-md'),
              })),
            })`,
-        )
-        .then((r) => console.error(`[main] font probe ${String(r)}`))
-        .catch((e) => console.error(`[main] font probe failed: ${String(e)}`));
-    }, 7000);
-    fontProbe.unref();
-    mainWindow.on("closed", () => clearTimeout(fontProbe));
-  }
+          )
+          .then((r) => console.error(`[main] font probe ${String(r)}`))
+          .catch((e) => console.error(`[main] font probe failed: ${String(e)}`));
+      }, 7000);
+      fontProbe.unref();
+      mainWindow.on("closed", () => clearTimeout(fontProbe));
+    }
     try {
       const win = mainWindow;
       chatSession =

@@ -10,6 +10,7 @@
 | [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) | 未结项缺陷的实测证据、两条已排除的修法、下一步该测什么 | 遇到“明明该修好却没修好”的现象，或接手一个已知坑 |
 | [`ROADMAP.md`](ROADMAP.md) | 按优先级/性价比排序的待办：已知缺陷 + 与同类对比得出的功能缺口，每条带可测的验收标准 | 决定下一版做什么 |
 | [`competitive-audit-2026-09-18.md`](competitive-audit-2026-09-18.md) | 与**整个 coding-agent GUI 品类**（官方桌面端 / 编排型 GUI / 代理总管）的对标，以及合并去重后的未完成清单（P0/P1/P2） | 想知道我们缺哪一块，或要在“编排层”上动手之前 |
+| [`audit-2026-09-12.md`](audit-2026-09-12.md) | 2026-09-12 的**全面审计原文**（P0/P1/P2/P3 共 25 项）—— 历史附件，顶部有“别用它判断现状”的说明 | 想知道当初发现了什么，或核对某条结论的出处 |
 | [`release-notes-<version>.md`](release-notes-1.2.0.md) | 各版本的发布说明（即 Release 正文） | 写 Release，或回答“这版改了什么” |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | 全部版本的变更记录 | 查某个行为是哪一版改的 |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | 开发流程、架构速览与五条硬规则 | 提 PR 之前 |

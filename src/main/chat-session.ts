@@ -549,15 +549,17 @@ export async function createChatSession(opts: {
         // listener, and the title then stays on its empty placeholder for the whole session.
         // Re-announcing on ready closes that race.
         //
-        // Two more announcements close the other half of it. The app mounts asynchronously and
-        // its listener is not attached for the whole of that window, so a single push can land
-        // while nobody is listening: measured as a child window that sometimes opened with the
-        // right title and an empty conversation, rendering somewhere between 6s and 10s when it
-        // worked and never when it did not. hydrate() is idempotent, the delays are short and
-        // unref'd, and both give up on a disposed session.
+        // Three more announcements close the other half of it. The app mounts asynchronously and
+        // its listener is not attached for the whole of that window — it is still not attached
+        // when it sends webviewReady — so a single push, or a short one, can land while nobody is
+        // listening: measured as a child window that sometimes opened with the right title and an
+        // empty conversation, rendering between 6s and 10s when it worked and never when it did
+        // not, and still failing under the load of the debug probes at 600ms and 1800ms. The
+        // schedule below covers the slow end; hydrate() is idempotent, and every timer is unref'd
+        // and gives up on a disposed session.
         void sendSessionInfo();
         void hydrate();
-        for (const delay of [600, 1800]) {
+        for (const delay of [600, 1800, 5000, 12000]) {
           setTimeout(() => {
             if (sessionDisposed) return;
             void sendSessionInfo();

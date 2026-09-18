@@ -2350,6 +2350,62 @@ app.whenReady().then(async () => {
   // Create chat session after window is ready
   if (mainWindow) {
     mainWindowId = mainWindow.webContents.id;
+  // Font-size measurement, behind the same switch as the child-window diagnostics. The appearance
+  // setting has never actually resized chat text, and two attempts at fixing it were ruled out
+  // (setting the variable with !important cannot work — it is a custom-property declaration — and
+  // injecting a later <style> did not win either). The question the code cannot answer is which
+  // stylesheet the cascade actually resolves, and what the variables end up as, so this asks the
+  // document. See docs/KNOWN-ISSUES.md.
+  if (process.env.PI_DEBUG_WINDOW === "1") {
+    const fontProbe = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      void mainWindow.webContents
+        .executeJavaScript(
+          `JSON.stringify({
+             rootFsMd: getComputedStyle(document.documentElement).getPropertyValue('--pi-fs-md').trim(),
+             rootChatFs: getComputedStyle(document.documentElement).getPropertyValue('--chat-fs').trim(),
+             msgFontSize: (() => {
+               const el = document.querySelector('.text-block, .messages .msg');
+               return el ? getComputedStyle(el).fontSize : null;
+             })(),
+             // Where the chain actually breaks. The upstream rule is :root, where
+             // --chat-fs reads var(--pi-fs-md, 13px). The text measured 11px, and 11px is exactly
+             // 13 * 11/13 — the fallback — so --pi-fs-md is missing at that element while it reads
+             // fine at :root. Custom properties inherit, so an element in between redeclares it;
+             // this names that element instead of guessing at it.
+             msgChain: (() => {
+               const el = document.querySelector('.text-block, .messages .msg');
+               if (!el) return null;
+               const names = ['--pi-fs-md', '--chat-fs', '--chat-fs-12', '--chat-fs-11'];
+               const chain = [];
+               for (let n = el; n; n = n.parentElement) {
+                 const cs = getComputedStyle(n);
+                 chain.push({
+                   at:
+                     n.tagName.toLowerCase() +
+                     (n.id ? '#' + n.id : '') +
+                     (n.className ? '.' + String(n.className).split(' ')[0] : ''),
+                   vars: names.map((k) => k + '=' + cs.getPropertyValue(k).trim()).join(' '),
+                 });
+                 if (chain.length >= 6) break;
+               }
+               return chain;
+             })(),
+             styles: Array.from(document.querySelectorAll('style, link[rel=stylesheet]')).map((el, i) => ({
+               i,
+               id: el.id || '',
+               chars: (el.textContent || '').length,
+               mentionsChatFs: (el.textContent || '').includes('--chat-fs'),
+               mentionsFsMd: (el.textContent || '').includes('--pi-fs-md'),
+             })),
+           })`,
+        )
+        .then((r) => console.error(`[main] font probe ${String(r)}`))
+        .catch((e) => console.error(`[main] font probe failed: ${String(e)}`));
+    }, 7000);
+    fontProbe.unref();
+    mainWindow.on("closed", () => clearTimeout(fontProbe));
+  }
     try {
       const win = mainWindow;
       chatSession =

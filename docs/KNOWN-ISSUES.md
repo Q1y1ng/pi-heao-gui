@@ -4,6 +4,33 @@ Open defects with their measured evidence, so the next person can continue inste
 
 ---
 
+## Our theme tokens are not visible in the sidebar's scope
+
+**Measured in 1.2.3, while trying to fix the contrast finding on `.pi-btn-ghost`.**
+
+- `--pi-text-dim` on the sidebar's ghost buttons measures **3:1** in the dark theme (against
+  `rgb(20,23,28)`) — below the 4.5:1 the accessibility gate requires for text.
+- Switching that one rule to `var(--pi-text)` measured **1.12:1 in the light theme and 1.1:1 in the
+  dark one** — text and background effectively the same colour. A token that reads fine everywhere
+  else does not resolve to a usable colour in this rule, so the value was left as it was.
+
+This has the same shape as the font-size defect, and is worth treating as one question: **where do
+our tokens stop being visible?** The font probe found `--pi-fs-md: 16px` at `:root` and all the way
+down `#pi-shell → .pi-body → #pi-main`, so the chain is healthy for the chat — and yet a chrome rule
+in the sidebar cannot use `--pi-text`. Answering that is likely to fix both.
+
+## The isolated e2e suite is flaky in its window lookups
+
+**Two runs, same code, different results: 97/0, then 88/2, then 95/2.**
+
+The checks that move are *a session is available to open in its own window* and, as a consequence,
+the contrast check that sees the error banner it puts on screen. The cause is which window the
+section ends up talking to: a stripped child has no sidebar, and the settings window cannot answer
+for the app. The lookup now asks for the main window structurally (`#pi-sidebar`), which is more
+correct than matching a URL and falling back to "any window", but the failure still reproduces, so
+the harness is what needs to be made deterministic. The app-level e2e (87/0, run twice) does not
+move this way.
+
 ## The stripped child shell did not load the session — **fixed in 1.2.3**
 
 **Status:** fixed · the root cause was found by measurement, after two code-reading guesses turned out wrong.
@@ -54,6 +81,27 @@ empty.
 ---
 
 ## The font-size setting does not resize chat text
+
+**Measured again in 1.2.3 — the variable chain is healthy; a real message node has not been measured yet.**
+
+The earlier notes said `--chat-fs` stayed at 16px while `--pi-fs-md` moved. What the running app
+actually reports, read off the document in the main window with `PI_DEBUG_WINDOW=1`:
+
+- `--pi-fs-md: 16px` and `--chat-fs: 16px` at `:root`, and the upstream's own rule
+  (`:root` with `--chat-fs: var(--pi-fs-md, 13px)`) computing `--chat-fs-12: calc(16px * 12 / 13)` —
+  **our value is the one being used**, so the variable plumbing works.
+- The chain `#pi-shell → .pi-body → #pi-main → …` reports the same values at every level: nothing
+  redeclares them in between.
+
+**Two measurements were wrong, and that is why this is still open.** A probe asked for
+`.text-block, .messages .msg, p` and got `p.pi-stats-note`: the first match in document order is the
+stats panel's paragraph, whose 11px is its own font size and not the chat's — which briefly looked
+like a broken cascade. And the main window's chat had no message nodes at all during the run, so
+`.text-block` measured `null` there.
+
+**The next measurement is specific, then:** read a `.text-block` in a window that actually shows a
+conversation (the child windows do), with the configured size changed. The config file is *not* one
+of `~/.pi/agent/*.json` — find it through `CONFIG_PATH` in `main.ts` before changing anything.
 
 **Status:** open as of 1.2.0 · reproducible · root cause measured · two fix attempts reverted.
 

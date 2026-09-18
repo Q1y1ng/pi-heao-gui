@@ -395,12 +395,13 @@ export const SIDEBAR_HTML = `
     border: 1px solid var(--pi-border);
     border-radius: var(--pi-radius);
       background: transparent;
-      /* Measured, not picked by eye: --pi-text-dim is rgb(91,100,114) against this sidebar's
-         rgb(20,23,28) in the dark theme — 3:1, below the 4.5:1 the accessibility gate requires
-         for text. It is the only place that token carries real button text, so the button gets
-         the full-contrast tone instead of moving the token for the whole theme; it still reads as
-         a ghost button (transparent background, thin border) and hover lifts it further. */
-      color: var(--pi-text);
+      /* The accessibility gate is right that this is 3:1 on the sidebar in the dark theme, below
+         the 4.5:1 it requires for text, and fixing it is not a colour swap: --pi-text-dim is the
+         measured 3:1, and setting --pi-text here measured 1.12:1 in the light theme and 1.1:1 in
+         the dark one -- the token does not resolve to a usable colour in this scope, which is the
+         same "our tokens are not visible here" question the font-size setting runs into. Left at
+         the value that at least renders readable text until that is answered (KNOWN-ISSUES.md). */
+      color: var(--pi-text-dim);
       font-size: var(--pi-fs-sm);
     font-family: inherit;
     cursor: pointer;

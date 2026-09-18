@@ -4,6 +4,17 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 未发布
+
+### Added
+
+- **图片与音频预览。** 文件面板里点开 PNG / JPG / GIF / WebP / BMP / ICO / AVIF / SVG 会直接显示图片（
+  按比例缩放适配、不拉伸）；点开 MP3 / WAV / OGG / M4A / AAC / FLAC / OPUS 会显示带控件的播放器。
+  上限 10 MB，走 `data:` URL，与背景图同一套做法 —— 页面的 CSP 本来就对 `img-src` / `media-src` 放行 `data:`，
+  所以**没有放宽任何安全策略**。其余文件仍进原来的编辑器：判定只看扩展名，`logo.png.bak` 这种备份仍是文本。
+- 顺带补上一处安全细节：媒体文件打开时 **`Ctrl+S` 不会把（空的）编辑器内容写回去** —— 键盘快捷键是全局的，
+  它并不知道面板在显示什么。e2e 会校验 PNG 的字节在按下 `Ctrl+S` 之后**逐字节不变**。
+
 ## 1.2.3 — 2026-09-18
 
 ### Fixed

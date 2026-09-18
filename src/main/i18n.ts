@@ -273,6 +273,13 @@ export const CHAT_STRINGS: Record<string, string> = {
   导出: "Export",
   设置: "Settings",
   "已导出到: ": "Exported to: ",
+  // Dock file panel: media previews. English keeps the same word order the code assumes —
+  // "已打开 12 字节" is assembled as prefix + number + unit, and so is this.
+  图片预览: "Image preview",
+  音频预览: "Audio preview",
+  已打开: "Opened ",
+  字节: "bytes",
+  "图片/音频不在面板内编辑": "Images and audio cannot be edited in this panel",
   昨天: "yesterday",
   今天: "today",
   本周: "this week",

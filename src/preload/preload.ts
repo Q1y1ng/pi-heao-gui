@@ -84,6 +84,7 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:term-close",
   "pi:fs-tree",
   "pi:fs-read",
+  "pi:fs-media",
   "pi:fs-write",
   "pi:git-info",
   "pi:git-commit-message",

@@ -1,3 +1,5 @@
+import { AUDIO_EXTENSIONS, IMAGE_EXTENSIONS } from "./file-kind";
+
 /**
  * Bottom dock: the standalone replacement for what VS Code itself provided in
  * the original extension — a real terminal (upstream `terminal.ts`), a way to
@@ -41,6 +43,7 @@ export const DOCK_HTML = `
           <button class="pi-dock-btn primary" id="pi-files-save" type="button" title="保存 (Ctrl+S)">保存</button>
         </div>
         <textarea id="pi-files-editor" spellcheck="false" placeholder="从左侧选择一个文件…"></textarea>
+        <div id="pi-files-media" hidden></div>
       </div>
     </div>
     <div class="pi-dock-pane" id="pi-pane-changes">
@@ -151,6 +154,12 @@ export const DOCK_CSS = `
   border-bottom: 1px solid var(--pi-border); font-size: var(--pi-fs-sm);
 }
 .pi-files-spacer { flex: 1; }
+#pi-files-media {
+flex: 1; display: flex; align-items: center; justify-content: center;
+overflow: auto; background: var(--pi-bg); padding: 8px;
+}
+#pi-files-media img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#pi-files-media audio { width: 100%; }
 #pi-files-editor, #pi-commit-msg {
   flex: 1; width: 100%; resize: none; border: none; outline: none;
   background: var(--pi-bg); color: var(--pi-text);
@@ -304,6 +313,46 @@ export const DOCK_SCRIPT = `
   var currentFile = '';
   var cm = null;
 
+  // Media previews. The decision comes from the extension alone, and the lists are injected from
+  // file-kind.ts so the renderer and the pi:fs-media handler can never disagree about what an
+  // image is. Everything that is not media keeps the editor path it always had.
+  var IMAGE_EXT = ${JSON.stringify(IMAGE_EXTENSIONS)};
+  var AUDIO_EXT = ${JSON.stringify(AUDIO_EXTENSIONS)};
+
+  function extOf(name) {
+    var s = String(name === null || name === undefined ? '' : name).toLowerCase();
+    var dot = s.lastIndexOf('.');
+    // Only '/' can separate here: loadTree builds these paths as workspace-relative strings, so
+    // they are always forward-slashed. A literal backslash would have to be escaped twice inside
+    // this template and is precisely what silently breaks the generated page; the full
+    // either-separator rule lives in file-kind.ts, where it is unit-tested.
+    var slash = s.lastIndexOf('/');
+    return dot > slash ? s.slice(dot) : '';
+  }
+
+  function previewKindOf(name) {
+    var e = extOf(name);
+    if (IMAGE_EXT.indexOf(e) >= 0) return 'image';
+    if (AUDIO_EXT.indexOf(e) >= 0) return 'audio';
+    return 'text';
+  }
+
+  /** Swap the editor out for the media host, and back. The save/send buttons only mean something
+   *  for text, so they go with the editor. */
+  function setFileMode(mode) {
+    var media = mode !== 'text';
+    var host = document.getElementById('pi-files-media');
+    var ta = document.getElementById('pi-files-editor');
+    var cmEl = document.querySelector('.CodeMirror');
+    if (host) host.hidden = !media;
+    if (ta) ta.style.display = media ? 'none' : '';
+    if (cmEl) cmEl.style.display = media ? 'none' : '';
+    var save = document.getElementById('pi-files-save');
+    var send = document.getElementById('pi-files-send');
+    if (save) save.hidden = media;
+    if (send) send.hidden = media;
+  }
+
   function editor() {
     if (cm || !window.CodeMirror) return cm;
     var ta = document.getElementById('pi-files-editor');
@@ -356,16 +405,41 @@ export const DOCK_SCRIPT = `
   }
 
   async function openFile(path) {
+    var kind = previewKindOf(path);
+    if (kind !== 'text') {
+      var media = await window.pi.invoke('pi:fs-media', path);
+      if (!media || !media.ok) { meta.textContent = (media && media.error) || '读取失败'; return; }
+      currentFile = path;
+      document.getElementById('pi-files-name').textContent = path;
+      var host = document.getElementById('pi-files-media');
+      if (host) {
+        host.textContent = '';
+        var el = document.createElement(kind === 'image' ? 'img' : 'audio');
+        el.id = kind === 'image' ? 'pi-files-image' : 'pi-files-audio';
+        if (kind === 'image') { el.alt = ''; } else { el.controls = true; }
+        el.src = media.dataUrl;
+        host.appendChild(el);
+      }
+      setFileMode(kind);
+      meta.textContent = (kind === 'image' ? '图片预览' : '音频预览') + ' · ' + Math.round((media.size || 0) / 1024) + ' KB';
+      return;
+    }
     var res = await window.pi.invoke('pi:fs-read', path);
     if (!res || !res.ok) { meta.textContent = (res && res.error) || '读取失败'; return; }
     currentFile = path;
     document.getElementById('pi-files-name').textContent = path;
     var ed = editor();
+    setFileMode('text');
     if (ed) { ed.setOption('mode', modeFor(path)); ed.setValue(res.content || ''); }
     else { document.getElementById('pi-files-editor').value = res.content || ''; }
+    meta.textContent = '已打开 ' + res.size + ' 字节';
   }
 
   async function saveFile() {
+    // A binary file has no meaningful text content: writing the editor's value back would destroy
+    // it. Refuse before touching the disk — Ctrl+S is bound globally and does not know what the
+    // panel is showing.
+    if (previewKindOf(currentFile) !== 'text') { meta.textContent = '图片/音频不在面板内编辑'; return; }
     var ed = editor();
     var content = ed ? ed.getValue() : document.getElementById('pi-files-editor').value;
     var res = await window.pi.invoke('pi:fs-write', { path: currentFile, content: content });

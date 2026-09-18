@@ -664,6 +664,196 @@ app.whenReady().then(async () => {
         JSON.stringify(loaded),
       );
 
+      // Media previews: a PNG and a WAV open in the panel itself instead of filling the text editor
+      // with replacement characters. The dock's tree is rooted at the workspace, so the fixtures go
+      // in the workspace root under names the repository's .gitignore already ignores.
+      const pngFixture = path.join(REPO_ROOT, "_e2e-preview.png");
+      const wavFixture = path.join(REPO_ROOT, "_e2e-preview.wav");
+      const writeSilentWav = (file) => {
+        const rate = 8000;
+        const samples = Math.round(rate * 0.06); // 60 ms of silence is a complete, playable clip
+        const data = Buffer.alloc(samples * 2);
+        const head = Buffer.alloc(44);
+        head.write("RIFF", 0);
+        head.writeUInt32LE(36 + data.length, 4);
+        head.write("WAVE", 8);
+        head.write("fmt ", 12);
+        head.writeUInt32LE(16, 16);
+        head.writeUInt16LE(1, 20);
+        head.writeUInt16LE(1, 22);
+        head.writeUInt32LE(rate, 24);
+        head.writeUInt32LE(rate * 2, 28);
+        head.writeUInt16LE(2, 32);
+        head.writeUInt16LE(16, 34);
+        head.write("data", 36);
+        head.writeUInt32LE(data.length, 40);
+        fs.writeFileSync(file, Buffer.concat([head, data]));
+      };
+      fs.copyFileSync(path.join(REPO_ROOT, "build", "icon.png"), pngFixture);
+      writeSilentWav(wavFixture);
+      const pngBytes = fs.readFileSync(pngFixture).toString("base64");
+      try {
+        // The workspace root was the user's own folder, not the repository, so the fixtures live in
+        // the repository and the tree reaches them by opening the repository's own row. Reload first:
+        // clicking "up" always calls loadTree (from "." it pops nothing and loads "." again), which is
+        // the only reload the panel offers and it does not depend on which tab is already active.
+        const openByName = (name) => `(() => {
+          const rows = Array.from(document.querySelectorAll('#pi-files-list .pi-files-row'));
+          const row = rows.find((r) => (r.textContent || '').trim().includes(${JSON.stringify(name)}));
+          if (!row) return { ok: false, seen: rows.slice(0, 14).map((r) => (r.textContent || '').trim()) };
+          row.click();
+          return { ok: true };
+        })()`;
+
+        const seenRows = () =>
+          js(
+            win,
+            "Array.from(document.querySelectorAll('#pi-files-list .pi-files-row')).slice(0, 14).map((r) => (r.textContent || '').trim())",
+          );
+        const fixturesVisible = () =>
+          js(
+            win,
+            "!!Array.from(document.querySelectorAll('#pi-files-list .pi-files-row')).find((r) => (r.textContent || '').includes('_e2e-preview'))",
+          );
+        // Where the fixtures sit depends on the run. The isolated profile uses the repository as its
+        // workspace; the real one is configured with the user's parent folder, so the repository is a
+        // row to open. Ask the tree which one this is instead of assuming — and assert the outcome
+        // (the fixtures are reachable), not the route taken to them.
+        await js(win, "(() => { const b = document.getElementById('pi-files-up'); if (b) b.click(); return true; })()");
+        await sleep(900);
+        if ((await fixturesVisible()) !== true) {
+          await js(win, openByName(path.basename(REPO_ROOT)));
+          await sleep(900);
+        }
+        check(
+          "the file tree reaches the folder the fixtures live in",
+          (await fixturesVisible()) === true,
+          JSON.stringify(await seenRows()),
+        );
+
+        const imgOpen = await js(win, openByName("_e2e-preview.png"));
+        await sleep(1200);
+        // The panel reads its state through two elements that exist no matter how the page was
+        // built, so the assertion does not depend on CodeMirror being vendored: the textarea is
+        // always there, and the CodeMirror wrapper only replaces it when it loaded.
+        const READ_MEDIA = `(() => {
+          const img = document.getElementById('pi-files-image');
+          const audio = document.getElementById('pi-files-audio');
+          const host = document.getElementById('pi-files-media');
+          const save = document.getElementById('pi-files-save');
+          const ta = document.getElementById('pi-files-editor');
+          const cmEl = document.querySelector('.CodeMirror');
+          return {
+            imageTag: img ? img.tagName : '',
+            imageHead: img ? String(img.src || '').slice(0, 22) : '',
+            natural: img ? img.naturalWidth : 0,
+            audioTag: audio ? audio.tagName : '',
+            audioHead: audio ? String(audio.src || '').slice(0, 22) : '',
+            controls: audio ? audio.controls === true : false,
+            hostVisible: !!host && host.hidden === false,
+            saveHidden: !!save && save.hidden === true,
+            editorHidden: (!ta || ta.style.display === 'none') && (!cmEl || cmEl.style.display === 'none'),
+            hasCodeMirror: !!cmEl,
+            name: (document.getElementById('pi-files-name') || {}).textContent || '',
+          };
+        })()`;
+        // Opening a file is an IPC round trip on top of an asynchronous click, so poll for the
+        // effect rather than sleeping a fixed time and hoping.
+        const waitForMedia = (want) =>
+          waitFor(
+            async () => {
+              const s = await js(win, READ_MEDIA);
+              return s.imageTag === want || s.audioTag === want || String(s.name).includes("_e2e-preview")
+                ? s
+                : null;
+            },
+            8_000,
+            `media preview ${want}`,
+          ).catch(async () => js(win, READ_MEDIA));
+
+        const imgState = await waitForMedia("IMG");
+        check(
+          "a PNG opens as an image, not as text",
+          imgOpen.ok === true && imgState.imageTag === "IMG" && imgState.imageHead === "data:image/png;base64,",
+          `open=${JSON.stringify(imgOpen)} state=${JSON.stringify(imgState)}`,
+        );
+        check("the image actually decoded", imgState.natural > 0, `naturalWidth=${imgState.natural}`);
+        check(
+          "the editor and its save button step aside for media",
+          imgState.hostVisible === true && imgState.saveHidden === true && imgState.editorHidden === true,
+          JSON.stringify(imgState),
+        );
+
+        // Ctrl+S is bound globally and does not know what the panel is showing. Writing the
+        // editor's value over a PNG would destroy it, so this asserts the file is untouched.
+        await js(
+          win,
+          "(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true })); return true; })()",
+        );
+        await sleep(700);
+        const unchanged = fs.readFileSync(pngFixture).toString("base64") === pngBytes;
+        const refusal = await js(win, "(document.getElementById('pi-dock-meta')||{}).textContent || ''");
+        check("Ctrl+S cannot overwrite a media file", unchanged, `meta="${String(refusal).slice(0, 60)}"`);
+
+        const wavOpen = await js(win, openByName("_e2e-preview.wav"));
+        await sleep(1200);
+        const wavState = await waitForMedia("AUDIO");
+        const wavStacked = await js(win, "!!document.getElementById('pi-files-image')");
+        check(
+          "a WAV opens as an audio element with controls",
+          wavOpen.ok === true && wavState.audioTag === "AUDIO" && wavState.controls === true && wavState.audioHead === "data:audio/wav;base64,",
+          `open=${JSON.stringify(wavOpen)} state=${JSON.stringify(wavState)}`,
+        );
+        check(
+          "switching from image to audio replaces the element rather than stacking",
+          wavStacked === false,
+          JSON.stringify(wavState),
+        );
+
+        // The new branch must not swallow text: the editor path is still the default.
+        const textOpen = await js(win, openByName("package.json"));
+        await sleep(1200);
+        const textState = await waitFor(
+          async () => {
+            const s = await js(win, READ_MEDIA);
+            return String(s.name).includes("package.json") ? s : null;
+          },
+          8_000,
+          "text file in the editor",
+        ).catch(async () => js(win, READ_MEDIA));
+        const textChrome = await js(win, `(() => {
+          const host = document.getElementById('pi-files-media');
+          const save = document.getElementById('pi-files-save');
+          return {
+            image: !!document.getElementById('pi-files-image'),
+            audio: !!document.getElementById('pi-files-audio'),
+            hostHidden: !host || host.hidden === true,
+            hostVisible: !!host && host.hidden === false,
+            saveVisible: !!save && save.hidden === false,
+          };
+        })()`);
+        check(
+          "a JSON file still opens in the editor",
+          textOpen.ok === true &&
+            textState.editorHidden === false &&
+            String(textState.name).includes("package.json"),
+          `open=${JSON.stringify(textOpen)} state=${JSON.stringify(textState)}`,
+        );
+        // The media element is not removed, it goes behind the hidden host — so what matters is that
+        // the host is hidden again and the save button is back with the editor.
+        check(
+          "the media host is hidden again for text",
+          textChrome.hostHidden === true && textChrome.saveVisible === true && textChrome.hostVisible === false,
+          JSON.stringify(textChrome),
+        );
+      } finally {
+        for (const f of [pngFixture, wavFixture]) {
+          try {
+            fs.unlinkSync(f);
+          } catch {}
+        }
+      }
+
       // Changes pane
       await js(
         win,

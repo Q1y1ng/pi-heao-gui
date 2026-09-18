@@ -65,6 +65,7 @@ import {
   type AuthStatus,
 } from "./pi-cli";
 import { getRpcLogPath } from "./rpc-client";
+import { mediaMimeFor, previewKindFor } from "./file-kind";
 import { buildTokensCss } from "./theme";
 import { refreshTrayMenu, setRecentSessions, setWindowList, bumpUnread, clearUnread } from "./tray";
 import { createSessionLister, type SessionLister } from "./sessions";
@@ -1665,6 +1666,39 @@ ipcMain.handle("pi:fs-read", async (_e, relPath: string) => {
     if (st.size > 4 * 1024 * 1024) return { ok: false, error: "文件过大（上限 4 MB）" };
     const content = await readFile(full, "utf8");
     return { ok: true, content, path: String(relPath), size: st.size };
+  } catch (e) {
+    return { ok: false, error: errText(e) };
+  }
+});
+
+/**
+ * Media variant of `pi:fs-read`: a PNG or a WAV cannot go into a text editor, so this returns a
+ * data URL the panel can hand to <img> / <audio> instead. Same workspace guard, same read-only
+ * stance; the cap is higher because a picture is legitimately bigger than a source file, and the
+ * page's CSP already allows data: for img-src and media-src, so nothing has to be loosened.
+ */
+const MEDIA_MAX_BYTES = 10 * 1024 * 1024;
+
+ipcMain.handle("pi:fs-media", async (_e, relPath: string) => {
+  const full = safeWorkspacePath(workspaceRootDir(), relPath);
+  if (!full) return { ok: false, error: "路径无效" };
+  const kind = previewKindFor(relPath);
+  const mime = mediaMimeFor(relPath);
+  if (kind === "text" || !mime) return { ok: false, error: "不是图片或音频" };
+  try {
+    const st = await stat(full);
+    if (!st.isFile()) return { ok: false, error: "不是文件" };
+    if (st.size > MEDIA_MAX_BYTES)
+      return { ok: false, error: `文件过大（上限 ${MEDIA_MAX_BYTES / 1024 / 1024} MB）` };
+    const buf = await readFile(full);
+    return {
+      ok: true,
+      kind,
+      mime,
+      size: st.size,
+      path: String(relPath),
+      dataUrl: `data:${mime};base64,${buf.toString("base64")}`,
+    };
   } catch (e) {
     return { ok: false, error: errText(e) };
   }

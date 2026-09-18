@@ -97,11 +97,11 @@ the computed font size of an actual `.text-block`, once per sample:
 | 16 | 16px / 16px | **16px** | 39 |
 | 22 | 22px / 22px | **22px** | 39 |
 
-The plumbing is the fix that was already in `broadcastTheme()`: the chat lives in a `<webview>`, a
-webview is not a `BrowserWindow` and never appeared in `getAllWindows()`, so the token stylesheet was
-never delivered and every appearance setting silently did nothing in the chat pane. Sending to
-`getAllWebContents()` (the `window` **and** `webview` kinds) is what makes the message text read
-`--pi-fs-md` at all.
+The tokens reaching the chat is one half of it: the chat lives in a `<webview>`, a webview is not a
+`BrowserWindow` and never appeared in `getAllWindows()`, so the token stylesheet was never delivered at
+all. Sending to `getAllWebContents()` (the `window` **and** `webview` kinds) is what makes the chat read
+`--pi-fs-md` in the first place — necessary, and on its own not enough. What the message text was
+actually sized from is in the live-path paragraphs below.
 
 **Two measurements had it wrong, and they are the reason this stayed open.** A probe asked for
 `.text-block, .messages .msg, p` and got `p.pi-stats-note` — the first match in document order is the

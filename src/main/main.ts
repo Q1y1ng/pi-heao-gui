@@ -788,6 +788,21 @@ async function openSessionWindow(
         const script = `JSON.stringify({
              t: ${ms},
              sel: ['.msg', '.text-block', '.user-bubble', '.msg-body'].map((s) => s + '=' + document.querySelectorAll(s).length),
+             // The font-size question, measured where the text actually is. An earlier attempt read
+             // these off our own chrome and reported a healthy chain that said nothing about the
+             // message text. See docs/KNOWN-ISSUES.md.
+             fsVars: (() => {
+               const cs = getComputedStyle(document.documentElement);
+               return (
+                 cs.getPropertyValue('--pi-fs-md').trim() +
+                 ' / ' +
+                 cs.getPropertyValue('--chat-fs').trim()
+               );
+             })(),
+             textFs: (() => {
+               const el = document.querySelector('.text-block, .msg');
+               return el ? getComputedStyle(el).fontSize : null;
+             })(),
              mainChars: (document.getElementById('pi-main') || { innerHTML: '' }).innerHTML.length,
              shellChars: (document.getElementById('pi-shell') || { innerHTML: '' }).innerHTML.length,
              path: (() => {

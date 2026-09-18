@@ -156,6 +156,14 @@ const SHIM_SCRIPT = `
             document.head.appendChild(tokens);
           }
           tokens.textContent = data.css;
+          // pi-chat sets --chat-fs INLINE when it boots, from window.__PI_FONTSIZE__ (see
+          // studio/pi-chat/src/main.ts), and an inline custom property beats every stylesheet — so
+          // the copy that won the cascade was the one written once at load and never again.
+          // Measured: --pi-fs-md followed a size change into this document (16px -> 24px) while
+          // --chat-fs stayed at 16px and the message text stayed with it. Re-pointing that inline
+          // copy at the master makes it follow the sheet just replaced, which is what the upstream's
+          // own :root rule does. The fallback keeps the text readable if the master is ever absent.
+          document.documentElement.style.setProperty('--chat-fs', 'var(--pi-fs-md, 13px)');
         }
         window.dispatchEvent(new MessageEvent('message', { data: data }));
       });

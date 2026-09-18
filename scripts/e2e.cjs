@@ -1258,7 +1258,10 @@ app.whenReady().then(async () => {
         // written no session at all by this point — the list is genuinely empty (`[]`) no matter how
         // long this waits. Skipping keeps this section's other checks (including the font-size one
         // below) from reporting a failure about something they do not test.
-        skip("a session opens in its own window", `the sandbox profile listed no sessions: ${listed}`);
+        skip(
+          "a session opens in its own window",
+          `the sandbox profile listed no sessions: ${listed}`,
+        );
         return;
       }
 
@@ -1347,10 +1350,14 @@ app.whenReady().then(async () => {
       );
       let tokenAfter = null;
       try {
-        tokenAfter = await waitFor(async () => {
-          const now = await readChatFont();
-          return now.fsMd === `${wanted}px` ? now : null;
-        }, 15_000, "the chat's document to receive the new font token");
+        tokenAfter = await waitFor(
+          async () => {
+            const now = await readChatFont();
+            return now.fsMd === `${wanted}px` ? now : null;
+          },
+          15_000,
+          "the chat's document to receive the new font token",
+        );
       } catch {
         /* reported by the check below */
       }

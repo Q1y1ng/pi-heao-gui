@@ -125,7 +125,6 @@ is gone, so walk `document.styleSheets` for the variable and check whether pi-ch
 e2e asserts the half that works ("the chat's document receives the font token while the app runs") and
 skips the text half with these numbers, so the split stays visible instead of hiding in a red check.
 
-
 **Status:** open as of 1.2.0 · reproducible · root cause measured · two fix attempts reverted.
 
 设置 → 外观 → 字号 accepts a value, the settings window shows it, and the CSS custom property

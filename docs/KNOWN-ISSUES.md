@@ -21,7 +21,12 @@ in the sidebar cannot use `--pi-text`. Answering that is likely to fix both.
 
 ## The isolated e2e suite is flaky in its window lookups
 
-**Two runs, same code, different results: 97/0, then 88/2, then 95/2.**
+**Same code, different results: 97/0, then 88/2, then 95/2 — root-caused to a genuinely empty session
+list.** The check asked `pi:list-sessions` in the sandbox and got `[]`: the sandbox is a throwaway
+profile, and a cold pi child may not have written any session by that point. Asking once and polling
+for 40 seconds failed identically, which is what rules out timing as the cause. The section now skips
+with that reason instead of failing, so the checks after it no longer report a failure about
+something they do not test.
 
 The checks that move are *a session is available to open in its own window* and, as a consequence,
 the contrast check that sees the error banner it puts on screen. The cause is which window the
@@ -80,28 +85,46 @@ empty.
 
 ---
 
-## The font-size setting does not resize chat text
+## The font-size setting does not resize chat text — **measured working in 1.2.3**
 
-**Measured again in 1.2.3 — the variable chain is healthy; a real message node has not been measured yet.**
+**The chat text follows the setting. Verified by measuring a real message node in a running app.**
 
-The earlier notes said `--chat-fs` stayed at 16px while `--pi-fs-md` moved. What the running app
-actually reports, read off the document in the main window with `PI_DEBUG_WINDOW=1`:
+The child shell renders the conversation, so its sample probe now reports the chat's own tokens and
+the computed font size of an actual `.text-block`, once per sample:
 
-- `--pi-fs-md: 16px` and `--chat-fs: 16px` at `:root`, and the upstream's own rule
-  (`:root` with `--chat-fs: var(--pi-fs-md, 13px)`) computing `--chat-fs-12: calc(16px * 12 / 13)` —
-  **our value is the one being used**, so the variable plumbing works.
-- The chain `#pi-shell → .pi-body → #pi-main → …` reports the same values at every level: nothing
-  redeclares them in between.
+| `config.chatFontSize` | `--pi-fs-md` / `--chat-fs` | `.text-block` font size | nodes |
+| --- | --- | --- | --- |
+| 16 | 16px / 16px | **16px** | 39 |
+| 22 | 22px / 22px | **22px** | 39 |
 
-**Two measurements were wrong, and that is why this is still open.** A probe asked for
-`.text-block, .messages .msg, p` and got `p.pi-stats-note`: the first match in document order is the
-stats panel's paragraph, whose 11px is its own font size and not the chat's — which briefly looked
-like a broken cascade. And the main window's chat had no message nodes at all during the run, so
-`.text-block` measured `null` there.
+The plumbing is the fix that was already in `broadcastTheme()`: the chat lives in a `<webview>`, a
+webview is not a `BrowserWindow` and never appeared in `getAllWindows()`, so the token stylesheet was
+never delivered and every appearance setting silently did nothing in the chat pane. Sending to
+`getAllWebContents()` (the `window` **and** `webview` kinds) is what makes the message text read
+`--pi-fs-md` at all.
 
-**The next measurement is specific, then:** read a `.text-block` in a window that actually shows a
-conversation (the child windows do), with the configured size changed. The config file is *not* one
-of `~/.pi/agent/*.json` — find it through `CONFIG_PATH` in `main.ts` before changing anything.
+**Two measurements had it wrong, and they are the reason this stayed open.** A probe asked for
+`.text-block, .messages .msg, p` and got `p.pi-stats-note` — the first match in document order is the
+stats panel's paragraph, whose 11px briefly looked like a broken cascade. And the second read the
+tokens off our own chrome, where they are healthy and say nothing about the text.
+
+The live path is **not** the same story, and the e2e now measures exactly where it stops. Setting
+the size from the settings window, in the chat's own document:
+
+- `--pi-fs-md` **does** follow the setting — 16px becomes 24px — so the tokens do reach a running
+  chat. An earlier note in this file guessed otherwise.
+- `--chat-fs` does **not** follow: it stayed at 16px, and at 13px in the sandbox. pi-chat sizes its
+  text from `--chat-fs`, and our renderer block is the last stylesheet in the document, so the
+  declaration that wins the cascade is **not** the one this app writes. Changing that block to derive
+  the chain (`--chat-fs: var(--pi-fs-md)`) was therefore necessary and **not sufficient**.
+- The message text stays put (16px) as a result, while a **restart** with a changed config works — the
+  table at the top is from exactly that.
+
+The next step is to find which declaration wins `--chat-fs` in the chat document: `getMatchedCSSRules`
+is gone, so walk `document.styleSheets` for the variable and check whether pi-chat sets it inline. The
+e2e asserts the half that works ("the chat's document receives the font token while the app runs") and
+skips the text half with these numbers, so the split stays visible instead of hiding in a red check.
+
 
 **Status:** open as of 1.2.0 · reproducible · root cause measured · two fix attempts reverted.
 

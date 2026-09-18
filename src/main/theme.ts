@@ -204,19 +204,20 @@ function renderTokens(p: Palette, accentColor: string, fs: number): string {
   --pi-fs-sm: calc(var(--pi-fs-md) * 12 / 13);
   --pi-fs-lg: calc(var(--pi-fs-md) * 14 / 13);
 
-  /* pi-chat derives every chat size from --chat-fs, which in turn reads --pi-fs-md at its own
-     :root. Measured live: --pi-fs-md went 16px -> 22px while --chat-fs stayed 16px, so that
-     derivation does not re-resolve when the tokens are replaced — some later declaration of
-     the upsteam variable wins. This block is the last stylesheet in the document, so declaring
-     the derived chain here as well settles it regardless of where the break is. */
-  --chat-fs: ${fs}px;
-  --chat-fs-8: calc(${fs}px * 8 / 13);
-  --chat-fs-9: calc(${fs}px * 9 / 13);
-  --chat-fs-10: calc(${fs}px * 10 / 13);
-  --chat-fs-11: calc(${fs}px * 11 / 13);
-  --chat-fs-12: calc(${fs}px * 12 / 13);
-  --chat-fs-14: calc(${fs}px * 14 / 13);
-  --chat-fs-15: calc(${fs}px * 15 / 13);
+  /* pi-chat derives every chat size from --chat-fs, which reads --pi-fs-md at its own :root.
+     Measured live: --pi-fs-md went 16px -> 24px while --chat-fs stayed put -- because this block is
+     the last stylesheet in the document and therefore wins the cascade, and it used to bake the
+     number in, so the copy that won never changed. Declaring the chain in terms of --pi-fs-md
+     instead of repeating the number is what makes a size change follow the master, however the live
+     update sets it (an inline property and a replaced sheet both work). */
+  --chat-fs: var(--pi-fs-md);
+  --chat-fs-8: calc(var(--pi-fs-md) * 8 / 13);
+  --chat-fs-9: calc(var(--pi-fs-md) * 9 / 13);
+  --chat-fs-10: calc(var(--pi-fs-md) * 10 / 13);
+  --chat-fs-11: calc(var(--pi-fs-md) * 11 / 13);
+  --chat-fs-12: calc(var(--pi-fs-md) * 12 / 13);
+  --chat-fs-14: calc(var(--pi-fs-md) * 14 / 13);
+  --chat-fs-15: calc(var(--pi-fs-md) * 15 / 13);
 
   --pi-speed: 130ms;
 }

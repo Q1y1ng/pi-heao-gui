@@ -63,9 +63,18 @@ test("waiting beats running, and the freshest row comes first inside a group", (
 });
 
 test("the state a row is shown in follows the same order", () => {
-  assert.equal(stateOf({ windowId: 1, label: "", running: true, waiting: 1, unread: 0, touchedAt: 0 }), "waiting");
-  assert.equal(stateOf({ windowId: 1, label: "", running: true, waiting: 0, unread: 0, touchedAt: 0 }), "running");
-  assert.equal(stateOf({ windowId: 1, label: "", running: false, waiting: 0, unread: 3, touchedAt: 0 }), "idle");
+  assert.equal(
+    stateOf({ windowId: 1, label: "", running: true, waiting: 1, unread: 0, touchedAt: 0 }),
+    "waiting",
+  );
+  assert.equal(
+    stateOf({ windowId: 1, label: "", running: true, waiting: 0, unread: 0, touchedAt: 0 }),
+    "running",
+  );
+  assert.equal(
+    stateOf({ windowId: 1, label: "", running: false, waiting: 0, unread: 3, touchedAt: 0 }),
+    "idle",
+  );
 });
 
 test("a listener that unsubscribes stops hearing about changes", () => {

@@ -132,10 +132,7 @@ test("a start-up that dies before it is ready is retried exactly once", async ()
   });
   // The session exists before the retry happens: the window must not wait for a start-up to be over.
   assert.ok(session, "the session is handed back as soon as pi is spawned");
-  assert.ok(
-    await waitUntil(() => events(log).includes("ready")),
-    "the retry ran",
-  );
+  assert.ok(await waitUntil(() => events(log).includes("ready")), "the retry ran");
   assert.deepEqual(
     events(log),
     // `cwd` is the fake reporting where it was started (see test/fake-pi.cjs): one line per process.

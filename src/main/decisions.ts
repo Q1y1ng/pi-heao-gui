@@ -157,7 +157,10 @@ export function createDecisionQueue(options: DecisionQueueOptions = {}): Decisio
     },
 
     stats(): { pending: number; windows: number } {
-      return { pending: items.size, windows: new Set([...items.values()].map((i) => i.windowId)).size };
+      return {
+        pending: items.size,
+        windows: new Set([...items.values()].map((i) => i.windowId)).size,
+      };
     },
   };
 }

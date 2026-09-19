@@ -344,6 +344,15 @@ export const CHAT_STRINGS: Record<string, string> = {
     "Numbers come from the pi RPC events (message_update carries cumulative usage). Prices follow what the provider reports;",
   "未提供 reasoning 拆分或缓存计费的模型会显示 –。":
     "models that report neither reasoning splits nor cache billing show –.",
+  // ── pending decisions (the cross-window "waiting for you" panel)
+  待你处理: "Waiting for you",
+  "窗口 #": "window #",
+  " 项等待回答": " waiting for an answer",
+  " 秒前": "s ago",
+  "跳过去 →": "Go there →",
+  "现在没有等待回答的请求。": "Nothing is waiting for an answer.",
+  "pi 正在等一个回答（权限、确认或输入）。点一条会跳到提出它的窗口 —— 回答要在那里做，在别处回答不了。":
+    "pi is waiting for an answer (a permission, a confirmation or an input). Clicking an entry takes you to the window that asked — the answer has to be given there, not here.",
 };
 
 let chatKeysByLength: string[] | null = null;

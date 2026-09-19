@@ -155,6 +155,10 @@ export const IPC = {
   OPEN_SETTINGS: "pi:open-settings",
   /** Settings window only: play an alert sound on demand (the "试听" buttons). */
   ALERT_TEST: "pi:alert-test",
+  /** The decisions nobody has answered yet — every window's, not just this one's. */
+  GET_DECISIONS: "pi:get-decisions",
+  /** Bring the window that is waiting for an answer to the front. */
+  DECISIONS_FOCUS: "pi:decisions-focus",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",
@@ -179,4 +183,6 @@ export const IPC = {
   SESSIONS_LIST: "pi:sessions-list",
   STREAMING: "pi:streaming",
   MCP_STATUS: "pi:mcp-status",
+  /** Pushed to every window whenever the pending-decision list changes. */
+  DECISIONS: "pi:decisions",
 } as const;

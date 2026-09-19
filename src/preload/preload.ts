@@ -88,6 +88,10 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:fs-write",
   "pi:git-info",
   "pi:git-commit-message",
+  // The pending-decision list is cross-window: the chat renderer reads it and asks the main process
+  // to bring another window forward. Neither touches config, auth or agent files.
+  "pi:get-decisions",
+  "pi:decisions-focus",
 ]);
 
 // Main -> renderer channels that should be forwarded as MessageEvents
@@ -125,6 +129,7 @@ const forwardChannels = [
   "pi:search-progress",
   "pi:term-data",
   "pi:term-exit",
+  "pi:decisions",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;

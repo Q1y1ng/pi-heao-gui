@@ -26,6 +26,8 @@
 │ chat-adapter.ts    装配聊天页：vendored bundle + chrome + vendor 库 + shim
 │ sidebar.ts         会话列表侧栏      dock.ts      终端/文件/变更三个面板
 │ palette.ts         命令面板          stats-panel.ts  token 面板
+│ decisions.ts       待处理决策登记表   decisions-panel.ts  "待你处理"面板（跨窗口）
+│ spawn-queue.ts     同一 profile 的 pi 启动串行化（见下）
 │ settings-window.ts 设置窗口（独立 preload；唯一能写 ~/.pi/agent/* 的窗口）
 │ diff-window.ts     自己的 diff 视图，不走系统默认程序
 │ sessions.ts        会话列表（异步、分片读、带缓存）  git.ts  分支/worktree/提交信息

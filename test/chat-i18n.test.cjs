@@ -16,6 +16,7 @@ function fragments() {
   const { SIDEBAR_HTML, SIDEBAR_SCRIPT } = require(path.join(DIST, "sidebar.js"));
   const { DOCK_HTML, DOCK_SCRIPT } = require(path.join(DIST, "dock.js"));
   const { STATS_HTML, STATS_SCRIPT } = require(path.join(DIST, "stats-panel.js"));
+  const { DECISIONS_HTML, DECISIONS_SCRIPT } = require(path.join(DIST, "decisions-panel.js"));
   const { PALETTE_HTML, PALETTE_SCRIPT } = require(path.join(DIST, "palette.js"));
   return [
     ["SIDEBAR_HTML", SIDEBAR_HTML],
@@ -24,6 +25,8 @@ function fragments() {
     ["DOCK_SCRIPT", DOCK_SCRIPT],
     ["STATS_HTML", STATS_HTML],
     ["STATS_SCRIPT", STATS_SCRIPT],
+    ["DECISIONS_HTML", DECISIONS_HTML],
+    ["DECISIONS_SCRIPT", DECISIONS_SCRIPT],
     ["PALETTE_HTML", PALETTE_HTML],
     ["PALETTE_SCRIPT", PALETTE_SCRIPT],
   ];

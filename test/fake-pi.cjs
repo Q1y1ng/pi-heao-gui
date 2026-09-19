@@ -61,6 +61,23 @@ setTimeout(() => {
     })}\n`,
   );
   record("ready");
+  // `PI_FAKE_DIALOG` makes the fake ask a question the way a permission prompt does: an
+  // `extension_ui_request` that the app must show and a person must answer. It is how the e2e can
+  // test the pending-decision list without a model turn (the isolated suite makes none).
+  const dialog = process.env.PI_FAKE_DIALOG || "";
+  if (dialog) {
+    process.stdout.write(
+      `${JSON.stringify({
+        type: "extension_ui_request",
+        id: "fake-dialog",
+        method: dialog,
+        title: process.env.PI_FAKE_DIALOG_TITLE || "fake pi asks",
+        message: process.env.PI_FAKE_DIALOG_MESSAGE || "",
+        options: dialog === "select" ? ["Allow", "Block"] : undefined,
+      })}\n`,
+    );
+    record("dialog");
+  }
   // Reading stdin only now is also what pi does: it does not look at a request until its start-up
   // work is behind it (measured — a request written at +1.0 s was answered at +70.9 s, after the
   // last `npm install`). A fake that answered earlier would look ready before it had "installed",

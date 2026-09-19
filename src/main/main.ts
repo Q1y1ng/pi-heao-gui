@@ -79,6 +79,7 @@ import {
 } from "./config";
 import { log, errText } from "./log";
 import { installNavigationGuards } from "./navigation";
+import { createDecisionQueue, describeRequest } from "./decisions";
 import { getSpawnQueue, profileKey } from "./spawn-queue";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
@@ -173,6 +174,7 @@ const MSG_TYPE_TO_CHANNEL: Record<string, string> = {
   appendInput: IPC.APPEND_INPUT,
   sessionInfo: IPC.SESSION_INFO,
   permissionMode: IPC.PERMISSION_MODE,
+  decisions: IPC.DECISIONS,
   files: IPC.FILES,
   sessionsList: IPC.SESSIONS_LIST,
   streaming: IPC.STREAMING,
@@ -232,6 +234,31 @@ function cancelDecisionAlerts(windowId: number): void {
 
 function cancelAllDecisionAlerts(): void {
   for (const id of [...decisionAlerts.keys()]) cancelDecisionAlerts(id);
+}
+
+// ─── The list of decisions nobody has answered yet ─────────────────────
+//
+// The chime above says "someone is required"; this says *who* and *for what*, in every window. The
+// list is global on purpose: a decision can be raised in a child window, in a session that is not on
+// screen, or in the window nobody is looking at, and the panel is how the person finds it.
+const decisions = createDecisionQueue({ log: (message) => log.info(message) });
+
+decisions.onChange(() => {
+  const items = decisions.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) postToWindow(win, { type: "decisions", items });
+  }
+});
+
+/**
+ * What to call a window in that list. Session windows are titled after their session, so their title
+ * is the useful half; the main window and the settings window are not, and a bare id is.
+ */
+function decisionWindowLabel(win: BrowserWindow): string {
+  const title = win.getTitle().trim();
+  if (win === mainWindow) return "主窗口";
+  if (title && !/^Pi Heao (GUI|设置)/.test(title)) return title;
+  return `窗口 #${win.id}`;
 }
 
 function postToWindow(win: BrowserWindow, msg: unknown): void {
@@ -495,6 +522,7 @@ async function createWindow(): Promise<void> {
       disposeTerminalFor(mainWindowId);
       clearUnread(mainWindowId);
       cancelDecisionAlerts(mainWindowId);
+      decisions.dropWindow(mainWindowId);
     }
     mainWindowId = -1;
     mainWindow = null;
@@ -844,21 +872,7 @@ async function openSessionWindow(
         config: childConfig,
         sessionFile,
         cwd: config.workspaceRoot || homedir(),
-        host: {
-          postToRenderer: (msg) => postToWindow(win, msg),
-          saveStats: (sessionFile, data) => getStatsStore().save(sessionFile, data),
-          loadStats: (sessionFile) => getStatsStore().load(sessionFile),
-          toggleFavorite: (provider, modelId) => {
-            const key = `${provider}/${modelId}`;
-            const current = config.favoriteModels || [];
-            const next = current.includes(key)
-              ? current.filter((k) => k !== key)
-              : [...current, key];
-            saveConfig({ ...config, favoriteModels: next });
-            return next;
-          },
-          getFavorites: () => config.favoriteModels || [],
-        },
+        host: sessionHost(win),
       })) ?? null;
   } catch (e) {
     log.error("child session failed:", errText(e));
@@ -879,6 +893,7 @@ async function openSessionWindow(
     if (sessionFile) windowsBySession.delete(sessionKey(sessionFile));
     clearUnread(win.id);
     cancelDecisionAlerts(win.id);
+    decisions.dropWindow(win.id);
     if (childSession) {
       childSession.dispose();
       childSession = null;
@@ -974,8 +989,26 @@ function sessionHost(win: BrowserWindow): {
         }
       }
       // Permission, elevation or a confirmation: someone has to answer, so this is
-      // the one alert that is allowed to interrupt.
-      if (m?.type === "dialog" && m.request && !win.isDestroyed()) scheduleDecisionAlerts(win);
+      // the one alert that is allowed to interrupt — and it goes on the list every
+      // window can see, because the window that is waiting is not always the window
+      // the person is looking at.
+      if (m?.type === "dialog" && m.request && !win.isDestroyed()) {
+        const described = describeRequest(m.request);
+        decisions.add({
+          id: String((m.request as { id?: unknown }).id ?? ""),
+          windowId: win.id,
+          method: described.method,
+          title: described.title,
+          message: described.message,
+          windowLabel: decisionWindowLabel(win),
+          askedAt: Date.now(),
+        });
+        scheduleDecisionAlerts(win);
+      }
+      // The session's pi is gone: whatever it was waiting for can no longer be answered, so it must
+      // not keep sitting on the list. A reload or a fresh message starts a new pi, and a new pi asks
+      // its own questions.
+      if (m?.type === "error" && !win.isDestroyed()) decisions.dropWindow(win.id);
       postToWindow(win, msg);
     },
     saveStats: (sessionFile, data) => {
@@ -1015,6 +1048,31 @@ ipcMain.handle(IPC.ALERT_TEST, async (_e, kind: unknown) => {
   const k = kind === "decision" ? "decision" : "turnEnd";
   const played = await playChime(k, config.alerts.volume);
   return { ok: played, error: played ? "" : "音频不可用（提示音未能播放）" };
+});
+
+// ─── IPC: the pending-decision list ───────────────────────────────────
+
+/** Every window's unanswered decisions — the panel is the same list everywhere. */
+ipcMain.handle(IPC.GET_DECISIONS, () => decisions.list());
+
+/**
+ * Bring the window that is waiting to the front.
+ *
+ * Answering still happens there: pi's request, its options and its textarea live in that window's
+ * session, so this is a "take me to it" and not an "answer it for me".
+ */
+ipcMain.handle(IPC.DECISIONS_FOCUS, (_e, arg: unknown) => {
+  const windowId = Number((arg as { windowId?: unknown } | null)?.windowId ?? arg);
+  const win = BrowserWindow.getAllWindows().find((w) => w.id === windowId);
+  if (!win || win.isDestroyed()) {
+    // The window is gone, so the list is stale: say so, and take its entries off it.
+    decisions.dropWindow(windowId);
+    return { ok: false, error: "那个窗口已经关掉了" };
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  return { ok: true };
 });
 
 // ─── IPC: Config ──────────────────────────────────────────────────────
@@ -1929,6 +1987,8 @@ function diagnosticsInfo(): string {
     `workspace ${config.workspaceRoot || "(home)"}`,
     `theme ${config.theme} accent ${config.accent}`,
     `rpc log ${getRpcLogPath()}`,
+    `pending decisions ${decisions.stats().pending} in ${decisions.stats().windows} window(s)`,
+    `pi start-ups ${JSON.stringify(getSpawnQueue().stats())}`,
     "",
     "config:",
     JSON.stringify(masked, null, 2),
@@ -2221,8 +2281,11 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
     try {
       const senderWindow = BrowserWindow.fromWebContents(e.sender);
       if (msgType === "dialogResponse") {
-        // Answered: stop repeating that window's alert.
-        if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+        // Answered: stop repeating that window's alert, and take it off the list every window sees.
+        if (senderWindow) {
+          cancelDecisionAlerts(senderWindow.id);
+          decisions.resolve(senderWindow.id, String(msg?.id ?? ""));
+        }
       }
       if (msgType === "switchSession") {
         const file = String(msg?.sessionFile || msg?.file || "");
@@ -2236,7 +2299,10 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
         }
         log.info("ipc switchSession ->", file);
         // The dialog belonged to the session being left: stop reminding about it.
-        if (senderWindow) cancelDecisionAlerts(senderWindow.id);
+        if (senderWindow) {
+          cancelDecisionAlerts(senderWindow.id);
+          decisions.dropWindow(senderWindow.id);
+        }
         await session.switchTo(file);
         // A window's title should say which session it is showing.
         if (senderWindow && !senderWindow.isDestroyed()) {

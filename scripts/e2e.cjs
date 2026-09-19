@@ -2012,6 +2012,173 @@ app.whenReady().then(async () => {
       }
     });
 
+    // ══ Pending decisions: raised in one window, listed in another ═════════
+    await section("Pending decisions: raised in one window, listed in another", async () => {
+      const sw = byTitle(/设置|Settings/);
+      if (!sw) {
+        check("settings window is available for the decision checks", false, "no settings window");
+        return;
+      }
+      if (!ISOLATED) {
+        // It points a session at a fake pi, which is a config write — and the read-only pass
+        // against the real environment is exactly what must not do that.
+        skip(
+          "a pending decision is listed in every window",
+          "needs --isolated: the check points a session at a fake pi",
+        );
+        return;
+      }
+      const isMainWindow = async (w) => {
+        try {
+          return await js(w, "!!document.getElementById('pi-sidebar')");
+        } catch {
+          return false;
+        }
+      };
+      let chatWin = null;
+      for (const w of allWindows()) {
+        if (await isMainWindow(w)) {
+          chatWin = w;
+          break;
+        }
+      }
+      if (!chatWin) chatWin = chatWindow();
+
+      // A real pi only asks for permission inside a turn, and this suite makes no model calls, so the
+      // question comes from `test/fake-pi.cmd`: it reports ready and then raises a `confirm` request
+      // through the same `extension_ui_request` path a permission prompt uses.
+      const before = await js(sw, "window.pi.invoke('pi:get-config')");
+      const fakePi = path.join(REPO_ROOT, "test", "fake-pi.cmd");
+      process.env.PI_FAKE_DIALOG = "confirm";
+      process.env.PI_FAKE_DIALOG_TITLE = "e2e: 需要确认";
+      await js(sw, `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(fakePi)}})`);
+      await sleep(300);
+
+      let child = null;
+      try {
+        // A session for the new window to open. The store is refilled if an earlier section emptied
+        // it (see seedSessions).
+        let file = "";
+        for (let i = 0; i < 8 && !file; i++) {
+          const sessions = await js(chatWin, "window.pi.invoke('pi:list-sessions')").catch(
+            () => null,
+          );
+          if (Array.isArray(sessions) && sessions.length) file = sessions[0].file;
+          else {
+            seedSessions(3);
+            await sleep(800);
+          }
+        }
+        if (!file) {
+          skip("a pending decision is listed in every window", "no session to open a window on");
+          return;
+        }
+
+        const beforeIds = new Set(allWindows().map((w) => w.id));
+        const bounds = chatWin.getBounds();
+        await js(
+          chatWin,
+          `window.pi.invoke('pi:open-session-window', ${JSON.stringify({
+            file,
+            screenX: bounds.x + 40,
+            screenY: bounds.y + 80,
+          })})`,
+        );
+        child = await waitFor(
+          () => allWindows().find((w) => !beforeIds.has(w.id)) ?? null,
+          40_000,
+          "window for the fake pi",
+        );
+        check("the window that asks is open", !!child, `${allWindows().length} windows`);
+        if (!child) return;
+
+        // The question reaches that window's chat UI first: that is where it is answered.
+        const shown = await waitFor(
+          () => js(child, "!!document.querySelector('#overlay .dialog')").catch(() => false),
+          30_000,
+          "the dialog",
+        ).catch(() => false);
+        check("the window shows the request it was asked", shown === true);
+
+        // And it reaches the *other* window's list — that is the whole point of the panel.
+        const badge = await waitFor(
+          async () => {
+            const b = await js(
+              chatWin,
+              "(() => { const b = document.getElementById('pi-decisions-badge'); return b ? { hidden: b.hidden, text: b.textContent } : null; })()",
+            ).catch(() => null);
+            return b && !b.hidden ? b : null;
+          },
+          20_000,
+          "the badge in the main window",
+        ).catch(() => null);
+        check(
+          "another window's badge counts it",
+          badge?.text === "1",
+          JSON.stringify(badge),
+        );
+
+        // The panel lists it, with the title the request carried.
+        await js(chatWin, "document.getElementById('pi-decisions-btn').click()");
+        await sleep(500);
+        const listed = await js(
+          chatWin,
+          `(() => {
+            const items = Array.from(document.querySelectorAll('#pi-decisions-list .pi-decisions-item'));
+            return { count: items.length, text: (items[0] && items[0].textContent) || '', target: items[0] ? items[0].getAttribute('data-window') : '' };
+          })()`,
+        );
+        check(
+          "the panel lists it, with what it is asking",
+          listed?.count === 1 && String(listed.text).includes("e2e: 需要确认"),
+          JSON.stringify(listed),
+        );
+
+        // Clicking it goes to the window that is waiting — not to the window the panel is in.
+        const target = allWindows().find((w) => String(w.id) === String(listed?.target));
+        await js(
+          chatWin,
+          "document.querySelector('#pi-decisions-list .pi-decisions-item').click()",
+        );
+        await sleep(700);
+        check(
+          "clicking an entry raises the window that is waiting",
+          !!target && !target.isDestroyed() && target.isFocused(),
+          `target=${listed?.target} focused=${target && !target.isDestroyed() ? target.isFocused() : "gone"}`,
+        );
+
+        // Answering it in that window takes it off the list.
+        await js(
+          child,
+          "(() => { const b = document.querySelector('#overlay .dialog .btn-primary'); if (b) b.click(); return !!b; })()",
+        );
+        const cleared = await waitFor(
+          async () => {
+            const state = await js(
+              chatWin,
+              "(() => { const b = document.getElementById('pi-decisions-badge'); return b ? b.hidden : null; })()",
+            ).catch(() => null);
+            return state === true ? true : null;
+          },
+          15_000,
+          "the badge to clear",
+        ).catch(() => false);
+        check("answering it takes it off the list", cleared === true);
+      } finally {
+        // Never leave a sandbox pointed at the fake pi — later sections (and a human running this
+        // with --keep) would be testing something else than they think.
+        delete process.env.PI_FAKE_DIALOG;
+        delete process.env.PI_FAKE_DIALOG_TITLE;
+        if (before && typeof before.piPath === "string") {
+          await js(sw, `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(before.piPath)}})`).catch(
+            () => null,
+          );
+        }
+        if (child && !child.isDestroyed()) child.close();
+        await sleep(600);
+      }
+    });
+
     await section("Accessibility: text contrast in both themes", async () => {
       // Regression guard. Shipped defects this would have caught on the spot:
       //   .msg h1/h2/h3 pinned to #f2f4f8 -> 1.1:1 on a light background;

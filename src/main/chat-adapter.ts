@@ -10,6 +10,7 @@ import type { StandaloneConfig } from "../shared/types";
 import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
 import { DOCK_HTML, DOCK_CSS, DOCK_SCRIPT } from "./dock";
 import { STATS_HTML, STATS_SCRIPT, STATS_CSS } from "./stats-panel";
+import { DECISIONS_HTML, DECISIONS_SCRIPT, DECISIONS_CSS } from "./decisions-panel";
 import { PALETTE_HTML, PALETTE_SCRIPT, PALETTE_CSS } from "./palette";
 import { buildThemeCss } from "./theme";
 
@@ -195,7 +196,14 @@ const ICONS = {
   copy: `<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>`,
   external: `<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M19 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>`,
   terminal: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12 15h5"/>`,
+  bell: `<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>`,
 };
+
+/**
+ * The pending-decision button. In both shells: a decision raised in a child window still has to be
+ * findable from the window the person is actually looking at.
+ */
+const DECISIONS_BUTTON = `<button class="pi-icon-btn pi-decisions-btn" id="pi-decisions-btn" title="待你处理" aria-label="待你处理">${svgIcon(ICONS.bell)}<span class="pi-decisions-badge" id="pi-decisions-badge" hidden></span></button>`;
 
 const CHROME_CSS = `
 <style id="pi-standalone-chrome">
@@ -481,6 +489,9 @@ function buildMinimalChromeHtml(lang: UiLang): string {
     <div class="pi-tb-center">
       <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
     </div>
+    <div class="pi-tb-right">
+      <div class="pi-tb-actions">${DECISIONS_BUTTON}</div>
+    </div>
   </header>
   <div class="pi-body">
     <div id="pi-main"></div>
@@ -542,6 +553,7 @@ function buildChromeHtml(lang: UiLang): string {
         <button class="pi-icon-btn" id="pi-tb-search" title="${t("tb.search", lang)}" aria-label="${t("tb.searchLabel", lang)}">${svgIcon(ICONS.search)}</button>
         <button class="pi-icon-btn" id="pi-tb-refresh" title="${t("tb.refresh", lang)}" aria-label="${t("tb.refresh", lang)}">${svgIcon(ICONS.refresh)}</button>
         <button class="pi-icon-btn" id="pi-tb-export" title="${t("tb.export", lang)}" aria-label="${t("tb.exportLabel", lang)}">${svgIcon(ICONS.download)}</button>
+        ${DECISIONS_BUTTON}
         <span class="pi-tb-sep" aria-hidden="true"></span>
         <button class="pi-icon-btn" id="pi-tb-settings" title="${t("tb.settings", lang)}" aria-label="${t("tb.settingsLabel", lang)}">${svgIcon(ICONS.gear)}</button>
       </div>
@@ -572,6 +584,7 @@ function buildChromeHtml(lang: UiLang): string {
 ${SIDEBAR_HTML}
     </aside>
 ${STATS_HTML}
+${DECISIONS_HTML}
 ${PALETTE_HTML}
     <div id="pi-main">
 ${DOCK_HTML}
@@ -889,11 +902,14 @@ export function buildChatHtml(
     }
   }
   if (headLineIdx !== -1) {
-    // A stripped window carries none of the panels, so it does not pay for their CSS.
+    // A stripped window carries none of the panels, so it does not pay for their CSS. The
+    // pending-decision panel is the exception: it is the one panel whose subject is *other*
+    // windows, so a stripped child carries it (and its button) too.
     const panelCss = minimal
-      ? []
+      ? [styleTag("pi-decisions", DECISIONS_CSS)]
       : [
           styleTag("pi-stats", STATS_CSS),
+          styleTag("pi-decisions", DECISIONS_CSS),
           styleTag("pi-palette", PALETTE_CSS),
           styleTag("pi-dock-css", DOCK_CSS),
         ];
@@ -916,6 +932,7 @@ export function buildChatHtml(
         buildThemeCss(config.theme, config.accent, config.chatFontSize) +
         CHROME_CSS +
         styleTag("pi-stats", STATS_CSS) +
+        styleTag("pi-decisions", DECISIONS_CSS) +
         styleTag("pi-palette", PALETTE_CSS) +
         styleTag("pi-dock-css", DOCK_CSS) +
         vendorAssets().css +
@@ -976,12 +993,13 @@ export function buildChatHtml(
       // and titlebar wiring all drive controls it does not have — and their
       // timers are the kind of thing that later shows up as idle CPU.
       const chromeScripts = minimal
-        ? [T(MINIMAL_TITLE_SCRIPT)]
+        ? [T(MINIMAL_TITLE_SCRIPT), T(DECISIONS_SCRIPT)]
         : [
             T(SIDEBAR_SCRIPT),
             T(TITLEBAR_SCRIPT),
             T(TOKENS_SCRIPT),
             T(STATS_SCRIPT),
+            T(DECISIONS_SCRIPT),
             T(PALETTE_SCRIPT),
           ];
       allLines.splice(

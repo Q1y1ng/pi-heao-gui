@@ -53,6 +53,7 @@ import {
   archiveSession,
   restoreSession,
   listArchived,
+  importSession,
 } from "./session-ops";
 import { searchSessions, orderByRecency } from "./search";
 import { createStatsStore, type StatsStore, type StoredSessionStats } from "./stats-store";
@@ -2081,6 +2082,41 @@ ipcMain.handle("pi:diagnostics", async (_e, op: string) => {
     return { ok: true, path: file };
   }
   return { ok: false, error: "未知操作" };
+});
+
+/**
+ * Import a session file from elsewhere (another machine, another profile).
+ *
+ * Export already existed; this is the other half — the app that can write a conversation out should
+ * be able to read one back in. With no `path` it asks for the file (that is the human path); the
+ * path form exists so the e2e can drive the same code without a native dialog, and it is checked
+ * exactly the same way.
+ */
+ipcMain.handle(IPC.IMPORT_SESSION, async (e, arg: unknown) => {
+  const win = BrowserWindow.fromWebContents(e.sender) ?? mainWindow;
+  let from = String((arg as { path?: unknown } | null)?.path ?? "").trim();
+  if (!from) {
+    const picked = win
+      ? await dialog.showOpenDialog(win, {
+          title: "导入会话",
+          filters: [{ name: "pi 会话文件", extensions: ["jsonl"] }],
+          properties: ["openFile"],
+        })
+      : await dialog.showOpenDialog({
+          title: "导入会话",
+          filters: [{ name: "pi 会话文件", extensions: ["jsonl"] }],
+          properties: ["openFile"],
+        });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { ok: false, canceled: true, error: "没有选择文件" };
+    }
+    from = picked.filePaths[0];
+  }
+  return await importSession({
+    from,
+    sessionsDir: join(PI_AGENT_DIR, "sessions"),
+    fallbackCwd: workspaceRootDir(),
+  });
 });
 
 ipcMain.handle("pi:export-conversation", async (e) => {

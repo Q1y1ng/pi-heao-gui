@@ -18,6 +18,8 @@ const ICON = {
   star: '<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9Z"/>',
   export:
     '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  import:
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 8l5-5 5 5"/><path d="M12 3v12"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
   archive:
     '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
@@ -57,6 +59,9 @@ export const SIDEBAR_HTML = `
   <div class="pi-sidebar-footer">
     <button id="pi-export-chat" class="pi-btn-ghost" title="导出对话为 Markdown">
       <span>${svg(ICON.export, 13)}</span><span>导出</span>
+    </button>
+    <button id="pi-import-chat" class="pi-btn-ghost" title="导入会话文件（.jsonl）">
+      <span>${svg(ICON.import, 13)}</span><span>导入</span>
     </button>
     <button id="pi-open-settings" class="pi-btn-ghost" title="设置 (Ctrl+,)">
       <span>${svg(ICON.gear, 13)}</span><span>设置</span>
@@ -610,6 +615,26 @@ export const SIDEBAR_SCRIPT = `
   wire('pi-new-session-mini', function() { if (window.pi) window.pi.postMessage({ type: 'newSession' }); });
   wire('pi-open-settings', function() { if (window.pi) window.pi.invoke('pi:open-settings'); });
   wire('pi-open-settings-mini', function() { if (window.pi) window.pi.invoke('pi:open-settings'); });
+  wire('pi-import-chat', function() {
+    if (!window.pi) return;
+    window.pi.invoke('pi:import-session', {}).then(function(res) {
+      if (!res || !res.ok) {
+        if (res && res.canceled) return;
+        showToast((res && res.error) || '导入失败');
+        return;
+      }
+      requestSessions();
+      var toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = res.cwdRewritten
+          ? '已导入（原目录不在这台机器上，已改到当前工作目录）: ' + res.file
+          : '已导入: ' + res.file;
+        toast.className = 'toast show success';
+        setTimeout(function() { toast.className = 'toast'; }, 4000);
+      }
+    }).catch(function(e) { showToast('导入失败: ' + (e && e.message)); });
+  });
+
   wire('pi-export-chat', function() {
     if (!window.pi) return;
     window.pi.invoke('pi:export-conversation').then(function(path) {

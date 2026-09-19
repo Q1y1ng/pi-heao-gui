@@ -1247,6 +1247,106 @@ app.whenReady().then(async () => {
       }
     });
 
+    // ══ 8b. Import: the other half of export ══════════════════════════════
+    await section("Import: a session file from elsewhere lands in the list", async () => {
+      if (!ISOLATED) {
+        skip(
+          "a session file can be imported",
+          "needs --isolated: the check writes into the session store",
+        );
+        return;
+      }
+      // A session file this app did not write: pi's format is self-contained, so the harness can
+      // make one — which is exactly what a file from another machine looks like.
+      const dir = fs.mkdtempSync(path.join(SANDBOX, "import-"));
+      const id = `e2e-import-${Date.now().toString(36)}`;
+      const source = path.join(dir, `${id}.jsonl`);
+      const lines = [
+        JSON.stringify({
+          type: "session",
+          version: 3,
+          id,
+          timestamp: new Date().toISOString(),
+          cwd: REPO_ROOT,
+        }),
+        // pi wraps a message: {type:"message", id, parentId, timestamp, message:{role, content}}.
+        JSON.stringify({
+          type: "message",
+          id: "m1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          message: {
+            role: "user",
+            content: [{ type: "text", text: "imported hello" }],
+            timestamp: Date.now(),
+          },
+        }),
+      ];
+      const nl = String.fromCharCode(10);
+      fs.writeFileSync(source, `${lines.join(nl)}${nl}`, "utf8");
+
+      const res = await js(
+        win,
+        `window.pi.invoke('pi:import-session', { path: ${JSON.stringify(source)} })`,
+      );
+      check(
+        "the import reports where it landed",
+        !!res && res.ok === true && !!res.file,
+        JSON.stringify(res),
+      );
+      if (!res?.ok) return;
+      check("the file is in the session store", fs.existsSync(res.file), res.file);
+      check(
+        "the conversation came along verbatim",
+        fs.readFileSync(res.file, "utf8").includes("imported hello"),
+        res.file,
+      );
+
+      // It is a session of this profile now: the app lists it.
+      const want = path.basename(res.file);
+      let listed = [];
+      for (let i = 0; i < 20; i++) {
+        const sessions = await js(win, "window.pi.invoke('pi:list-sessions')").catch(() => []);
+        listed = Array.isArray(sessions) ? sessions : [];
+        if (listed.some((s) => path.basename(s.file) === want)) break;
+        await sleep(1000);
+      }
+      check(
+        "the imported session is in the list",
+        listed.some((s) => path.basename(s.file) === want),
+        `${listed.length} session(s), looking for ${want}`,
+      );
+
+      // And it opens: the conversation that came with it is on screen.
+      await js(
+        win,
+        `window.pi.invoke('pi:switch-session', { file: ${JSON.stringify(res.file)} })`,
+      ).catch(() => null);
+      await sleep(1500);
+      let shown = false;
+      for (let i = 0; i < 10 && !shown; i++) {
+        shown = await js(win, "(document.body.textContent || '').includes('imported hello')").catch(
+          () => false,
+        );
+        if (!shown) await sleep(1000);
+      }
+      check("the imported session opens with its conversation", shown === true);
+
+      // A file that is not a session is refused, and says why.
+      const junk = path.join(dir, "junk.jsonl");
+      fs.writeFileSync(junk, "this is not a session\n", "utf8");
+      const refused = await js(
+        win,
+        `window.pi.invoke('pi:import-session', { path: ${JSON.stringify(junk)} })`,
+      );
+      check(
+        "a file that is not a session is refused with a reason",
+        !!refused && refused.ok === false && !!refused.error,
+        JSON.stringify(refused),
+      );
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     // ══ 9. Settings window: every tab and every control ═══════════════════
     await section("Settings window: every tab switches", async () => {
       await js(win, "document.getElementById('pi-tb-settings').click()");

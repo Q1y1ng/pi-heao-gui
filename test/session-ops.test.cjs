@@ -110,3 +110,93 @@ test("delete removes the file and reports a missing one as an error", async () =
   const again = await deleteSession(file);
   assert.equal(again.ok, false);
 });
+
+// ─── Importing a session from elsewhere ───────────────────────────────────────
+
+const { checkSessionFile, sessionSlug, importSession } = require("../dist/main/session-ops.js");
+
+const header = (cwd, id = "abc-123") =>
+  JSON.stringify({ type: "session", version: 3, id, timestamp: "2026-09-19T00:00:00.000Z", cwd });
+
+test("a pi session file is recognised by its header", () => {
+  const check = checkSessionFile(`${header("C:\repo")}\n{"type":"message"}\n`);
+  assert.equal(check.ok, true);
+  assert.equal(check.cwd, "C:\repo");
+  assert.equal(check.sessionId, "abc-123");
+});
+
+test("a file that is not a session is refused, with a reason", () => {
+  for (const [text, why] of [
+    ["", "空"],
+    ["\n\n", "空"],
+    ["not json at all\n", "不是 JSON"],
+    ['["a","b"]\n', "数组"],
+    ['{"hello":"world"}\n', "没有 id 也没有时间戳"],
+  ]) {
+    const check = checkSessionFile(text);
+    assert.equal(check.ok, false, JSON.stringify(text));
+    assert.ok(check.reason, `no reason for ${JSON.stringify(text)}: ${why}`);
+  }
+});
+
+test("a session directory name is pi's own shape", () => {
+  // Verified against a real profile: `~/.pi/agent/sessions/--E--AI-pi-standalone-gui--/`.
+  const windowsPath = ["E:", "AI", "pi-standalone-gui"].join(String.fromCharCode(92));
+  assert.equal(sessionSlug(windowsPath), "--E--AI-pi-standalone-gui--");
+  assert.equal(sessionSlug("/home/a/repo"), "---home-a-repo--");
+});
+
+test("an import lands in the session store, keeping the conversation verbatim", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-import-"));
+  const from = path.join(dir, "elsewhere.jsonl");
+  const body = `${header(dir)}\n{"type":"message","id":"m1"}\n{"type":"message","id":"m2"}\n`;
+  fs.writeFileSync(from, body, "utf8");
+  const sessionsDir = path.join(dir, "sessions");
+  const result = await importSession({ from, sessionsDir, fallbackCwd: dir });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.cwdRewritten, false, "the recorded directory exists here");
+  assert.equal(fs.readFileSync(result.file, "utf8"), body, "the file is copied, not rewritten");
+  assert.equal(path.dirname(result.file), path.join(sessionsDir, sessionSlug(dir)));
+});
+
+test("a session from a machine whose directory does not exist here is re-pointed", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-import-"));
+  const from = path.join(dir, "other-machine.jsonl");
+  fs.writeFileSync(from, `${header(["D:", "gone", "project"].join(String.fromCharCode(92)))}\n{"type":"message"}\n`, "utf8");
+  const sessionsDir = path.join(dir, "sessions");
+  const result = await importSession({ from, sessionsDir, fallbackCwd: dir });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.cwdRewritten, true);
+  assert.equal(result.cwd, dir);
+  const first = fs.readFileSync(result.file, "utf8").split("\n")[0];
+  assert.equal(JSON.parse(first).cwd, dir, "pi resumes in a directory that exists");
+  assert.equal(
+    fs.readFileSync(result.file, "utf8").split("\n")[1],
+    '{"type":"message"}',
+    "and nothing else moved",
+  );
+});
+
+test("importing the same file twice does not overwrite the first copy", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-import-"));
+  const from = path.join(dir, "twice.jsonl");
+  fs.writeFileSync(from, `${header(dir)}\n{"type":"message"}\n`, "utf8");
+  const sessionsDir = path.join(dir, "sessions");
+  const first = await importSession({ from, sessionsDir, fallbackCwd: dir });
+  const second = await importSession({ from, sessionsDir, fallbackCwd: dir });
+  assert.equal(first.ok && second.ok, true);
+  assert.notEqual(first.file, second.file);
+  assert.ok(second.file.endsWith("-2.jsonl"), second.file);
+  assert.equal(fs.existsSync(first.file), true, "the first import is still there");
+});
+
+test("junk is refused and nothing is written", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-import-"));
+  const from = path.join(dir, "junk.jsonl");
+  fs.writeFileSync(from, "hello, this is not a session\n", "utf8");
+  const sessionsDir = path.join(dir, "sessions");
+  const result = await importSession({ from, sessionsDir, fallbackCwd: dir });
+  assert.equal(result.ok, false);
+  assert.ok(result.error);
+  assert.equal(fs.existsSync(sessionsDir), false, "no directory is created for a file that is not one");
+});

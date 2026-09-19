@@ -192,6 +192,9 @@ export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
   return res.ok ? parseWorktrees(res.stdout) : [];
 }
 
+/** Characters git refuses in a ref name, plus the ones that would make it a flag or a path. */
+const FORBIDDEN_IN_REF = ["~", "^", ":", "?", "*", "[", "\\"];
+
 /**
  * Whether a branch name is safe to hand to `git worktree add -b`.
  *
@@ -207,9 +210,12 @@ export function isSafeBranchName(name: string): boolean {
   if (!n || n.length > 80) return false;
   if (n.startsWith("-") || n.startsWith("/") || n.endsWith("/")) return false;
   if (n.startsWith(".") || n.endsWith(".") || n.endsWith(".lock")) return false;
-  // `\p{Cc}` rather than a `\x00-\x1f` range: the rule that reads this file flags literal control
-  // characters in a regex, and a property escape says the same thing without them.
-  if (/[\s~^:?*\\\[\]\p{Cc}]/u.test(n)) return false;
+  // Written as a list plus two small tests rather than one dense character class: the class needed
+  // a backslash, a bracket and a control-character escape in the same expression, and every linter
+  // reads that differently.
+  if ([...n].some((ch) => FORBIDDEN_IN_REF.includes(ch) || /\s|\p{Cc}/u.test(ch))) {
+    return false;
+  }
   if (n.includes("..") || n.includes("@{") || n.includes("//")) return false;
   return n.split("/").every((part) => part.length > 0 && !part.startsWith("."));
 }

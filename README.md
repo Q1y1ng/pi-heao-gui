@@ -116,6 +116,8 @@ here. Its origin, and the MIT notice it carries, are recorded in [NOTICE.md](NOT
 ### Sessions
 
 - pi's own session files — history, resume, rename, fork, export. Nothing is stored twice.
+- Export a conversation to Markdown, and **import** one from elsewhere (another machine or profile):
+  a `.jsonl` session lands in the list and opens with its conversation.
 - Project trust is pi's, not ours: an untrusted workspace is prompted the same way the CLI prompts.
 - **Waiting for you**: when pi needs an answer (a permission, a confirmation, an input) the title bar
   counts it and the panel lists every window that is waiting. Clicking an entry raises that window —

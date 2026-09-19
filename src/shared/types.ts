@@ -161,6 +161,8 @@ export const IPC = {
   DECISIONS_FOCUS: "pi:decisions-focus",
   /** Make a new working copy of this repository and open a session window in it. */
   WORKTREE_CREATE: "pi:worktree-create",
+  /** Copy a session file into this profile — the other half of export. */
+  IMPORT_SESSION: "pi:import-session",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",

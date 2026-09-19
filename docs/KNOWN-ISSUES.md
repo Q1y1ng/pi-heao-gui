@@ -82,6 +82,13 @@ itself is writing before deciding: file has the text and the window does not →
 fails; neither has it → the turn produced no text to render, and it skips with that reason. The daily
 suite has run **25/25** since.
 
+> **The app-level pass has the same shape, less often.** On 2026-09-19 one read-only run reported two
+> failures in its post-report multi-window section (*the session window actually shows the conversation*,
+> conversation nodes 0; and the font-size check that reads those nodes), and the next run of the same
+> code was clean (82/0, exit 0). Same class as above — a window being read before it has painted, or a
+> session picked before it has content — and the same answer: the check reports what it saw (the node
+> count and the window body text) rather than only failing.
+
 **Also fixed while in there:** the export check used to skip with "no file was produced (session may
 be empty)" — a guess. The application's own log said what it was: `export conversation failed: Pi RPC
 process is not running` (a state the app supports — Reload re-spawns it) or a resumed sandbox session

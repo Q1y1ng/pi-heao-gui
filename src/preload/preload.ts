@@ -71,6 +71,7 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:pick-workspace",
   "pi:set-workspace",
   "pi:export-conversation",
+  "pi:import-session",
   "pi:session-op",
   "pi:list-archived",
   "pi:search-sessions",

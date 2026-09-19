@@ -353,6 +353,15 @@ export const CHAT_STRINGS: Record<string, string> = {
     "Numbers come from the pi RPC events (message_update carries cumulative usage). Prices follow what the provider reports;",
   "未提供 reasoning 拆分或缓存计费的模型会显示 –。":
     "models that report neither reasoning splits nor cache billing show –.",
+  // ── sidebar: importing a session from elsewhere
+  "导入会话文件（.jsonl）": "Import a session file (.jsonl)",
+  导入: "Import",
+  导入失败: "Import failed",
+  "已导入: ": "Imported: ",
+  "已导入（原目录不在这台机器上，已改到当前工作目录）: ":
+    "Imported (that session directory is not on this machine, so it now uses the current workspace): ",
+  "导入失败: ": "Import failed: ",
+
   // ── pending decisions (the cross-window "waiting for you" panel)
   待你处理: "Waiting for you",
   "窗口 #": "window #",

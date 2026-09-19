@@ -8,7 +8,8 @@
  *   - pi lists sessions one directory deep, so moving a file into
  *     `sessions/_archived/<cwd-slug>/` hides it from the CLI as well.
  */
-import { appendFile, mkdir, readFile, rename, stat, unlink, readdir, open } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, stat, unlink, readdir, open, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { log, errText } from "./log";
@@ -177,4 +178,129 @@ export async function listArchived(sessionsDir: string, limit = 200): Promise<st
 
 export function sessionTitleFromPath(file: string): string {
   return basename(file).replace(/\.jsonl$/, "");
+}
+
+// ─── Importing a session from somewhere else ──────────────────────────────
+//
+// pi's session files are self-contained JSONL, so importing one is a copy plus two questions: is it
+// really a session file (the sidebar must not end up listing junk), and does the working directory it
+// was recorded in exist on this machine (a file from another computer names a directory this one does
+// not have — and pi resumes a session in its header's `cwd`).
+
+export interface SessionFileCheck {
+  ok: boolean;
+  /** Why it is not a session file, when it is not. */
+  reason?: string;
+  /** The working directory the session was recorded in, when it carries one. */
+  cwd?: string;
+  sessionId?: string;
+}
+
+/**
+ * Is this the text of a pi session file?
+ *
+ * The first line is pi's header — `{"type":"session","version":3,"id":"…","timestamp":"…","cwd":"…"}`
+ * — so that is what is checked, and the rest of the file is left alone (it is the conversation, and
+ * nothing here needs to understand it).
+ */
+export function checkSessionFile(text: string): SessionFileCheck {
+  const first = text.split("\n").find((line) => line.trim() !== "") ?? "";
+  if (!first.trim()) return { ok: false, reason: "文件是空的" };
+  let header: unknown;
+  try {
+    header = JSON.parse(first);
+  } catch {
+    return { ok: false, reason: "第一行不是 JSON —— 看起来不是 pi 的会话文件" };
+  }
+  if (!header || typeof header !== "object" || Array.isArray(header)) {
+    return { ok: false, reason: "第一行不是会话头（是个数组或值）" };
+  }
+  const h = header as Record<string, unknown>;
+  const id = typeof h.id === "string" ? h.id : "";
+  const cwd = typeof h.cwd === "string" ? h.cwd : "";
+  const stamped =
+    typeof h.timestamp === "string" || typeof h.timestamp === "number" ? h.timestamp : "";
+  if (!id && !stamped) {
+    return { ok: false, reason: "会话头里既没有 id 也没有时间戳" };
+  }
+  return { ok: true, cwd, sessionId: id };
+}
+
+/**
+ * pi's own directory name for a working directory (`E:\AI\repo` → `--E--AI-repo--`): every separator
+ * becomes a dash and the whole thing is wrapped in two more. Verified against a real profile's
+ * directory, not assumed — but it only decides where the file sits: the app lists sessions by walking
+ * the tree, and pi resumes by the full path it is handed.
+ */
+export function sessionSlug(cwd: string): string {
+  return `--${cwd.replace(/[:\u005c/]/g, "-")}--`;
+}
+
+export interface ImportResult {
+  ok: boolean;
+  error?: string;
+  /** Where the imported session landed. */
+  file?: string;
+  /** The working directory it will resume in here. */
+  cwd?: string;
+  /** True when the recorded directory did not exist and the current workspace was used instead. */
+  cwdRewritten?: boolean;
+}
+
+/** Copy a session file into this profile's session store. */
+export async function importSession(opts: {
+  from: string;
+  sessionsDir: string;
+  /** Where to point a session whose own working directory does not exist on this machine. */
+  fallbackCwd: string;
+}): Promise<ImportResult> {
+  let text: string;
+  try {
+    text = await readFile(opts.from, "utf8");
+  } catch (e) {
+    return { ok: false, error: `读不了这个文件：${errText(e)}` };
+  }
+  const check = checkSessionFile(text);
+  if (!check.ok) return { ok: false, error: check.reason || "不是 pi 的会话文件" };
+
+  const recorded = check.cwd || "";
+  let cwd = recorded;
+  let cwdRewritten = false;
+  if (!cwd || !existsSync(cwd)) {
+    cwd = opts.fallbackCwd;
+    cwdRewritten = true;
+  }
+  const lines = text.split("\n");
+  if (cwdRewritten) {
+    // Only the header is touched: everything after it is the conversation, verbatim.
+    try {
+      const header = JSON.parse(lines[0]) as Record<string, unknown>;
+      header.cwd = cwd;
+      lines[0] = JSON.stringify(header);
+    } catch {
+      /* checkSessionFile already proved this line parses */
+    }
+  }
+
+  const dir = join(opts.sessionsDir, sessionSlug(cwd));
+  try {
+    await mkdir(dir, { recursive: true });
+  } catch (e) {
+    return { ok: false, error: `建不了会话目录：${errText(e)}` };
+  }
+  // Never overwrite what is already here: the same session exported from another profile has the
+  // same file name, and overwriting would destroy this machine's copy of it.
+  const base = basename(opts.from);
+  let target = join(dir, base);
+  for (let n = 2; existsSync(target) && n < 100; n++) {
+    target = join(dir, base.replace(/\.jsonl$/i, `-${n}.jsonl`));
+  }
+  if (existsSync(target)) return { ok: false, error: "同名文件太多了，换个名字再导入" };
+  try {
+    await writeFile(target, lines.join("\n"), "utf8");
+  } catch (e) {
+    return { ok: false, error: `写不了会话文件：${errText(e)}` };
+  }
+  log.info(`imported session ${opts.from} -> ${target}${cwdRewritten ? " (cwd rewritten)" : ""}`);
+  return { ok: true, file: target, cwd, cwdRewritten };
 }

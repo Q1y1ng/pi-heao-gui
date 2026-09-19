@@ -29,6 +29,45 @@ const REPO_ROOT = path.join(__dirname, "..");
 process.env.PI_NO_RESTORE = "1";
 
 let SANDBOX = null;
+/** Real session files found in the user's own profile, for (re)seeding the sandbox store. */
+let seededSources = [];
+/** Basenames of the files actually copied in, so a check can prefer the ones with content. */
+const seededNames = new Set();
+
+/**
+ * Copy up to `limit` of `seededSources` into the sandbox's session store, re-pointing each
+ * header's `cwd` at this repository.
+ *
+ * Called once at startup so the sidebar holds realistic data, and again by the checks that need a
+ * session to exist. The archive/delete sections legitimately empty the store, so a later check that
+ * reports "no sessions" is reporting on another section's cleanup rather than on the app — which is
+ * how this section came to pass at 97/0 and fail at 88/2 with the same code (docs/KNOWN-ISSUES.md).
+ */
+function seedSessions(limit) {
+  if (!SANDBOX) return { copied: 0, rewritten: 0 };
+  const dir = path.join(SANDBOX, ".pi", "agent", "sessions", "-e2e-seeded-");
+  fs.mkdirSync(dir, { recursive: true });
+  const wantCwd = path.resolve(REPO_ROOT).toLowerCase();
+  let copied = 0;
+  let rewritten = 0;
+  for (const file of seededSources.slice(0, limit)) {
+    try {
+      const lines = fs.readFileSync(file, "utf8").split("\n");
+      const header = JSON.parse(lines[0]);
+      if (String(header.cwd || "") && path.resolve(String(header.cwd)).toLowerCase() !== wantCwd) {
+        header.cwd = REPO_ROOT;
+        lines[0] = JSON.stringify(header);
+        rewritten++;
+      }
+      fs.writeFileSync(path.join(dir, path.basename(file)), lines.join("\n"), "utf8");
+      seededNames.add(path.basename(file));
+      copied++;
+    } catch {
+      /* not a session header we can safely re-point */
+    }
+  }
+  return { copied, rewritten };
+}
 if (ISOLATED) {
   SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), "pi-e2e-home-"));
   const realHome = os.homedir();
@@ -46,9 +85,6 @@ if (ISOLATED) {
   // this workspace gets its header rewritten instead of the format reinvented.
   const realSessionsRoot = path.join(realAgent, "sessions");
   const wantCwd = path.resolve(REPO_ROOT).toLowerCase();
-  const seedDir = path.join(fakeAgent, "sessions", "-e2e-seeded-");
-  let copiedSessions = 0;
-  let rewrittenCwd = 0;
   if (fs.existsSync(realSessionsRoot)) {
     const candidates = [];
     for (const entry of fs.readdirSync(realSessionsRoot, { withFileTypes: true })) {
@@ -76,27 +112,11 @@ if (ISOLATED) {
       }
     }
 
-    fs.mkdirSync(seedDir, { recursive: true });
-    const pick = [...wanted, ...other].slice(0, 3);
-    for (const file of pick) {
-      const lines = fs.readFileSync(file, "utf8").split("\n");
-      const isWanted = wanted.includes(file);
-      if (!isWanted) {
-        try {
-          const header = JSON.parse(lines[0]);
-          header.cwd = REPO_ROOT;
-          lines[0] = JSON.stringify(header);
-          rewrittenCwd++;
-        } catch {
-          continue; // not a session header we can safely re-point
-        }
-      }
-      fs.writeFileSync(path.join(seedDir, path.basename(file)), lines.join("\n"), "utf8");
-      copiedSessions++;
-    }
+    seededSources = [...wanted, ...other];
   }
+  const seeded = seedSessions(3);
   console.log(
-    `  [isolated] sandbox ${SANDBOX} (${copiedSessions} session file(s), ${rewrittenCwd} re-pointed at this workspace)`,
+    `  [isolated] sandbox ${SANDBOX} (${seeded.copied} session file(s), ${seeded.rewritten} re-pointed at this workspace)`,
   );
   fs.mkdirSync(path.join(SANDBOX, ".pi", "standalone"), { recursive: true });
   fs.writeFileSync(
@@ -213,6 +233,56 @@ const allWindows = () =>
 const byTitle = (re) => allWindows().find((w) => re.test(w.getTitle()));
 const chatWindow = () => allWindows()[0];
 const js = (win, code) => win.webContents.executeJavaScript(code, true);
+
+/**
+ * Bring `win` to the front for the checks that read rendered output.
+ *
+ * Chromium throttles a window it considers hidden or occluded: CSS transitions stop advancing and
+ * an xterm's renderer can hold a write back. A test reading the DOM then sees a frozen frame or an
+ * empty terminal and reports it as an app defect — which is how this suite's two moving checks, the
+ * terminal echo and the theme contrast, failed (2 of 5 runs, 2026-09-19; the contrast section
+ * switches the theme *through the settings window*, which occludes the chat window it then reads).
+ */
+function foreground(win) {
+  try {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.moveTop();
+    win.focus();
+  } catch {
+    /* the window may be gone; the check that follows will say so */
+  }
+}
+
+/**
+ * Point `win` at a session that has messages, seeding one into the sandbox store when the list is
+ * empty. Returns the file it switched to, or "" when there is nothing to copy (a machine whose own
+ * profile holds no sessions at all).
+ */
+async function openSeededConversation(win) {
+  const list = async () => {
+    const sessions = await js(win, "window.pi.invoke('pi:list-sessions')").catch(() => null);
+    return Array.isArray(sessions) ? sessions : [];
+  };
+  let sessions = await list();
+  if (!sessions.length) {
+    const refilled = seedSessions(3);
+    console.log(`  [isolated] refilled the session store with ${refilled.copied} file(s)`);
+    await sleep(800);
+    sessions = await list();
+  }
+  if (!sessions.length) return "";
+  // Prefer one of the files this harness seeded: the list is newest-first, and the newest is usually
+  // the empty session the app itself just started, which exports a header and nothing else (run 2 of
+  // 5 on 2026-09-19 reported exactly that: bytes=42 role markers=0).
+  const seededFirst = sessions.filter((s) => seededNames.has(path.basename(s.file)));
+  const file = (seededFirst.length ? seededFirst : sessions)[0].file;
+  await js(win, `window.pi.invoke('pi:switch-session', {file: ${JSON.stringify(file)}})`).catch(
+    () => null,
+  );
+  await sleep(1500);
+  return file;
+}
 
 app.whenReady().then(async () => {
   const t0 = Date.now();
@@ -571,6 +641,7 @@ app.whenReady().then(async () => {
       }
 
       // Terminal: drive the real PTY and wait for the echo to come back.
+      foreground(win);
       await js(
         win,
         `(() => { const b = document.querySelector('.pi-dock-tab[data-dock="term"]'); if (b) b.click(); })()`,
@@ -1107,22 +1178,68 @@ app.whenReady().then(async () => {
     // ══ 8. Export conversation ════════════════════════════════════════════
     await section("Export conversation", async () => {
       lastSavePath = null;
+      // Export needs a conversation to write, and in this sandbox the only way to have one is to
+      // resume a real session file — the isolated suite has no model to send a prompt to. That
+      // resume sometimes comes back with nothing (the same thing the export then writes: a header
+      // and no messages), so this waits for the conversation to land in the window and says so
+      // precisely when it does not, rather than reporting an export defect. The assertion that the
+      // exported file *contains* the conversation lives in the daily suite, where a real turn has
+      // just produced one.
+      if (ISOLATED) {
+        const resumed = await openSeededConversation(win);
+        const showed = resumed
+          ? await waitFor(
+              () =>
+                js(win, "document.querySelectorAll('.msg').length").then((n) => (n > 0 ? n : null)),
+              20_000,
+              "the resumed conversation to appear",
+            ).catch(() => null)
+          : null;
+        if (!showed) {
+          skip(
+            "export writes a markdown file with the conversation in it",
+            resumed
+              ? `the sandbox session resumed without messages (${path.basename(resumed)})`
+              : "the sandbox store held no session to resume",
+          );
+          return;
+        }
+      }
       await js(win, "document.getElementById('pi-tb-export').click()");
-      const wrote = await waitFor(
+      let wrote = await waitFor(
         () => lastSavePath && fs.existsSync(lastSavePath),
         15_000,
         "export file",
       ).catch(() => false);
+      if (!wrote) {
+        // Do not report a skip without saying what happened: the channel itself answers with the
+        // path it wrote (or null), so ask it instead of guessing at "maybe the session is empty".
+        const direct = await js(win, "window.pi.invoke('pi:export-conversation')").catch((e) =>
+          `threw: ${e && e.message}`,
+        );
+        if (typeof direct === "string" && direct && fs.existsSync(direct)) {
+          lastSavePath = direct;
+          wrote = true;
+        } else {
+          check(
+            "export writes a markdown file with the conversation in it",
+            false,
+            `the button produced nothing, and calling the channel directly answered ${JSON.stringify(direct)}`,
+          );
+        }
+      }
       if (wrote) {
         const text = fs.readFileSync(lastSavePath, "utf8");
+        // Not just "a file appeared": the handler writes its header even for an empty session, so
+        // the marker is what proves the conversation itself reached the file. The window was just
+        // switched to a seeded session that has messages, so this is deterministic.
+        const markers = (text.match(/\*\*👤 用户\*\*|\*\*🤖 Assistant\*\*/g) || []).length;
         check(
-          "export writes a markdown file with content",
-          text.length > 0,
-          `bytes=${text.length}`,
+          "export writes a markdown file with the conversation in it",
+          text.length > 0 && markers > 0,
+          `bytes=${text.length} role markers=${markers}`,
         );
         fs.rmSync(lastSavePath, { force: true });
-      } else {
-        skip("export writes a markdown file", "no file was produced (session may be empty)");
       }
     });
 
@@ -1631,13 +1748,28 @@ app.whenReady().then(async () => {
         await sleep(2000);
       }
       if (!file) {
-        // Not a defect. The sandbox is a throwaway profile, and a cold pi child can legitimately have
-        // written no session at all by this point — the list is genuinely empty (`[]`) no matter how
-        // long this waits. Skipping keeps this section's other checks (including the font-size one
-        // below) from reporting a failure about something they do not test.
+        // Refill before giving up. The archive/delete sections legitimately empty this store, so an
+        // empty list here says more about what ran earlier than about the app — and a check that
+        // skips half the time is not a check (this section passed at 97/0 and failed at 88/2 with
+        // the same code). The harness owns the files it seeds, so it can put them back.
+        const refilled = seedSessions(3);
+        console.log(`  [isolated] refilled the session store with ${refilled.copied} file(s)`);
+        for (let i = 0; i < 10 && !file; i++) {
+          const sessions = await js(chatWin, "window.pi.invoke('pi:list-sessions')");
+          if (Array.isArray(sessions) && sessions.length) {
+            file = sessions[0].file;
+            break;
+          }
+          listed = JSON.stringify(sessions).slice(0, 120);
+          await sleep(1000);
+        }
+      }
+      if (!file) {
+        // Only a machine whose own profile holds no sessions to copy lands here, which is a
+        // property of the machine rather than of the app.
         skip(
           "a session opens in its own window",
-          `the sandbox profile listed no sessions: ${listed}`,
+          `no session could be listed, even after refilling the sandbox store: ${listed}`,
         );
         return;
       }
@@ -1886,12 +2018,45 @@ app.whenReady().then(async () => {
       //   links using the raw accent       -> 3.20:1 on white.
       // All three were hardcoded values in the theme bridge that ignored the theme.
       const measure = `(() => {
+      // Read the cascaded colours, not an animated frame. Changing the theme animates colour
+      // (--pi-speed, 130ms), and Chromium does not advance a transition in a window it considers
+      // occluded — the settings window is raised to switch the theme, and the chat window behind it
+      // is exactly that. A frozen frame is a colour no stylesheet asks for, which is how this gate
+      // produced "3:1 in the dark theme, and 1.12:1 with var(--pi-text)": the light theme's text
+      // colour against the dark theme's sidebar.
+      const freeze = document.createElement('style');
+      freeze.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
+      document.head.appendChild(freeze);
+      // A 14%-alpha red reads "color(srgb 0.772549 0.211765 0.305882 / 0.14)". Parsing those 0..1
+      // components as 0..255 made an error banner over its own light red background measure 1.28:1
+      // where the real figure is ~13:1, so this gate reported a defect that was its own arithmetic.
+      const parse = (c) => {
+        const s = String(c).trim();
+        if (s.charAt(0) === '#') {
+          const h = s.length === 4 ? s.replace(/[0-9a-f]/gi, (d) => d + d).slice(1) : s.slice(1);
+          return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
+        }
+        if (s.indexOf('color(') === 0) {
+          const body = s.slice(s.indexOf('(') + 1, s.lastIndexOf(')'));
+          const halves = body.split('/');
+          const parts = halves[0].trim().replace(/^(srgb|srgb-linear|display-p3)\\s*/, '').split(/\\s+/).map(Number);
+          return [Math.round((parts[0] || 0) * 255), Math.round((parts[1] || 0) * 255), Math.round((parts[2] || 0) * 255), halves[1] === undefined ? 1 : Number(halves[1])];
+        }
+        const n = (s.match(/[0-9.]+/g) || []).map(Number);
+        return [n[0] || 0, n[1] || 0, n[2] || 0, n.length > 3 ? n[3] : 1];
+      };
+      const alphaOf = (c) => parse(c)[3];
       const lum = (c) => {
-        const m = String(c).match(/[\\d.]+/g) || [];
+        const p = parse(c);
         const f = (v) => { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-        return 0.2126 * f(+m[0] || 0) + 0.7152 * f(+m[1] || 0) + 0.0722 * f(+m[2] || 0);
+        return 0.2126 * f(p[0]) + 0.7152 * f(p[1]) + 0.0722 * f(p[2]);
       };
       const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      const mix = (fg, over, a) => {
+        const f = parse(fg), o = parse(over);
+        const c = [0, 1, 2].map((i) => Math.round(f[i] * a + o[i] * (1 - a)));
+        return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+      };
       const bad = [];
       document.querySelectorAll('body *').forEach((el) => {
         const txt = (el.textContent || '').trim();
@@ -1902,24 +2067,21 @@ app.whenReady().then(async () => {
         if (r.width < 6 || r.height < 4) return;
         let op = 1, n = el;
         while (n) { op *= parseFloat(getComputedStyle(n).opacity || '1'); n = n.parentElement; }
-        let bg = 'rgb(255,255,255)', m = el;
-        while (m) { const b = getComputedStyle(m).backgroundColor; if (b && b !== 'rgba(0, 0, 0, 0)') { bg = b; break; } m = m.parentElement; }
+        // Composite every semi-transparent background between the element and the page rather than
+        // stopping at the first non-transparent one: an error banner's own red sits at 14% alpha
+        // over the page, and treating that as opaque is the other half of the 1.28:1 reading.
+        const layers = [];
+        let m = el;
+        while (m) {
+          const b = getComputedStyle(m).backgroundColor;
+          const a = alphaOf(b);
+          if (a > 0) { layers.push({ color: b, a: a }); if (a >= 1) break; }
+          m = m.parentElement;
+        }
+        let bg = 'rgb(255,255,255)';
+        for (let i = layers.length - 1; i >= 0; i--) bg = mix(layers[i].color, bg, layers[i].a);
         // Contrast is not linear in opacity, so the text colour is composited with its backdrop
         // at the element's effective opacity, and the ratio is measured on the result.
-        const parse = (c) => {
-          const s = String(c).trim();
-          if (s.charAt(0) === '#') {
-            const h = s.length === 4 ? s.replace(/[0-9a-f]/gi, (d) => d + d).slice(1) : s.slice(1);
-            return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
-          }
-          const n = (s.match(/[0-9.]+/g) || []).map(Number);
-          return [n[0] || 0, n[1] || 0, n[2] || 0, n.length > 3 ? n[3] : 1];
-        };
-        const mix = (fg, over, a) => {
-          const f = parse(fg), o = parse(over);
-          const c = [0, 1, 2].map((i) => Math.round(f[i] * a + o[i] * (1 - a)));
-          return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')';
-        };
         const v = ratio(mix(cs.color, bg, op), bg);
         // A hidden element is not a contrast defect: an idle toast sits at opacity 0.
         if (op < 0.05) return;
@@ -1940,6 +2102,7 @@ app.whenReady().then(async () => {
         if (v < (big ? 3 : 4.5)) bad.push({ v: +v.toFixed(2), sel: el.tagName.toLowerCase() + '.' + String(el.className || '').slice(0, 24), color: cs.color, bg });
       });
       bad.sort((a, b) => a.v - b.v);
+      freeze.remove();
       const root = getComputedStyle(document.documentElement);
       return JSON.stringify({
         bad: bad.slice(0, 6),
@@ -1964,6 +2127,16 @@ app.whenReady().then(async () => {
           allWindows().find((x) =>
             /pi-heao-chat|chat-dist/i.test(String(x.webContents.getURL())),
           ) || chatWindow();
+        // Raise it before reading: the theme was switched *through the settings window*, which is
+        // now on top of the window whose colours this is about to measure, and an occluded window
+        // is throttled. See `foreground`.
+        foreground(w);
+        await sleep(400);
+        // Name the window in every message. "Which window did this measure" is the ambiguity that
+        // let this section report a colour from one window against a background from another; a child
+        // shell's temp file is also named pi-heao-chat-*.html, so matching on the URL alone can pick
+        // a stripped child while the numbers are read as if they were the main window's.
+        const where = `win#${w.webContents.id} ${String(w.webContents.getURL()).split(/[\\/]/).pop()}`;
         let rows;
         try {
           rows = await w.webContents.executeJavaScript(measure, true);
@@ -1971,7 +2144,11 @@ app.whenReady().then(async () => {
           rows = "ERR " + (e && e.message);
         }
         if (typeof rows !== "string" || !rows.startsWith("{")) {
-          check(`contrast measurable in ${theme} theme`, false, String(rows).slice(0, 90));
+          check(
+            `contrast measurable in ${theme} theme`,
+            false,
+            `${where} — ${String(rows).slice(0, 90)}`,
+          );
           continue;
         }
         const { bad, bgToken, textToken, bodyBg } = JSON.parse(rows);
@@ -1987,13 +2164,15 @@ app.whenReady().then(async () => {
         check(
           `the ${theme} theme is applied before measuring`,
           bgToken.toLowerCase() === (theme === "dark" ? "#0e1013" : "#ffffff"),
-          `--pi-bg=${bgToken} --pi-text=${textToken} body=${bodyBg}`,
+          `${where} — --pi-bg=${bgToken} --pi-text=${textToken} body=${bodyBg}`,
         );
         const worst = bad[0];
         check(
           `no text below 4.5:1 in the ${theme} theme`,
           bad.length === 0,
-          worst ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel}` : undefined,
+          worst
+            ? `${worst.v}:1 ${worst.color} on ${worst.bg} — ${worst.sel} (${where})`
+            : undefined,
         );
       }
       if (settingsWin) {

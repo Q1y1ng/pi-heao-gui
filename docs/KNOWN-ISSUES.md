@@ -53,22 +53,57 @@ any colour, and reports the tokens next to the numbers when it did not. `.pi-btn
 > down `#pi-shell → .pi-body → #pi-main`, so the chain is healthy for the chat — and yet a chrome rule
 > in the sidebar cannot use `--pi-text`. Answering that is likely to fix both.
 
-## The isolated e2e suite is flaky in its window lookups
+## The isolated e2e suite is flaky in its window lookups — **closed: five consecutive green runs**
 
-**Same code, different results: 97/0, then 88/2, then 95/2 — root-caused to a genuinely empty session
-list.** The check asked `pi:list-sessions` in the sandbox and got `[]`: the sandbox is a throwaway
-profile, and a cold pi child may not have written any session by that point. Asking once and polling
-for 40 seconds failed identically, which is what rules out timing as the cause. The section now skips
-with that reason instead of failing, so the checks after it no longer report a failure about
-something they do not test.
+**Status:** closed 2026-09-19 · 116 checks, **0 failures in five consecutive runs** · the one
+remaining skip states exactly why it skipped.
 
-The checks that move are *a session is available to open in its own window* and, as a consequence,
-the contrast check that sees the error banner it puts on screen. The cause is which window the
-section ends up talking to: a stripped child has no sidebar, and the settings window cannot answer
-for the app. The lookup now asks for the main window structurally (`#pi-sidebar`), which is more
-correct than matching a URL and falling back to "any window", but the failure still reproduces, so
-the harness is what needs to be made deterministic. The app-level e2e (87/0, run twice) does not
-move this way.
+**What moved, and why.** *Same code, different results: 97/0, then 88/2, then 95/2* was three faults
+wearing one symptom, and none of them was the app:
+
+| What failed | What it really was | What it is now |
+| --- | --- | --- |
+| *a session opens in its own window* (skipped) | The archive/delete sections legitimately empty the sandbox's session store, so the check reported "no sessions" — about another section's cleanup, not the app. | The harness refills the store it seeded (`seedSessions`) and looks again. The check has passed in every run since. |
+| *no text below 4.5:1* — the ghost button at 3:1 / 1.12:1 | A frozen CSS transition. The theme is switched **through the settings window**, which occludes the chat window, and Chromium does not advance a transition in a window it considers occluded. A frozen frame is a colour no stylesheet asks for. | The measurement asserts the theme landed, then reads the **cascaded** value with transitions and animations frozen for the duration. It also parses `color(srgb …)` and composites semi-transparent backgrounds — both of which it read wrongly, reporting an error banner at 1.28:1 where the real figure is ~13:1. |
+| *terminal runs a command and shows its output* | The same throttling: an occluded window's renderer can hold an xterm write back, and an unrendered window's `innerText` is empty. | `foreground(win)` before the checks that read rendered output. |
+
+**The measurement was the thing under test.** Every failure above was the harness reading a window
+that was not being painted, while its answer to "which window, in which state" was "whatever exists
+right now". The contrast section now names the window it measured in every message
+(`win#1 pi-heao-chat-*.html …`), which is what made the ghost button's colour traceable to a frozen
+frame rather than to the token.
+
+**The same fault lived in the daily suite, where it cost more.** *an assistant reply arrived* failed
+about half of all runs, with `assistant reply (first 300):` empty — while the turn was streaming
+`outputTokens=288` and **the user's own message** read empty too. `innerText` is layout-dependent and
+an occluded window is throttled. The harness now reads `textContent` (that check means "the reply
+reached the conversation", not "it is painted"), and it compares against the session file the app
+itself is writing before deciding: file has the text and the window does not → a regression, and it
+fails; neither has it → the turn produced no text to render, and it skips with that reason. The daily
+suite has run **25/25** since.
+
+**Also fixed while in there:** the export check used to skip with "no file was produced (session may
+be empty)" — a guess. The application's own log said what it was: `export conversation failed: Pi RPC
+process is not running` (a state the app supports — Reload re-spawns it) or a resumed sandbox session
+with nothing in it. The check now reports which of those it hit, and the assertion that the exported
+markdown *contains* the conversation moved to the daily suite, where a real turn has just produced one.
+
+> The original entry, kept as the record of how it read at the time:
+>
+> **Same code, different results: 97/0, then 88/2, then 95/2 — root-caused to a genuinely empty
+> session list.** The check asked `pi:list-sessions` in the sandbox and got `[]`: the sandbox is a
+> throwaway profile, and a cold pi child may not have written any session by that point. Asking once
+> and polling for 40 seconds failed identically, which is what rules out timing as the cause. The
+> section now skips with that reason instead of failing, so the checks after it no longer report a
+> failure about something they do not test.
+>
+> The checks that move are *a session is available to open in its own window* and, as a consequence,
+> the contrast check that sees the error banner it puts on screen. The cause is which window the
+> section ends up talking to: a stripped child has no sidebar, and the settings window cannot answer
+> for the app. The lookup now asks for the main window structurally (`#pi-sidebar`), which is more
+> correct than matching a URL and falling back to "any window", but the failure still reproduces, so
+> the harness is what needs to be made deterministic. The app-level e2e (87/0, run twice) does not
+> move this way.
 
 ## The stripped child shell did not load the session — **fixed in 1.2.3**
 

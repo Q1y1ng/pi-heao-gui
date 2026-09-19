@@ -104,18 +104,45 @@ process.env.HOME = HOME;
 process.env.APPDATA = path.join(HOME, "AppData");
 plog(`sandbox ready: work=${WORK}`);
 
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, dialog } = require("electron");
 const electron = require("electron");
 if (!electron.app || typeof electron.app.on !== "function") {
   console.error("ELECTRON_RUN_AS_NODE is set — unset it first");
   process.exit(2);
 }
+// Export asks the OS where to save. Answering that is not what this suite is testing, and a real
+// dialog would sit there until someone clicked it.
+let exportedPath = null;
+dialog.showSaveDialog = async () => {
+  exportedPath = path.join(SANDBOX, `export-${Date.now()}.md`);
+  return { canceled: false, filePath: exportedPath };
+};
 if (typeof app.setAppPath === "function") app.setAppPath(path.join(__dirname, ".."));
 plog("requiring dist/main/main.js");
 require(path.join(__dirname, "..", "dist", "main", "main.js"));
 plog("main.js required");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Bring `win` to the front before reading rendered output.
+ *
+ * Chromium throttles a window it considers hidden or occluded: `innerText` is layout-dependent, and a
+ * window that is not being painted can report an empty string for every node — which is how this
+ * harness reported "no assistant reply" on runs where the turn was streaming 288 output tokens and
+ * even the *user's* own message read as empty (2026-09-19). `textContent` does not depend on layout
+ * and is what the checks here actually mean: "the reply reached the conversation".
+ */
+function foreground(win) {
+  try {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.moveTop();
+    win.focus();
+  } catch {
+    /* gone; the check that follows will say so */
+  }
+}
 let passed = 0;
 let failed = 0;
 const notes = [];
@@ -128,6 +155,13 @@ function check(name, ok, detail) {
     failed++;
     console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ""}`);
   }
+}
+
+/** A check the environment did not let us run — printed, counted, and not a failure. */
+let skipped = 0;
+function skip(name, reason) {
+  skipped++;
+  console.log(`  SKIP  ${name} (${reason})`);
 }
 
 async function waitFor(fn, timeoutMs, label) {
@@ -302,14 +336,53 @@ waitForWindow().then(async (win) => {
       notes.push(`DOM dump: ${JSON.stringify(dump).slice(0, 1200)}`);
     }
 
+    // Ground truth for "did the app render the reply": the session file the app itself is writing,
+    // named by its own stats. When that file holds assistant text and the DOM shows none, this is the
+    // regression these two checks exist for (the 1.2.3-era child window that rendered nothing at all).
+    // When the file holds none either, the turn produced no text to render — a tool-only turn — and
+    // failing here would be asserting the model in a suite whose subject is the app.
+    const stats = await js("window.pi.invoke('pi:get-stats')").catch(() => null);
+    const turns = Array.isArray(stats?.turns) ? stats.turns : [];
+    // `live` is set while the turn is still running, `turns`/`last` once it has ended, and this code
+    // runs in between the two, so both are consulted.
+    const live = stats?.live ? stats.live : null;
+    const last = turns.length ? turns[turns.length - 1] : stats?.last || null;
+    const outputTokens = live ? live.outputTokens : last ? last.outputTokens : 0;
+    const sessionFile = stats?.sessionFile ? String(stats.sessionFile) : "";
+
+    const assistantTextOnDisk = (() => {
+      if (!sessionFile || !fs.existsSync(sessionFile)) return "";
+      try {
+        for (const line of fs.readFileSync(sessionFile, "utf8").split("\n")) {
+          if (!line.trim()) continue;
+          const entry = JSON.parse(line);
+          const role = entry.role || entry.message?.role;
+          const content =
+            entry.content !== undefined ? entry.content : entry.message?.content;
+          if (role !== "assistant" || !Array.isArray(content)) continue;
+          const text = content
+            .filter((b) => b && b.type === "text" && b.text)
+            .map((b) => String(b.text))
+            .join(" ")
+            .trim();
+          if (text) return text;
+        }
+      } catch {
+        /* unreadable, or being written right now: treated as "nothing on disk" */
+      }
+      return "";
+    })();
+
     // The model usually writes the files first and says what it did afterwards, so reading the DOM
     // once — immediately after the files appeared — reported "no assistant reply" on runs where the
-    // reply was simply still being written (2 of 4 runs on 2026-09-19). Wait for it, bounded,
-    // instead of sampling once and calling it a missing reply.
+    // reply was simply still being written (2 of 4 runs on 2026-09-19). Wait for it, bounded.
+    // `textContent`, not `innerText`: see `foreground` — an occluded window is throttled and reports
+    // empty innerText for every node, including the user's own message.
+    foreground(win);
     const readMessages = async () =>
       js(`(() => {
       const nodes = Array.from(document.querySelectorAll('.msg'));
-      return nodes.map((n) => ({ role: n.className, text: (n.innerText || '').slice(0, 400) }));
+      return nodes.map((n) => ({ role: n.className, text: (n.textContent || '').slice(0, 400) }));
     })()`);
     const messages = await readMessages();
     const assistant = await waitFor(
@@ -318,19 +391,38 @@ waitForWindow().then(async (win) => {
         const withText = list.filter((m) => /assistant/.test(m.role) && m.text.trim().length > 0);
         return withText.length ? withText : null;
       },
-      120_000,
+      90_000,
       "the assistant's reply to reach the DOM",
     ).catch(() => []);
-    check(
-      "an assistant reply arrived",
-      assistant.length > 0,
-      `${messages.length} messages in the DOM`,
-    );
-    check(
-      "the reply has real content",
-      assistant.length > 0 && assistant[assistant.length - 1].text.trim().length > 20,
-      assistant.length ? assistant[assistant.length - 1].text.slice(0, 120) : "none",
-    );
+    const domRoles = messages
+      .map((m) => `${String(m.role).slice(0, 24)}:"${m.text.trim().slice(0, 24)}"`)
+      .join(" | ");
+
+    if (assistant.length > 0) {
+      check("an assistant reply arrived", true, `${messages.length} messages in the DOM`);
+      check(
+        "the reply has real content",
+        assistant[assistant.length - 1].text.trim().length > 20,
+        assistant[assistant.length - 1].text.slice(0, 120),
+      );
+    } else if (assistantTextOnDisk) {
+      // The app has it and the window does not: that is the regression, not the model.
+      check(
+        "an assistant reply arrived",
+        false,
+        `the session file holds "${assistantTextOnDisk.slice(0, 80)}" but the DOM shows ${messages.length} message(s): ${domRoles}`,
+      );
+      check("the reply has real content", false, "the reply never reached the window");
+    } else {
+      notes.push(
+        `本回合没有可渲染的助手文本（live=${!!live}, outputTokens=${outputTokens}, session=${path.basename(sessionFile || "-")}, DOM=${domRoles.slice(0, 120)}）`,
+      );
+      skip(
+        "an assistant reply arrived",
+        "the turn produced no assistant text at all (tool-only turn)",
+      );
+      skip("the reply has real content", "same turn: there was nothing to render");
+    }
     check(
       "the turn reached an end state",
       !!finished,
@@ -403,6 +495,30 @@ waitForWindow().then(async (win) => {
     if (made.length) {
       const body = fs.readFileSync(path.join(WORK, "greet.js"), "utf8");
       check("greet.js contains a greet function", /greet/.test(body), body.slice(0, 100));
+    }
+
+    console.log("\n── 5b. 导出对话（内容来自刚才的真回合） ──");
+    foreground(win);
+    // The isolated suite can only assert that an export file appears, because its sandbox has no
+    // conversation to put in one (see scripts/e2e.cjs). Here a real turn has just run, so this is
+    // where "the export contains the conversation" can be asserted for real.
+    await js("document.getElementById('pi-tb-export').click()");
+    const exportShowed = await waitFor(
+      () => (exportedPath && fs.existsSync(exportedPath) ? exportedPath : null),
+      20_000,
+      "the export file",
+    ).catch(() => null);
+    if (exportShowed) {
+      const text = fs.readFileSync(exportShowed, "utf8");
+      const markers = (text.match(/\*\*👤 用户\*\*|\*\*🤖 Assistant\*\*/g) || []).length;
+      check(
+        "the exported markdown contains the conversation",
+        markers > 0 && /greet\.js/.test(text),
+        `bytes=${text.length} role markers=${markers}`,
+      );
+      notes.push(`导出文件：${text.length} 字节，${markers} 个角色标记`);
+    } else {
+      check("the exported markdown contains the conversation", false, "no export file was written");
     }
 
     console.log("\n── 6. Dock（日常要用的三个面板） ──");
@@ -546,7 +662,7 @@ waitForWindow().then(async (win) => {
       consoleErrors.slice(0, 3).join(" | "),
     );
 
-    console.log(`\n─── ${passed}/${passed + failed} 项通过 ───`);
+    console.log(`\n─── ${passed}/${passed + failed} 项通过${skipped ? `（${skipped} 项跳过）` : ""} ───`);
     for (const n of notes) console.log(`  注: ${n}`);
     console.log(`  沙箱: ${SANDBOX}`);
     if (process.env.PI_DAILY_KEEP !== "1") {

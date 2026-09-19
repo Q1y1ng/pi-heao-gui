@@ -1457,7 +1457,10 @@ async function switchWorkspace(
 ): Promise<{ ok: boolean; error?: string }> {
   const target = String(dir || "").trim();
   if (!target || !existsSync(target)) return { ok: false, error: "找不到那个目录" };
-  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(0, 8);
+  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(
+    0,
+    8,
+  );
   saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
   projects.touch(target);
   // Per-window workspace: the pi child is spawned with cwd, so the window bound

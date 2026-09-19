@@ -2555,10 +2555,7 @@ app.whenReady().then(async () => {
       // 2. Adding: the same directory twice (once with a trailing separator, which Windows hands out
       //    for the same directory) is still one row.
       await js(win, `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirA)}})`);
-      await js(
-        win,
-        `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirA + path.sep)}})`,
-      );
+      await js(win, `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirA + path.sep)}})`);
       const listed = await js(win, "window.pi.invoke('pi:get-projects')");
       const rows = Array.isArray(listed?.items) ? listed.items : [];
       check(
@@ -2665,7 +2662,11 @@ app.whenReady().then(async () => {
         win,
         `window.pi.invoke('pi:add-project',{path:${JSON.stringify(REPO_ROOT)}})`,
       );
-      check("the workspace itself can be kept as a project", kept?.ok === true, JSON.stringify(kept));
+      check(
+        "the workspace itself can be kept as a project",
+        kept?.ok === true,
+        JSON.stringify(kept),
+      );
       const projectName = path.basename(REPO_ROOT);
 
       await js(win, "window.dispatchEvent(new Event('focus'))");

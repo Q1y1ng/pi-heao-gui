@@ -26,7 +26,13 @@ function storeWith(initial = [], now = () => 1000) {
     },
     now,
   });
-  return { store, saves, get list() { return list; } };
+  return {
+    store,
+    saves,
+    get list() {
+      return list;
+    },
+  };
 }
 
 test("the same directory spelled two ways has one key", () => {

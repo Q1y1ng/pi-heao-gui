@@ -1940,7 +1940,13 @@ app.whenReady().then(async () => {
         if (v < (big ? 3 : 4.5)) bad.push({ v: +v.toFixed(2), sel: el.tagName.toLowerCase() + '.' + String(el.className || '').slice(0, 24), color: cs.color, bg });
       });
       bad.sort((a, b) => a.v - b.v);
-      return JSON.stringify(bad.slice(0, 6));
+      const root = getComputedStyle(document.documentElement);
+      return JSON.stringify({
+        bad: bad.slice(0, 6),
+        bgToken: root.getPropertyValue('--pi-bg').trim(),
+        textToken: root.getPropertyValue('--pi-text').trim(),
+        bodyBg: getComputedStyle(document.body).backgroundColor,
+      });
     })()`;
 
       // The theme is switched through the SETTINGS window: the chat window's preload
@@ -1964,11 +1970,25 @@ app.whenReady().then(async () => {
         } catch (e) {
           rows = "ERR " + (e && e.message);
         }
-        if (typeof rows !== "string" || !rows.startsWith("[")) {
+        if (typeof rows !== "string" || !rows.startsWith("{")) {
           check(`contrast measurable in ${theme} theme`, false, String(rows).slice(0, 90));
           continue;
         }
-        const bad = JSON.parse(rows);
+        const { bad, bgToken, textToken, bodyBg } = JSON.parse(rows);
+        // Confirm the theme actually landed before judging a single colour.
+        //
+        // docs/KNOWN-ISSUES.md recorded "#pi-sidebar .pi-btn-ghost is 3:1, and setting it to
+        // var(--pi-text) measures 1.12:1 light / 1.1:1 dark — the token does not resolve here", and
+        // that finding was an artifact of measuring across a theme switch: both numbers are exactly
+        // the LIGHT palette's text colours — rgb(91,100,114) and rgb(28,32,39) — against the DARK
+        // sidebar's rgb(20,23,28), i.e. 3.10:1 and 1.11:1. With one theme applied the same rule is
+        // 7.06:1 in dark and 5.58:1 in light, and --pi-text resolves to #e7eaf0 / #1c2027 at the
+        // button. Judging colours from two themes at once is what kept that entry open.
+        check(
+          `the ${theme} theme is applied before measuring`,
+          bgToken.toLowerCase() === (theme === "dark" ? "#0e1013" : "#ffffff"),
+          `--pi-bg=${bgToken} --pi-text=${textToken} body=${bodyBg}`,
+        );
         const worst = bad[0];
         check(
           `no text below 4.5:1 in the ${theme} theme`,

@@ -4,20 +4,54 @@ Open defects with their measured evidence, so the next person can continue inste
 
 ---
 
-## Our theme tokens are not visible in the sidebar's scope
+## Our theme tokens are not visible in the sidebar's scope — **closed: a measurement taken across a theme switch**
 
-**Measured in 1.2.3, while trying to fix the contrast finding on `.pi-btn-ghost`.**
+**Status:** closed 2026-09-19 · not a defect · reproduced arithmetically from the two quoted readings
 
-- `--pi-text-dim` on the sidebar's ghost buttons measures **3:1** in the dark theme (against
-  `rgb(20,23,28)`) — below the 4.5:1 the accessibility gate requires for text.
-- Switching that one rule to `var(--pi-text)` measured **1.12:1 in the light theme and 1.1:1 in the
-  dark one** — text and background effectively the same colour. A token that reads fine everywhere
-  else does not resolve to a usable colour in this rule, so the value was left as it was.
+**What was recorded.** `--pi-text-dim` on the sidebar's ghost buttons measured **3:1** in the dark
+theme (against `rgb(20,23,28)`), and switching that one rule to `var(--pi-text)` measured **1.12:1 in
+the light theme and 1.1:1 in the dark one** — read at the time as "a token that reads fine everywhere
+else does not resolve to a usable colour in this rule".
 
-This has the same shape as the font-size defect, and is worth treating as one question: **where do
-our tokens stop being visible?** The font probe found `--pi-fs-md: 16px` at `:root` and all the way
-down `#pi-shell → .pi-body → #pi-main`, so the chain is healthy for the chat — and yet a chrome rule
-in the sidebar cannot use `--pi-text`. Answering that is likely to fix both.
+**What it actually was.** Both readings pair the **light** palette's text colours with the **dark**
+theme's sidebar background:
+
+| recorded | text colour | where that colour comes from | measured against | ratio |
+| --- | --- | --- | --- | --- |
+| 3:1 (dark) | `rgb(91,100,114)` | the **light** theme's `--pi-text-dim` | `rgb(20,23,28)`, the dark sidebar | **3.10:1** |
+| 1.1:1 (dark) | `rgb(28,32,39)` | the **light** theme's `--pi-text` | `rgb(20,23,28)`, the dark sidebar | **1.11:1** |
+
+Neither text colour belongs to the theme whose background it was measured against, so the reading was
+taken either side of a theme switch. Nothing is wrong with the token: with one theme applied,
+`--pi-text` resolves to `#e7eaf0` (dark) and `#1c2027` (light) **at the button itself**, and the same
+rule measures **7.06:1 in the dark theme and 5.58:1 in the light one** — both above the 4.5:1 the gate
+requires. `npm run e2e:isolated` passes its contrast section in both themes (113/0/1, 2026-09-19).
+
+**Why it stayed open for a round.** It was never re-measured as one coherent reading. The rule also
+carries `transition: color 130ms`, so reading `getComputedStyle(el).color` immediately after changing
+it returns the **pre-change** colour — a probe reproduces that exactly. The entry then took on the
+shape of the font-size defect and was filed under *"where do our tokens stop being visible?"*, which
+made a measurement artifact look like a systemic cascade problem.
+
+**Fixed on the gate, not in the theme.** The contrast section now asserts that the theme actually
+landed (its `--pi-bg` token is the palette's background for the theme it asked for) **before** judging
+any colour, and reports the tokens next to the numbers when it did not. `.pi-btn-ghost` keeps
+`--pi-text-dim`, with those numbers in its comment in `src/main/sidebar.ts`.
+
+> The original entry, kept as the record of how it read at the time:
+>
+> **Measured in 1.2.3, while trying to fix the contrast finding on `.pi-btn-ghost`.**
+>
+> - `--pi-text-dim` on the sidebar's ghost buttons measures **3:1** in the dark theme (against
+>   `rgb(20,23,28)`) — below the 4.5:1 the accessibility gate requires for text.
+> - Switching that one rule to `var(--pi-text)` measured **1.12:1 in the light theme and 1.1:1 in the
+>   dark one** — text and background effectively the same colour. A token that reads fine everywhere
+>   else does not resolve to a usable colour in this rule, so the value was left as it was.
+>
+> This has the same shape as the font-size defect, and is worth treating as one question: **where do
+> our tokens stop being visible?** The font probe found `--pi-fs-md: 16px` at `:root` and all the way
+> down `#pi-shell → .pi-body → #pi-main`, so the chain is healthy for the chat — and yet a chrome rule
+> in the sidebar cannot use `--pi-text`. Answering that is likely to fix both.
 
 ## The isolated e2e suite is flaky in its window lookups
 

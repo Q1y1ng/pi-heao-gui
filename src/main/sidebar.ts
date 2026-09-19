@@ -394,15 +394,17 @@ export const SIDEBAR_HTML = `
     padding: 6px 8px;
     border: 1px solid var(--pi-border);
     border-radius: var(--pi-radius);
-      background: transparent;
-      /* The accessibility gate is right that this is 3:1 on the sidebar in the dark theme, below
-         the 4.5:1 it requires for text, and fixing it is not a colour swap: --pi-text-dim is the
-         measured 3:1, and setting --pi-text here measured 1.12:1 in the light theme and 1.1:1 in
-         the dark one -- the token does not resolve to a usable colour in this scope, which is the
-         same "our tokens are not visible here" question the font-size setting runs into. Left at
-         the value that at least renders readable text until that is answered (KNOWN-ISSUES.md). */
-      color: var(--pi-text-dim);
-      font-size: var(--pi-fs-sm);
+    background: transparent;
+    /* --pi-text-dim is the right token here, measured with the theme actually applied: this button
+       reads rgb(155,163,175) on rgb(20,23,28) — 7.06:1 — in the dark theme, and rgb(91,100,114) on
+       rgb(246,247,249) — 5.58:1 — in the light one. Both are above the 4.5:1 the gate wants.
+       This was recorded as a 3:1 defect for a while; that reading paired the LIGHT theme's text
+       colour with the DARK theme's sidebar background, which is a measurement taken across a theme
+       switch rather than a token that fails to resolve (--pi-text resolves to #e7eaf0 / #1c2027 at
+       this very button). The gate now asserts the theme landed before it judges a colour; the
+       arithmetic is in docs/KNOWN-ISSUES.md. */
+    color: var(--pi-text-dim);
+    font-size: var(--pi-fs-sm);
     font-family: inherit;
     cursor: pointer;
     transition: background var(--pi-speed), color var(--pi-speed), border-color var(--pi-speed);

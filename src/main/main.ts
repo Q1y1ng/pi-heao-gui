@@ -238,6 +238,7 @@ function postToWindow(win: BrowserWindow, msg: unknown): void {
   const type = (msg as { type?: string } | null)?.type;
   const channel = type ? MSG_TYPE_TO_CHANNEL[type] : undefined;
   if (channel) win.webContents.send(channel, msg);
+  else log.warn("unknown msg type for renderer:", type);
   // PI_DEBUG_WINDOW counts what the host actually sends to a window: the child shell with all
   // its panels stripped renders a full page and then shows no session, and the question is
   // whether the host ever sends it anything at all. See docs/KNOWN-ISSUES.md.
@@ -245,7 +246,7 @@ function postToWindow(win: BrowserWindow, msg: unknown): void {
     console.error(
       `[host->${win.webContents.id}] ${String((msg as { type?: string })?.type ?? "?")}`,
     );
-  } else log.warn("unknown msg type for renderer:", type);
+  }
 }
 
 /** The chat session that owns a given renderer. */
@@ -676,6 +677,7 @@ async function openSessionWindow(
     },
   });
   childWindows.add(win);
+  debugWindow(`child window created ${win.webContents.id}`);
   // The chat page sets its own <title> ("Pi Heao GUI"), and Electron copies a page
   // title over the window title — which is how a window about one session ended up
   // indistinguishable from the main one. For these windows the session name wins.
@@ -828,7 +830,9 @@ async function openSessionWindow(
     });
   }
   const tmpHtml = chatShellFile(process.env.PI_MINIMAL_CHILD === "0" ? "full" : "minimal");
+  debugWindow(`shell file ${tmpHtml ? `ok ${tmpHtml}` : "null"}`);
   if (tmpHtml) await win.loadFile(tmpHtml);
+  debugWindow("loadFile done");
 
   // Create a dedicated chat session for this window
   let childSession: ChatSession | null = null;
@@ -860,6 +864,7 @@ async function openSessionWindow(
   }
 
   if (childSession) windowSessions.set(childWinId, childSession);
+  debugWindow(`child session ready: ${!!childSession}`);
 
   win.on("focus", () => {
     clearUnread(win.id);
@@ -880,6 +885,49 @@ async function openSessionWindow(
     refreshWindowList();
   });
   return { ok: true, focused: false };
+}
+
+/** PI_DEBUG_WINDOW=1 traces the window-creation path (see docs/KNOWN-ISSUES.md). */
+function debugWindow(message: string): void {
+  if (process.env.PI_DEBUG_WINDOW === "1") console.error(`[window] ${message}`);
+}
+
+/**
+ * Start a new session for `win` — in that window when it is idle, in a window of its own when its
+ * agent is mid-turn.
+ *
+ * A running turn owns its window: pi keeps one session per process and refuses to swap it under an
+ * in-flight turn, so a new session cannot take this window over. Refusing is the wrong answer
+ * though — "start something else while this keeps going" is exactly what a person means by New
+ * session while the agent is working, and sessions running side by side is what the multi-window
+ * model is for.
+ *
+ * Shared by every entry point that means the same thing to whoever clicked it: the sidebar button,
+ * the title-bar "+" and the command palette (all through IPC), the File menu's Ctrl+N, and the
+ * tray. The menu and the tray used to route through the renderer, where nothing consumed them.
+ */
+async function startNewSessionForWindow(
+  win: BrowserWindow | null,
+): Promise<{ ok: boolean; openedWindow?: boolean; error?: string }> {
+  if (!win || win.isDestroyed()) return { ok: false, error: "窗口已关闭" };
+  const session = sessionFor(win.webContents);
+  if (!session) return { ok: false, error: "会话未就绪" };
+
+  if (!session.streaming) {
+    await session.newSession();
+    return { ok: true };
+  }
+
+  debugWindow("newSession while streaming -> openSessionWindow");
+  const opened = await openSessionWindow();
+  debugWindow(`openSessionWindow -> ${JSON.stringify(opened)}`);
+  postToWindow(win, {
+    type: "toast",
+    text: opened.ok ? "已在新窗口打开新会话，当前会话继续运行" : opened.error,
+    kind: opened.ok ? "success" : "error",
+  });
+  if (!opened.ok) log.warn("newSession while running: could not open a window:", opened.error);
+  return { ok: opened.ok, openedWindow: opened.ok, error: opened.error };
 }
 
 /** Sessions may only be opened from the pi sessions directory. */
@@ -2177,8 +2225,7 @@ for (const [channel, msgType] of Object.entries(channelToMsgType)) {
         }
         return { ok: true };
       } else if (msgType === "newSession") {
-        await session.newSession();
-        return { ok: true };
+        return await startNewSessionForWindow(senderWindow);
       } else {
         await session.handleMessage({ ...msg, type: msgType });
         return { ok: true };
@@ -2254,10 +2301,7 @@ function setupChineseMenu(): void {
           label: "新建会话",
           accelerator: "CmdOrCtrl+N",
           click: () => {
-            mainWindow?.webContents.send("pi:event", {
-              type: "event",
-              event: { type: "newSessionShortcut" },
-            });
+            void startNewSessionForWindow(mainWindow);
           },
         },
         { type: "separator" },
@@ -2393,7 +2437,7 @@ app.whenReady().then(async () => {
         if (!win) return;
         win.show();
         win.focus();
-        postToWindow(win, { type: "newSession" });
+        void startNewSessionForWindow(win);
       },
       openSettings: () => openSettingsWindow(),
       focusWindow: (id) => {

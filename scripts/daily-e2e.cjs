@@ -302,11 +302,25 @@ waitForWindow().then(async (win) => {
       notes.push(`DOM dump: ${JSON.stringify(dump).slice(0, 1200)}`);
     }
 
-    const messages = await js(`(() => {
+    // The model usually writes the files first and says what it did afterwards, so reading the DOM
+    // once — immediately after the files appeared — reported "no assistant reply" on runs where the
+    // reply was simply still being written (2 of 4 runs on 2026-09-19). Wait for it, bounded,
+    // instead of sampling once and calling it a missing reply.
+    const readMessages = async () =>
+      js(`(() => {
       const nodes = Array.from(document.querySelectorAll('.msg'));
       return nodes.map((n) => ({ role: n.className, text: (n.innerText || '').slice(0, 400) }));
     })()`);
-    const assistant = messages.filter((m) => /assistant/.test(m.role) && m.text.trim().length > 0);
+    const messages = await readMessages();
+    const assistant = await waitFor(
+      async () => {
+        const list = await readMessages();
+        const withText = list.filter((m) => /assistant/.test(m.role) && m.text.trim().length > 0);
+        return withText.length ? withText : null;
+      },
+      120_000,
+      "the assistant's reply to reach the DOM",
+    ).catch(() => []);
     check(
       "an assistant reply arrived",
       assistant.length > 0,
@@ -438,7 +452,94 @@ waitForWindow().then(async (win) => {
     const sessionsOk = await js("!!window.pi.invoke").catch(() => false);
     check("session channels are reachable from the chat window", sessionsOk === true);
 
-    console.log("\n── 8. 渲染进程报错 ──");
+    console.log("\n── 8. 运行中新建会话：开新窗口，而不是被拒绝 ──");
+    // The pain this covers: an agent is mid-turn and the person wants to start something else now.
+    // The old answer was a refusal ("Stop the agent before starting a new session."), which makes
+    // the multi-window model useless exactly when it is most wanted. The assertions are picked so
+    // the test does not race the model: what has to hold is that a window opened, that it is empty,
+    // and that the running window's own conversation was not swapped out from under the turn.
+    const busyTask =
+      "再做一个独立的小任务：依次创建 one.txt、two.txt、three.txt，每个文件写入自己的名字，然后运行 ls 确认它们都在。";
+    const idsBefore = BrowserWindow.getAllWindows().map((w) => w.id);
+
+    // Ask the app whether a turn is running instead of scraping the DOM for the stop control's
+    // label: the vendored UI keeps that text in a tooltip, so `innerText.includes('停止')` reported
+    // "not running" while the agent was plainly mid-turn (section 4 only passes because it also
+    // accepts an assistant message). pi:get-stats answers with `live`, which is null when idle.
+    const turnRunning = () =>
+      js("window.pi.invoke('pi:get-stats').then(s => !!(s && s.live && s.live.running))").catch(
+        () => false,
+      );
+
+    await js(`window.pi.postMessage({ type: 'prompt', message: ${JSON.stringify(busyTask)} })`);
+    const running = await waitFor(
+      () => turnRunning().then((yes) => yes || null),
+      120_000,
+      "a turn to start",
+    ).catch(() => false);
+    check(
+      "the next turn is running (so the refusal path is the one under test)",
+      running === true,
+      `get-stats.live.running=${String(await turnRunning())}`,
+    );
+
+    const countMessages = "(() => document.querySelectorAll('.msg').length)()";
+    const messagesBefore = await js(countMessages).catch(() => 0);
+    if (running) await js("window.pi.postMessage({ type: 'newSession' })");
+
+    // Identify the new window by id: the settings window from the section above is still open, so
+    // "the first window that is not the main one" would happily answer with that one instead.
+    const childWin = running
+      ? await waitFor(
+          () => BrowserWindow.getAllWindows().find((w) => !idsBefore.includes(w.id)),
+          30_000,
+          "a new session window",
+        ).catch(() => null)
+      : null;
+    check(
+      "New session while the agent runs opens a window instead of being refused",
+      !!childWin,
+      `windows ${idsBefore.length} -> ${BrowserWindow.getAllWindows().length}`,
+    );
+
+    if (childWin) {
+      notes.push(`运行中开出的新窗口标题: ${childWin.getTitle()}`);
+      // Bounded on purpose. An unbounded executeJavaScript here is what took a whole run down:
+      // when the child window's page never finished loading, the promise never settled and the
+      // script's own 900s watchdog was the only thing that ended it.
+      const childState = await Promise.race([
+        childWin.webContents
+          .executeJavaScript(
+            "(async () => { for (let i = 0; i < 40; i++) { if (window.pi) break; await new Promise(r => setTimeout(r, 250)); } return { bridge: !!window.pi, messages: document.querySelectorAll('.msg').length, url: String(location.href).slice(0, 70) }; })()",
+            true,
+          )
+          .catch((e) => ({ error: String(e?.message) })),
+        new Promise((r) =>
+          setTimeout(() => r({ error: "the child window's page never finished loading" }), 20_000),
+        ),
+      ]);
+      check(
+        "the new window starts its own empty session",
+        childState.bridge === true && childState.messages === 0,
+        JSON.stringify(childState),
+      );
+    }
+
+    notes.push(`开窗后原回合是否仍在跑: ${running ? String(await turnRunning()) : "n/a"}`);
+    const messagesAfter = await js(countMessages).catch(() => 0);
+    check(
+      "the running window kept its conversation (it was not swapped out under the turn)",
+      messagesAfter >= messagesBefore && messagesAfter > 0,
+      `${messagesBefore} -> ${messagesAfter}`,
+    );
+
+    // Leave the app as the sections after this one expect: turn stopped, extra window gone.
+    await js("window.pi.postMessage({ type: 'abort' })").catch(() => null);
+    await new Promise((r) => setTimeout(r, 800));
+    if (childWin && !childWin.isDestroyed()) childWin.destroy();
+    await new Promise((r) => setTimeout(r, 500));
+
+    console.log("\n── 9. 渲染进程报错 ──");
     check(
       "no renderer console errors during the run",
       consoleErrors.length === 0,

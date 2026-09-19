@@ -96,9 +96,14 @@ function fakeContents(currentUrl = CHAT_PAGE) {
       const entry = listeners.find((l) => l.event === "will-navigate");
       assert.ok(entry, "no will-navigate listener registered");
       let prevented = false;
-      entry.listener({ preventDefault: () => {
-        prevented = true;
-      } }, url);
+      entry.listener(
+        {
+          preventDefault: () => {
+            prevented = true;
+          },
+        },
+        url,
+      );
       if (prevented) state.prevented++;
       return prevented;
     },

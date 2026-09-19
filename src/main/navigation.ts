@@ -97,8 +97,10 @@ function currentUrlOf(contents: WebContents): string {
  * chat, settings, diff, a dragged-out session — is covered without being enumerated).
  */
 export function installNavigationGuards(contents: WebContents, deps: NavigationDeps): void {
-  const info = deps.logInfo ?? ((message: string, ...rest: unknown[]) => log.info(message, ...rest));
-  const warn = deps.logWarn ?? ((message: string, ...rest: unknown[]) => log.warn(message, ...rest));
+  const info =
+    deps.logInfo ?? ((message: string, ...rest: unknown[]) => log.info(message, ...rest));
+  const warn =
+    deps.logWarn ?? ((message: string, ...rest: unknown[]) => log.warn(message, ...rest));
 
   const decide = (rawUrl: string, source: string): NavigationVerdict => {
     const verdict = classifyNavigation(rawUrl, currentUrlOf(contents));

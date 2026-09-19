@@ -163,6 +163,10 @@ export const IPC = {
   WORKTREE_CREATE: "pi:worktree-create",
   /** Copy a session file into this profile — the other half of export. */
   IMPORT_SESSION: "pi:import-session",
+  /** What every window is doing (the board). */
+  GET_WINDOWS: "pi:get-windows",
+  /** Bring any window to the front (the decision list and the board both use it). */
+  FOCUS_WINDOW: "pi:focus-window",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",
@@ -189,4 +193,6 @@ export const IPC = {
   MCP_STATUS: "pi:mcp-status",
   /** Pushed to every window whenever the pending-decision list changes. */
   DECISIONS: "pi:decisions",
+  /** Pushed to every window whenever the window board changes. */
+  WINDOW_STATUS: "pi:window-status",
 } as const;

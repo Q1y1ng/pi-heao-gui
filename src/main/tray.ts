@@ -229,6 +229,11 @@ export function clearUnread(windowId?: number): void {
   refreshTrayMenu();
 }
 
+/** How many unread turns one window has marked (the board shows it per row). */
+export function unreadFor(windowId: number): number {
+  return unreadByWindow.get(windowId) ?? 0;
+}
+
 export function getUnreadCount(): number {
   return totalUnread();
 }

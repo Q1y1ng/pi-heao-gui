@@ -94,6 +94,8 @@ const INVOKE_ALLOWED = new Set<string>([
   // to bring another window forward. Neither touches config, auth or agent files.
   "pi:get-decisions",
   "pi:decisions-focus",
+  "pi:get-windows",
+  "pi:focus-window",
 ]);
 
 // Main -> renderer channels that should be forwarded as MessageEvents
@@ -132,6 +134,7 @@ const forwardChannels = [
   "pi:term-data",
   "pi:term-exit",
   "pi:decisions",
+  "pi:window-status",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;

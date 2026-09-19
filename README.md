@@ -123,6 +123,8 @@ here. Its origin, and the MIT notice it carries, are recorded in [NOTICE.md](NOT
   counts it and the panel lists every window that is waiting. Clicking an entry raises that window —
   the answer is given there. It is cross-window on purpose: a question raised in a child window shows
   up in the main one.
+- **Windows board**: what every window is doing (waiting / running / idle, plus unread counts), one
+  click to raise the one you want.
 
 ### Dock (terminal / files / changes)
 

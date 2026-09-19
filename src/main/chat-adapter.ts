@@ -11,6 +11,7 @@ import { SIDEBAR_HTML, SIDEBAR_SCRIPT } from "./sidebar";
 import { DOCK_HTML, DOCK_CSS, DOCK_SCRIPT } from "./dock";
 import { STATS_HTML, STATS_SCRIPT, STATS_CSS } from "./stats-panel";
 import { DECISIONS_HTML, DECISIONS_SCRIPT, DECISIONS_CSS } from "./decisions-panel";
+import { WINDOWS_HTML, WINDOWS_SCRIPT, WINDOWS_CSS } from "./windows-panel";
 import { PALETTE_HTML, PALETTE_SCRIPT, PALETTE_CSS } from "./palette";
 import { buildThemeCss } from "./theme";
 
@@ -197,12 +198,15 @@ const ICONS = {
   external: `<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M19 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>`,
   terminal: `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M12 15h5"/>`,
   bell: `<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>`,
+  windows: `<rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/>`,
 };
 
 /**
  * The pending-decision button. In both shells: a decision raised in a child window still has to be
  * findable from the window the person is actually looking at.
  */
+const WINDOWS_BUTTON = `<button class="pi-icon-btn pi-windows-btn" id="pi-windows-btn" title="窗口总览" aria-label="窗口总览">${svgIcon(ICONS.windows)}</button>`;
+
 const DECISIONS_BUTTON = `<button class="pi-icon-btn pi-decisions-btn" id="pi-decisions-btn" title="待你处理" aria-label="待你处理">${svgIcon(ICONS.bell)}<span class="pi-decisions-badge" id="pi-decisions-badge" hidden></span></button>`;
 
 const CHROME_CSS = `
@@ -490,7 +494,7 @@ function buildMinimalChromeHtml(lang: UiLang): string {
       <span class="pi-tb-title is-empty" id="pi-title-text" title="${t("tb.currentSession", lang)}"></span>
     </div>
     <div class="pi-tb-right">
-      <div class="pi-tb-actions">${DECISIONS_BUTTON}</div>
+      <div class="pi-tb-actions">${WINDOWS_BUTTON}${DECISIONS_BUTTON}</div>
     </div>
   </header>
   <div class="pi-body">
@@ -553,6 +557,7 @@ function buildChromeHtml(lang: UiLang): string {
         <button class="pi-icon-btn" id="pi-tb-search" title="${t("tb.search", lang)}" aria-label="${t("tb.searchLabel", lang)}">${svgIcon(ICONS.search)}</button>
         <button class="pi-icon-btn" id="pi-tb-refresh" title="${t("tb.refresh", lang)}" aria-label="${t("tb.refresh", lang)}">${svgIcon(ICONS.refresh)}</button>
         <button class="pi-icon-btn" id="pi-tb-export" title="${t("tb.export", lang)}" aria-label="${t("tb.exportLabel", lang)}">${svgIcon(ICONS.download)}</button>
+        ${WINDOWS_BUTTON}
         ${DECISIONS_BUTTON}
         <span class="pi-tb-sep" aria-hidden="true"></span>
         <button class="pi-icon-btn" id="pi-tb-settings" title="${t("tb.settings", lang)}" aria-label="${t("tb.settingsLabel", lang)}">${svgIcon(ICONS.gear)}</button>
@@ -585,6 +590,7 @@ ${SIDEBAR_HTML}
     </aside>
 ${STATS_HTML}
 ${DECISIONS_HTML}
+${WINDOWS_HTML}
 ${PALETTE_HTML}
     <div id="pi-main">
 ${DOCK_HTML}
@@ -906,10 +912,11 @@ export function buildChatHtml(
     // pending-decision panel is the exception: it is the one panel whose subject is *other*
     // windows, so a stripped child carries it (and its button) too.
     const panelCss = minimal
-      ? [styleTag("pi-decisions", DECISIONS_CSS)]
+      ? [styleTag("pi-decisions", DECISIONS_CSS), styleTag("pi-windows", WINDOWS_CSS)]
       : [
           styleTag("pi-stats", STATS_CSS),
           styleTag("pi-decisions", DECISIONS_CSS),
+          styleTag("pi-windows", WINDOWS_CSS),
           styleTag("pi-palette", PALETTE_CSS),
           styleTag("pi-dock-css", DOCK_CSS),
         ];
@@ -933,6 +940,7 @@ export function buildChatHtml(
         CHROME_CSS +
         styleTag("pi-stats", STATS_CSS) +
         styleTag("pi-decisions", DECISIONS_CSS) +
+        styleTag("pi-windows", WINDOWS_CSS) +
         styleTag("pi-palette", PALETTE_CSS) +
         styleTag("pi-dock-css", DOCK_CSS) +
         vendorAssets().css +
@@ -993,13 +1001,14 @@ export function buildChatHtml(
       // and titlebar wiring all drive controls it does not have — and their
       // timers are the kind of thing that later shows up as idle CPU.
       const chromeScripts = minimal
-        ? [T(MINIMAL_TITLE_SCRIPT), T(DECISIONS_SCRIPT)]
+        ? [T(MINIMAL_TITLE_SCRIPT), T(DECISIONS_SCRIPT), T(WINDOWS_SCRIPT)]
         : [
             T(SIDEBAR_SCRIPT),
             T(TITLEBAR_SCRIPT),
             T(TOKENS_SCRIPT),
             T(STATS_SCRIPT),
             T(DECISIONS_SCRIPT),
+            T(WINDOWS_SCRIPT),
             T(PALETTE_SCRIPT),
           ];
       allLines.splice(

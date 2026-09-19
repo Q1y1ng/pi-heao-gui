@@ -362,6 +362,18 @@ export const CHAT_STRINGS: Record<string, string> = {
     "Imported (that session directory is not on this machine, so it now uses the current workspace): ",
   "导入失败: ": "Import failed: ",
 
+  // ── window board (what every window is doing)
+  窗口总览: "Windows",
+  等待回答: "Waiting for you",
+  运行中: "Running",
+  空闲: "Idle",
+  " 个窗口": " window(s)",
+  " 条未读 · ": " unread · ",
+  "切过去 →": "Go there →",
+  "现在只有这一个窗口。": "This is the only window right now.",
+  "每个窗口一个 pi 进程。点一行把它提到前台；「等待回答」的窗口那一轮正卡在等人。":
+    "One pi process per window. Clicking a row raises that window; a window that is waiting for an answer has a turn blocked on it.",
+
   // ── pending decisions (the cross-window "waiting for you" panel)
   待你处理: "Waiting for you",
   "窗口 #": "window #",

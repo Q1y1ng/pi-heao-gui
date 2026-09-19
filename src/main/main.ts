@@ -43,7 +43,13 @@ import {
   buildEnv,
 } from "./chat-session";
 import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
-import { generateCommitMessage, git, isSafeBranchName, listWorktrees, worktreePathFor } from "./git";
+import {
+  generateCommitMessage,
+  git,
+  isSafeBranchName,
+  listWorktrees,
+  worktreePathFor,
+} from "./git";
 import { readPiChangelog } from "./changelog";
 import { resolveUiLang } from "./i18n";
 import {
@@ -81,9 +87,17 @@ import {
 import { log, errText } from "./log";
 import { installNavigationGuards } from "./navigation";
 import { createDecisionQueue, describeRequest } from "./decisions";
+import { createWindowStatusBoard } from "./window-status";
 import { getSpawnQueue, profileKey } from "./spawn-queue";
 import { buildSettingsHtml } from "./settings-window";
-import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
+import {
+  createTray,
+  showNotification,
+  destroyTray,
+  markQuitting,
+  isQuitting,
+  unreadFor,
+} from "./tray";
 import { disposeAlerts, fireAlert, isAlertNotifierWindow, playChime } from "./alerts";
 import { createUpdateController, type UpdateController, type UpdaterLike } from "./updater";
 
@@ -176,6 +190,7 @@ const MSG_TYPE_TO_CHANNEL: Record<string, string> = {
   sessionInfo: IPC.SESSION_INFO,
   permissionMode: IPC.PERMISSION_MODE,
   decisions: IPC.DECISIONS,
+  windowStatus: IPC.WINDOW_STATUS,
   files: IPC.FILES,
   sessionsList: IPC.SESSIONS_LIST,
   streaming: IPC.STREAMING,
@@ -244,7 +259,29 @@ function cancelAllDecisionAlerts(): void {
 // screen, or in the window nobody is looking at, and the panel is how the person finds it.
 const decisions = createDecisionQueue({ log: (message) => log.info(message) });
 
+// What every window is doing, for the board (see window-status.ts). Same shape as the decision list:
+// the main process is the only place that can see all the windows, so it keeps the state and pushes
+// it, and every window's board shows the same rows.
+const windowStatus = createWindowStatusBoard();
+
+windowStatus.onChange(() => {
+  const items = windowStatus.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) postToWindow(win, { type: "windowStatus", items });
+  }
+});
+
+/** Keep each window's "waiting" count in step with the decision list. */
+function refreshWaiting(): void {
+  const items = decisions.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    windowStatus.update(win.id, { waiting: items.filter((d) => d.windowId === win.id).length });
+  }
+}
+
 decisions.onChange(() => {
+  refreshWaiting();
   const items = decisions.list();
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) postToWindow(win, { type: "decisions", items });
@@ -717,6 +754,11 @@ async function openSessionWindow(
     },
   });
   childWindows.add(win);
+  windowStatus.update(win.id, {
+    label: label || "Pi Heao GUI",
+    sessionFile,
+    touchedAt: Date.now(),
+  });
   debugWindow(`child window created ${win.webContents.id}`);
   // The chat page sets its own <title> ("Pi Heao GUI"), and Electron copies a page
   // title over the window title — which is how a window about one session ended up
@@ -894,6 +936,7 @@ async function openSessionWindow(
 
   win.on("focus", () => {
     clearUnread(win.id);
+    windowStatus.update(win.id, { unread: 0 });
     cancelDecisionAlerts(win.id);
     win.flashFrame(false);
   });
@@ -905,6 +948,7 @@ async function openSessionWindow(
     clearUnread(win.id);
     cancelDecisionAlerts(win.id);
     decisions.dropWindow(win.id);
+    windowStatus.remove(win.id);
     if (childSession) {
       childSession.dispose();
       childSession = null;
@@ -996,6 +1040,7 @@ function sessionHost(win: BrowserWindow): {
         if (!focused) {
           showNotification("Pi Heao GUI", "Agent 已完成回复", { silent: sound.toastSilent });
           bumpUnread(win.id);
+          windowStatus.update(win.id, { unread: unreadFor(win.id) });
           win.flashFrame(true);
         }
       }
@@ -1020,6 +1065,18 @@ function sessionHost(win: BrowserWindow): {
       // not keep sitting on the list. A reload or a fresh message starts a new pi, and a new pi asks
       // its own questions.
       if (m?.type === "error" && !win.isDestroyed()) decisions.dropWindow(win.id);
+      // The board's two moving parts: whether a turn is streaming here, and what the window is
+      // about. Both are posted by the session anyway, so this is bookkeeping, not a new signal.
+      if (m?.type === "streaming" && !win.isDestroyed()) {
+        windowStatus.update(win.id, {
+          running: Boolean((m as { running?: unknown }).running),
+          touchedAt: Date.now(),
+        });
+      }
+      if (m?.type === "sessionInfo" && !win.isDestroyed()) {
+        const label = String((m as { label?: unknown }).label ?? "").trim();
+        if (label) windowStatus.update(win.id, { label, touchedAt: Date.now() });
+      }
       postToWindow(win, msg);
     },
     saveStats: (sessionFile, data) => {
@@ -1072,19 +1129,31 @@ ipcMain.handle(IPC.GET_DECISIONS, () => decisions.list());
  * Answering still happens there: pi's request, its options and its textarea live in that window's
  * session, so this is a "take me to it" and not an "answer it for me".
  */
-ipcMain.handle(IPC.DECISIONS_FOCUS, (_e, arg: unknown) => {
-  const windowId = Number((arg as { windowId?: unknown } | null)?.windowId ?? arg);
+/** Bring one window to the front. Shared by the decision list and the window board. */
+function focusWindowById(windowId: number): { ok: boolean; error?: string } {
   const win = BrowserWindow.getAllWindows().find((w) => w.id === windowId);
   if (!win || win.isDestroyed()) {
-    // The window is gone, so the list is stale: say so, and take its entries off it.
+    // The window is gone, so whatever listed it is stale: say so, and take its rows off both lists.
     decisions.dropWindow(windowId);
+    windowStatus.remove(windowId);
     return { ok: false, error: "那个窗口已经关掉了" };
   }
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
   return { ok: true };
-});
+}
+
+ipcMain.handle(IPC.DECISIONS_FOCUS, (_e, arg: unknown) =>
+  focusWindowById(Number((arg as { windowId?: unknown } | null)?.windowId ?? arg)),
+);
+
+ipcMain.handle(IPC.FOCUS_WINDOW, (_e, arg: unknown) =>
+  focusWindowById(Number((arg as { windowId?: unknown } | null)?.windowId ?? arg)),
+);
+
+/** What every window is doing — the board reads the same list in every window. */
+ipcMain.handle(IPC.GET_WINDOWS, () => windowStatus.list());
 
 // ─── IPC: Config ──────────────────────────────────────────────────────
 
@@ -1697,9 +1766,22 @@ ipcMain.handle(
     // otherwise. A shell terminal starts pi's agent dir not at all, so it does not wait.
     const termKind: TerminalKind = msg?.kind === "shell" ? "shell" : "pi";
     if (termKind === "pi") {
-      await getSpawnQueue().whenIdle(
-        profileKey({ ...process.env, ...buildEnv(config, app.getAppPath()) }),
-      );
+      const queue = getSpawnQueue();
+      const key = profileKey({ ...process.env, ...buildEnv(config, app.getAppPath()) });
+      // Say so when there is something to wait for. A terminal that silently does not appear for a
+      // minute reads as broken; the same minute with a sentence on screen reads as waiting.
+      const held = queue.stats().some((entry) => entry.key === key && entry.holding);
+      if (held) {
+        const note = BrowserWindow.fromWebContents(sender);
+        if (note && !note.isDestroyed()) {
+          postToWindow(note, {
+            type: "toast",
+            text: "终端要等另一个 pi 启动完成（同一个 agent 包目录，不能同时装）",
+            kind: "info",
+          });
+        }
+      }
+      await queue.whenIdle(key);
     }
     // The terminal follows the window's pi session so `pi` resumes the same chat.
     const session = sessionFor(sender);
@@ -2043,6 +2125,7 @@ function diagnosticsInfo(): string {
     `theme ${config.theme} accent ${config.accent}`,
     `rpc log ${getRpcLogPath()}`,
     `pending decisions ${decisions.stats().pending} in ${decisions.stats().windows} window(s)`,
+    `windows ${windowStatus.list().length} (${windowStatus.list().filter((w) => w.running).length} running)`,
     `pi start-ups ${JSON.stringify(getSpawnQueue().stats())}`,
     "",
     "config:",

@@ -654,6 +654,24 @@ app.whenReady().then(async () => {
         await js(win, "document.getElementById('pi-term-kind').click()");
         await sleep(2500);
       }
+      // A pi terminal waits for a start-up that is already installing the same agent packages
+      // (spawn-queue.ts), and a fresh sandbox profile installs a lot of them — so "not ready yet" is
+      // an answer the app gives on purpose. Wait for the terminal the way a person would, and report
+      // the wait rather than the symptom.
+      const readyForInput = await waitFor(
+        async () => {
+          const res = await js(win, "window.pi.invoke('pi:term-input', '')").catch(() => null);
+          return res?.ok ? true : null;
+        },
+        90_000,
+        "the terminal to accept input",
+      ).catch(() => false);
+      check(
+        "the dock terminal becomes ready to type into",
+        readyForInput === true,
+        "pi:term-input kept answering that the terminal is not ready",
+      );
+
       const READ_TERM = "((document.getElementById('pi-dock-term')||{}).innerText || '')";
       const marker = `e2e-${Date.now().toString(36)}`;
       // Restarting the terminal (the kind toggle) is asynchronous, so a write can
@@ -2233,6 +2251,32 @@ app.whenReady().then(async () => {
           JSON.stringify(listed),
         );
 
+        // The board is the same information from the other end: every window and what each is doing,
+        // not only who is waiting. It is read from the main process (the only place that can see all
+        // windows) and drawn in this window.
+        const board = await js(chatWin, "window.pi.invoke('pi:get-windows')");
+        check(
+          "the board lists every window",
+          Array.isArray(board) && board.length >= 2,
+          JSON.stringify(board),
+        );
+        const waitingRow = (Array.isArray(board) ? board : []).find(
+          (w) => String(w.windowId) === String(listed?.target),
+        );
+        check(
+          "the board marks the window that is waiting",
+          Number(waitingRow?.waiting) >= 1,
+          JSON.stringify(waitingRow),
+        );
+        await js(chatWin, "document.getElementById('pi-windows-btn').click()");
+        await sleep(500);
+        const boardRows = await js(
+          chatWin,
+          "document.querySelectorAll('#pi-windows-list .pi-windows-item').length",
+        );
+        check("the board panel draws a row per window", boardRows >= 2, String(boardRows));
+        await js(chatWin, "document.getElementById('pi-windows-close').click()");
+
         // Clicking it goes to the window that is waiting — not to the window the panel is in.
         const target = allWindows().find((w) => String(w.id) === String(listed?.target));
         await js(
@@ -2263,6 +2307,16 @@ app.whenReady().then(async () => {
           "the badge to clear",
         ).catch(() => false);
         check("answering it takes it off the list", cleared === true);
+        // …and the board stops calling that window "waiting".
+        const after = await js(chatWin, "window.pi.invoke('pi:get-windows')");
+        const clearedRow = (Array.isArray(after) ? after : []).find(
+          (w) => String(w.windowId) === String(listed?.target),
+        );
+        check(
+          "the board stops marking it once the answer is given",
+          Number(clearedRow?.waiting) === 0,
+          JSON.stringify(clearedRow),
+        );
       } finally {
         // Never leave a sandbox pointed at the fake pi — later sections (and a human running this
         // with --keep) would be testing something else than they think.

@@ -16,6 +16,17 @@ npm run test:daily         # real window + real model: the app actually finishes
                            # (needs a provider in ~/.pi/agent; skip only if you cannot reach one)
 ```
 
+> **From a shell with no console.** `verify` and both e2e suites open a real PTY (node-pty + ConPTY),
+> and node-pty's console-list helper calls `AttachConsole` — in a console-less shell that fails with
+> `AttachConsole failed`, and in the isolated suite the failure lands at **teardown**, after every
+> check has passed, so the run reports a crash instead of its summary. Give the run a console:
+> `cmd //c "conhost.exe cmd /c <a .cmd that calls the gate>"`. The checks themselves do not need one.
+>
+> **Booting the packaged build from an agent shell.** Such shells export `ELECTRON_RUN_AS_NODE=1`,
+> which makes the packaged app run as plain Node and exit silently — it looks exactly like a broken
+> build. Clear it for the child (`Remove-Item Env:ELECTRON_RUN_AS_NODE` in PowerShell, `env -u …` in
+> bash) before `Start-Process`. A healthy boot is four processes and a clean shutdown.
+
 Also confirm by hand, in a real window:
 
 - chat opens a session and streams a reply,

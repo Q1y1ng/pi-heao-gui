@@ -6,6 +6,48 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.3.0 — every window at a glance, and the directories you come back to
+
+Released 2026-09-19 · [release notes](docs/release-notes-1.3.0.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.0)
+
+- **A window board.** With several windows open, "which one is running, which one is waiting on me,
+  which one is idle" could only be pieced together from the tray menu and the title bar. There is now
+  a grid icon in the title bar: a read-only list (waiting first, then running, then idle, freshest
+  first inside a group) that names each window's session, state, unread count and how long ago it last
+  moved, and raises that window when you click its row. It adds **no polling and no new observation** —
+  it consumes state the main process already had, and pushes only on change.
+- **Projects: keep the directories you come back to.** The workspace row opens a list of saved
+  directories (name, path, a check on the current one) that you can rename, remove from the list
+  without touching the directory, or see greyed out when the directory is gone. The sidebar gained a
+  **project / time** grouping switch, and under project grouping a session is filed by the directory it
+  ran in — so a session started in a subdirectory belongs to the project above it, nested project
+  first. A project is **a directory and a name**, not a container: a window still has exactly one
+  working directory, and the session, terminal, git panel and file tree all follow it as before.
+- **"Waiting on you": every window's pending question, in one place.** pi asks for permission,
+  confirmation or input, and the app already played a sound — but which question, in which window, was
+  nowhere to be seen. The bell in the title bar now counts them and opens a cross-window list; a row
+  raises the window that asked (the answer still happens there), and rows are withdrawn when the
+  window closes, the session changes, or pi exits.
+- **New session while the agent is running opens a window instead of refusing.** "Let that one keep
+  going, I'll start something else" is the reason multi-window exists. The entry points were also
+  collapsed into one shared function: **File → New session (Ctrl+N) and the tray entry were dead** —
+  clicking them did nothing at all.
+- **One-click copy: a worktree plus a window of its own.** Pick a branch in the Changes panel, click
+  "＋ new copy", and it creates `repo-branch` beside the repository and starts a session there in its
+  own window, while the original window keeps running.
+- **Importing a session: export finally has its other half.** Pick a `.jsonl` exported from another
+  machine or profile and it joins the session list. Cross-machine, only the working directory in the
+  session header is repointed — **the conversation itself is untouched byte for byte** — and a name
+  clash gets a numbered suffix instead of overwriting the local copy.
+- **Fixed**: clicking a link in a reply can no longer navigate the app itself away (that path would
+  have handed a remote origin `window.pi`, whose allowlist includes `pi:term-input` and
+  `pi:fs-write`); the agent-exit banner now carries pi's last stderr (`code 1` on Windows is also
+  what a forced kill looks like); **two pi processes no longer install into the same agent package at
+  once** (the real cause of "exits with code 1 over and over"); a pi that dies during startup is
+  retried once; switching worktrees no longer waits for pi to boot; the accessibility gate no longer
+  judges colours across themes; and the gates no longer treat "the window is not painting" as a defect
+  of the app.
+
 ## 1.2.4 — images, audio, and a readable editor in both themes
 
 Released 2026-09-19 · [release notes](docs/release-notes-1.2.4.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.4)
@@ -259,12 +301,12 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (181, none skipped)
+npm test              # unit tests (235, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
 npm run verify        # 38 DOM assertions against a real window
 npm run smoke         # 22 end-to-end checks
-npm run test:daily    # 20 checks driving a real model end-to-end
+npm run test:daily    # 25 checks driving a real model end-to-end
 npm run check:package # asserts the packaged asar contains all 13 runtime paths
 npm run shots         # regenerates the README screenshots in a throwaway sandbox
 ```

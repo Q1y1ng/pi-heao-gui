@@ -8,6 +8,7 @@ import {
   Menu,
   webContents,
   screen,
+  type WebContents,
 } from "electron";
 import { join, sep, basename, dirname, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
@@ -87,6 +88,7 @@ import {
 import { log, errText } from "./log";
 import { installNavigationGuards } from "./navigation";
 import { createDecisionQueue, describeRequest } from "./decisions";
+import { createProjectStore } from "./projects";
 import { createWindowStatusBoard } from "./window-status";
 import { getSpawnQueue, profileKey } from "./spawn-queue";
 import { buildSettingsHtml } from "./settings-window";
@@ -191,6 +193,7 @@ const MSG_TYPE_TO_CHANNEL: Record<string, string> = {
   permissionMode: IPC.PERMISSION_MODE,
   decisions: IPC.DECISIONS,
   windowStatus: IPC.WINDOW_STATUS,
+  projects: IPC.PROJECTS,
   files: IPC.FILES,
   sessionsList: IPC.SESSIONS_LIST,
   streaming: IPC.STREAMING,
@@ -263,6 +266,24 @@ const decisions = createDecisionQueue({ log: (message) => log.info(message) });
 // the main process is the only place that can see all the windows, so it keeps the state and pushes
 // it, and every window's board shows the same rows.
 const windowStatus = createWindowStatusBoard();
+
+// ─── Saved projects ───────────────────────────────────────────────────
+//
+// A project is a directory plus the name to call it (see projects.ts). The store is thin — the list
+// lives in the config file, which is also the file a person may edit by hand — and everything that
+// follows a workspace (session, terminal, git pane, file tree) keeps following the window's `cwd`.
+// What a project buys is that switching between them stops meaning "walk the native picker again".
+const projects = createProjectStore({
+  load: () => config.projects || [],
+  save: (list) => saveConfig({ ...config, projects: list }),
+});
+
+projects.onChange(() => {
+  const items = projects.list();
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) postToWindow(win, { type: "projects", items });
+  }
+});
 
 windowStatus.onChange(() => {
   const items = windowStatus.list();
@@ -1416,23 +1437,46 @@ ipcMain.handle("pi:pick-workspace", async () => {
 });
 
 ipcMain.handle("pi:set-workspace", async (e, dir: string) => {
-  const target = String(dir || "");
-  if (!target || !existsSync(target)) return config;
-  // Remember it, and make it the default for new windows
-  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(
-    0,
-    8,
-  );
-  saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
-  // Per-window workspace: the pi child is spawned with cwd, so the window bound
-  // to this renderer has to be re-created with the new working directory.
-  const win = BrowserWindow.fromWebContents(e.sender);
-  const session = sessionFor(e.sender);
-  if (win && session && win.id === mainWindowId) {
-    await rebindMainSession(target);
-  }
+  await switchWorkspace(e.sender, String(dir || ""), { awaitSession: true });
   return config;
 });
+
+/**
+ * Point a window at another directory. The one path every caller shares.
+ *
+ * Three things have to happen in this order, and they are the reason this is a function rather than
+ * four copies: the choice is remembered (so new windows open where the person last worked), the
+ * project's recency is bumped, and the window's session is rebound in the new directory. Only the
+ * last one is slow — it starts a pi — which is why callers that are answering a UI gesture pass
+ * `awaitSession: false` and let the rebind happen behind the reply (see pi:worktree-use).
+ */
+async function switchWorkspace(
+  sender: WebContents,
+  dir: string,
+  opts: { awaitSession?: boolean } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const target = String(dir || "").trim();
+  if (!target || !existsSync(target)) return { ok: false, error: "找不到那个目录" };
+  const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(0, 8);
+  saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
+  projects.touch(target);
+  // Per-window workspace: the pi child is spawned with cwd, so the window bound
+  // to this renderer has to be re-created with the new working directory.
+  const win = BrowserWindow.fromWebContents(sender);
+  const session = sessionFor(sender);
+  // A switch that changes the workspace but not the session looks identical to a working one from the
+  // outside — the config is saved either way — so say which of the two happened.
+  log.info(
+    `workspace switch to ${target}: window=${win?.id ?? "none"} (main ${mainWindowId ?? "none"}), session=${session ? "yes" : "no"}`,
+  );
+  if (win && session && win.id === mainWindowId) {
+    if (opts.awaitSession) await rebindMainSession(target);
+    else void rebindMainSession(target);
+  } else if (win) {
+    postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
+  }
+  return { ok: true };
+}
 
 /** Recreate the main window's chat session in a new working directory. */
 async function rebindMainSession(cwd: string): Promise<void> {
@@ -1957,26 +2001,70 @@ ipcMain.handle(
   async (e, dir: unknown): Promise<{ ok: boolean; error?: string }> => {
     const target = String(dir || "").trim();
     if (!target || !existsSync(target)) return { ok: false, error: "找不到该 worktree 目录" };
-    const recent = [target, ...(config.recentWorkspaces || []).filter((p) => p !== target)].slice(
-      0,
-      8,
-    );
-    saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
-    const win = BrowserWindow.fromWebContents(e.sender);
-    const session = sessionFor(e.sender);
-    if (win && session && win.id === mainWindowId) {
-      // The switch itself is done — the workspace is saved, and everything that reads it (the git
-      // pane, the file tree, the terminal) follows on its own. The chat session is rebound behind
-      // this reply, not in front of it: rebinding starts a pi, and starting a pi can wait for
-      // another one to finish installing the same agent packages (see spawn-queue.ts) — a pane that
-      // asked to switch directories must not sit on that.
-      void rebindMainSession(target);
-    } else if (win) {
-      postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
-    }
-    return { ok: true };
+    // The switch itself is done behind this reply — see switchWorkspace. The chat session is rebound
+    // after it: rebinding starts a pi, and starting a pi can wait for another one to finish
+    // installing the same agent packages (see spawn-queue.ts), and a pane that asked to switch
+    // directories must not sit on that.
+    return switchWorkspace(e.sender, target);
   },
 );
+
+// ─── IPC: Projects ────────────────────────────────────────────────────
+
+ipcMain.handle(IPC.GET_PROJECTS, () => ({
+  // `exists` rides along because the sidebar draws the row: a project whose directory is gone (an
+  // unplugged drive) stays in the list and is shown greyed rather than silently disappearing.
+  items: projects.list().map((p) => ({ ...p, exists: existsSync(p.path) })),
+  current: config.workspaceRoot || "",
+  recent: config.recentWorkspaces || [],
+  groupBy: config.sidebarGroupBy || "time",
+}));
+
+/**
+ * Save a directory as a project. Defaults to the window's current workspace, which is what the
+ * "keep this one" button means; the native picker is for a directory nobody is in yet.
+ */
+ipcMain.handle(IPC.ADD_PROJECT, async (e, arg: unknown) => {
+  const req = (arg || {}) as { path?: unknown; name?: unknown; pick?: unknown };
+  let target = String(req.path || "").trim() || config.workspaceRoot || "";
+  if (req.pick) {
+    const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
+    const picked = await dialog.showOpenDialog(win as BrowserWindow, {
+      properties: ["openDirectory"],
+      defaultPath: target || homedir(),
+      buttonLabel: "加为项目",
+      title: "选择项目目录",
+    });
+    if (picked.canceled || !picked.filePaths.length) return { ok: false, canceled: true };
+    target = picked.filePaths[0];
+  }
+  if (!target || !existsSync(target)) return { ok: false, error: "找不到那个目录" };
+  const { project, added } = projects.add(target, typeof req.name === "string" ? req.name : "");
+  return { ok: true, added, project };
+});
+
+ipcMain.handle(IPC.REMOVE_PROJECT, (_e, arg: unknown) => {
+  const path = String((arg as { path?: unknown } | null)?.path ?? arg ?? "");
+  return { ok: projects.remove(path) };
+});
+
+ipcMain.handle(IPC.RENAME_PROJECT, (_e, arg: unknown) => {
+  const req = (arg || {}) as { path?: unknown; name?: unknown };
+  const project = projects.rename(String(req.path || ""), String(req.name || ""));
+  return project ? { ok: true, project } : { ok: false, error: "没有这个项目" };
+});
+
+/** Switch a window to a saved project — the same switch as the picker, one click shorter. */
+ipcMain.handle(IPC.USE_PROJECT, async (e, arg: unknown) => {
+  const path = String((arg as { path?: unknown } | null)?.path ?? arg ?? "");
+  return switchWorkspace(e.sender, path);
+});
+
+ipcMain.handle(IPC.SET_SIDEBAR_GROUP_BY, (_e, value: unknown) => {
+  const groupBy = value === "project" ? "project" : "time";
+  if (groupBy !== config.sidebarGroupBy) saveConfig({ ...config, sidebarGroupBy: groupBy });
+  return { ok: true, groupBy };
+});
 
 /**
  * Make a new working copy of this repository and start a session in it, in its own window.

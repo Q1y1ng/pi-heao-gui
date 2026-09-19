@@ -55,6 +55,15 @@ any colour, and reports the tokens next to the numbers when it did not. `.pi-btn
 
 ## The isolated e2e suite is flaky in its window lookups — **closed: five consecutive green runs**
 
+> **补充（2026-09-19，同一类噪声的第二次出现）**：报告后小节里 **同一对** 检查偶发失败 ——
+> 「the session window actually shows the conversation」与「the chat's message text follows the font-size setting」，
+> 两者都是子窗口**还在读会话**时读数（`conversation nodes: 0` / `font null -> null`）。观测：隔离档 4 次里 2 次、
+> 只读档 4 次里 2 次，失败的那对在下一份代码上又干净。harness 自己 seed 的是**真实会话的副本**（多 MB），
+> 子窗口要 spawn 一个 pi 再让它读完，几十秒是正常的。
+>
+> 已做两处降噪：等节点的上限 30s → 60s；字号检查在没有节点可测时改为 `skip` 并打印 `--chat-fs` 与节点数，
+> 而不是把"还没渲染"报成字号缺陷。降噪后隔离档 149/0、只读档 83/0 —— 与上一条同样的收口标准：**连续 5 次**。
+
 **Status:** closed 2026-09-19 · 116 checks, **0 failures in five consecutive runs** · the one
 remaining skip states exactly why it skipped.
 

@@ -123,3 +123,38 @@ test("checkOpenPath: allows documents and resolves relative paths", () => {
   // relative without a workspace root stays relative (no crash)
   assert.equal(checkOpenPath("notes.txt", "").ok, true);
 });
+
+test("sanitizeProjects: keeps usable rows and drops the rest", () => {
+  const { sanitizeProjects } = require("../dist/main/config.js");
+  // Paths are built with path.resolve rather than written out: a literal Windows path in a test file
+  // has to survive one more layer of escaping than it is worth, and this stays honest on any platform.
+  const repo = path.resolve("repo");
+  const other = path.resolve("other");
+  const rows = sanitizeProjects([
+    { path: repo, name: "repo", addedAt: 5, lastUsedAt: 9 },
+    { path: `${repo}${path.sep}`, name: "duplicate spelling" }, // same directory, dropped
+    { path: `relative${path.sep}dir` }, // not absolute, dropped
+    { path: "" }, // empty, dropped
+    "not an object",
+    null,
+    { path: other }, // no name: the directory name is used
+  ]);
+  assert.deepEqual(
+    rows.map((r) => r.name),
+    ["repo", "other"],
+  );
+  assert.equal(rows[0].addedAt, 5);
+  assert.equal(rows[1].lastUsedAt, 0, "missing timestamps become 0, not NaN");
+});
+
+test("sanitizeConfig: projects and the grouping axis survive a hand-edited file", () => {
+  const repo = path.resolve("repo");
+  const cfg = sanitizeConfig({ projects: [{ path: repo }], sidebarGroupBy: "project" });
+  assert.equal(cfg.projects.length, 1);
+  assert.equal(cfg.projects[0].name, "repo");
+  assert.equal(cfg.sidebarGroupBy, "project");
+
+  const fallback = sanitizeConfig({ projects: "nope", sidebarGroupBy: "nonsense" });
+  assert.deepEqual(fallback.projects, []);
+  assert.equal(fallback.sidebarGroupBy, "time", "an unknown axis falls back to time");
+});

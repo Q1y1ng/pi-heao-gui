@@ -37,14 +37,18 @@ export const SIDEBAR_HTML = `
     <button id="pi-sidebar-toggle" title="折叠侧栏 (Ctrl+B)" aria-label="折叠侧栏">${svg(ICON.collapse, 15)}</button>
   </div>
 
-  <button id="pi-pick-workspace" class="pi-ws-chip" title="选择工作目录">
+  <button id="pi-pick-workspace" class="pi-ws-chip" title="工作目录：点击切换项目">
     <span class="pi-ws-icon">${svg(ICON.folder, 14)}</span>
     <span id="pi-workspace-label">选择工作目录…</span>
+    <span class="pi-ws-caret">▾</span>
   </button>
+  <div id="pi-ws-menu" class="pi-ws-menu" hidden></div>
 
   <div class="pi-search">
     <span class="pi-search-icon">${svg(ICON.search, 13)}</span>
     <input id="pi-session-filter" type="text" placeholder="搜索会话…" spellcheck="false" aria-label="搜索会话" />
+    <button id="pi-group-by" class="pi-search-btn pi-group-btn" type="button"
+      title="分组方式：项目 / 时间" aria-label="切换分组方式">时间</button>
     <button id="pi-sidebar-archived-toggle" class="pi-search-btn" type="button"
       title="显示/隐藏已归档会话 (Ctrl+Shift+A)" aria-label="显示已归档会话">${svg(ICON.archive, 13)}</button>
   </div>
@@ -160,12 +164,85 @@ export const SIDEBAR_HTML = `
     color: var(--pi-accent);
     flex-shrink: 0;
   }
-  #pi-sidebar .pi-ws-chip span:last-child {
+  #pi-sidebar .pi-ws-chip #pi-workspace-label {
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  #pi-sidebar .pi-ws-caret {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--pi-text-faint);
+  }
+
+  /* project switcher: a short list of the directories worth keeping, plus the recents */
+  #pi-sidebar .pi-ws-menu {
+    margin: -4px 0 8px;
+    padding: 4px;
+    max-height: 46vh;
+    overflow: auto;
+    border-radius: var(--pi-radius);
+    border: 1px solid var(--pi-border-strong);
+    background: var(--pi-surface);
+    box-shadow: var(--pi-shadow-2);
+  }
+  #pi-sidebar .pi-ws-menu[hidden] { display: none; }
+  #pi-sidebar .pi-ws-menu-head {
+    padding: 6px 8px 4px;
+    font-size: var(--pi-fs-xs);
+    color: var(--pi-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  #pi-sidebar .pi-ws-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 8px;
+    border: none;
+    border-radius: var(--pi-radius-sm);
+    background: transparent;
+    color: var(--pi-text-dim);
+    font-family: inherit;
+    font-size: var(--pi-fs-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+  #pi-sidebar .pi-ws-item:hover { background: var(--pi-overlay); color: var(--pi-text); }
+  #pi-sidebar .pi-ws-item.is-current { color: var(--pi-accent); }
+  #pi-sidebar .pi-ws-item.is-missing { color: var(--pi-text-faint); }
+  #pi-sidebar .pi-ws-item-main { flex: 1; min-width: 0; }
+  #pi-sidebar .pi-ws-item-name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #pi-sidebar .pi-ws-item-path {
+    font-size: var(--pi-fs-xs);
+    color: var(--pi-text-faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    direction: rtl;
+  }
+  #pi-sidebar .pi-ws-item-x {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border: none; border-radius: var(--pi-radius-sm);
+    background: transparent; color: var(--pi-text-faint);
+    cursor: pointer; font-size: 11px; line-height: 1;
+  }
+  #pi-sidebar .pi-ws-item-x:hover { background: var(--pi-overlay); color: var(--pi-danger); }
+  #pi-sidebar .pi-ws-menu-empty {
+    padding: 8px;
+    font-size: var(--pi-fs-xs);
+    color: var(--pi-text-faint);
+  }
+  #pi-sidebar .pi-ws-sep { height: 1px; margin: 4px 6px; background: var(--pi-border); }
+  #pi-sidebar .pi-group-btn {
+    width: auto;
+    padding: 0 6px;
+    font-size: var(--pi-fs-xs);
+    font-family: inherit;
   }
 
   /* search */
@@ -186,7 +263,7 @@ export const SIDEBAR_HTML = `
   #pi-sidebar #pi-session-filter {
     width: 100%;
     box-sizing: border-box;
-    padding: 7px 9px 7px 30px;
+    padding: 7px 62px 7px 30px;
     border-radius: var(--pi-radius);
     border: 1px solid var(--pi-border);
     background: var(--pi-bg);
@@ -491,6 +568,11 @@ export const SIDEBAR_SCRIPT = `
   var currentFile = null;
   var sessions = [];
   var filterText = '';
+  // Saved projects (a directory plus the name to call it), the recents the app collected on its own,
+  // and which axis the list is grouped by. All three come from the main process on load.
+  var projects = [];
+  var recentWorkspaces = [];
+  var groupBy = 'time';
   /** Guards against queuing a second switch while pi is still loading one
    *  (a multi-MB session takes tens of seconds to parse). */
   var switching = false;
@@ -593,19 +675,198 @@ export const SIDEBAR_SCRIPT = `
     if (localStorage.getItem('pi-sidebar-collapsed') === '1') setCollapsed(true);
   } catch (e) {}
 
-  // Workspace picker
+  // ── Project switcher ───────────────────────────────────────────────
+  //
+  // The chip used to be one button that opened the native directory picker, so switching between two
+  // repositories meant walking a dialog every time. It now opens a short list: the saved projects
+  // first (that is what a project is for), then the recents the app collected on its own, then the
+  // two ways to add one. Clicking a row is the same switch the picker performs — the row is just a
+  // remembered directory.
+  var wsMenu = document.getElementById('pi-ws-menu');
+
+  function closeWsMenu() { if (wsMenu) wsMenu.hidden = true; }
+
+  function wsItem(opts) {
+    var row = document.createElement('button');
+    row.className = 'pi-ws-item' + (opts.current ? ' is-current' : '') + (opts.missing ? ' is-missing' : '');
+    row.type = 'button';
+    row.title = opts.path + (opts.missing ? '（目录不在了）' : '');
+    row.setAttribute('data-path', opts.path);
+    row.setAttribute('data-kind', opts.kind);
+    var main = document.createElement('span');
+    main.className = 'pi-ws-item-main';
+    var name = document.createElement('div');
+    name.className = 'pi-ws-item-name';
+    name.textContent = (opts.current ? '✓ ' : '') + (opts.name || '');
+    var path = document.createElement('div');
+    path.className = 'pi-ws-item-path';
+    path.textContent = opts.path;
+    main.appendChild(name);
+    main.appendChild(path);
+    row.appendChild(main);
+    if (opts.removable) {
+      var x = document.createElement('span');
+      x.className = 'pi-ws-item-x';
+      x.setAttribute('data-remove', '1');
+      x.title = '从项目列表里移除（目录不会被删）';
+      x.textContent = '✕';
+      row.appendChild(x);
+    }
+    return row;
+  }
+
+  function renderWsMenu() {
+    if (!wsMenu) return;
+    wsMenu.innerHTML = '';
+    var currentKey = normPath(window.__PI_WORKSPACE__ || '');
+    var head = document.createElement('div');
+    head.className = 'pi-ws-menu-head';
+    head.textContent = '项目';
+    wsMenu.appendChild(head);
+    if (!projects.length) {
+      var empty = document.createElement('div');
+      empty.className = 'pi-ws-menu-empty';
+      empty.textContent = '还没有项目。把常用的目录加进来，以后一键切换。';
+      wsMenu.appendChild(empty);
+    }
+    projects.forEach(function(p) {
+      var missing = p.exists === false;
+      wsMenu.appendChild(wsItem({
+        path: p.path, name: p.name, kind: 'project', removable: true,
+        current: normPath(p.path) === currentKey, missing: missing,
+      }));
+    });
+
+    var recent = (recentWorkspaces || []).filter(function(p) {
+      return !projects.some(function(proj) { return normPath(proj.path) === normPath(p); });
+    }).slice(0, 5);
+    if (recent.length) {
+      var sep = document.createElement('div');
+      sep.className = 'pi-ws-sep';
+      wsMenu.appendChild(sep);
+      var rhead = document.createElement('div');
+      rhead.className = 'pi-ws-menu-head';
+      rhead.textContent = '最近使用';
+      wsMenu.appendChild(rhead);
+      recent.forEach(function(p) {
+        wsMenu.appendChild(wsItem({ path: p, name: elidePath(p, 40), kind: 'recent' }));
+      });
+    }
+
+    var sep2 = document.createElement('div');
+    sep2.className = 'pi-ws-sep';
+    wsMenu.appendChild(sep2);
+    var here = window.__PI_WORKSPACE__ || '';
+    if (here && !projectFor(here)) {
+      wsMenu.appendChild(wsItem({ path: here, name: '把当前目录加为项目', kind: 'add-current' }));
+    }
+    wsMenu.appendChild(wsItem({ path: '', name: '添加项目…（选择目录）', kind: 'add-pick' }));
+    wsMenu.appendChild(wsItem({ path: '', name: '只切换目录，不记住…', kind: 'pick' }));
+  }
+
+  function loadProjects() {
+    if (!window.pi || !window.pi.invoke) return Promise.resolve();
+    return window.pi.invoke('pi:get-projects').then(function(res) {
+      if (!res) return;
+      projects = Array.isArray(res.items) ? res.items : [];
+      recentWorkspaces = Array.isArray(res.recent) ? res.recent : [];
+      setGroupBy(res.groupBy === 'project' ? 'project' : 'time');
+      if (res.current) window.__PI_WORKSPACE__ = res.current;
+    }).catch(function() {});
+  }
+
+  function setGroupBy(next) {
+    groupBy = next;
+    var btn = document.getElementById('pi-group-by');
+    if (btn) {
+      btn.textContent = next === 'project' ? '项目' : '时间';
+      btn.classList.toggle('is-on', next === 'project');
+      btn.title = next === 'project' ? '分组：按项目（点击改为按时间）' : '分组：按时间（点击改为按项目）';
+    }
+  }
+
+  function switchTo(path) {
+    if (!path || !window.pi) return;
+    setTitleLoading('切换工作目录…');
+    window.pi.invoke('pi:use-project', { path: path }).then(function(res) {
+      if (!res || res.ok === false) {
+        showToast((res && res.error) || '切换失败');
+        return;
+      }
+      window.__PI_WORKSPACE__ = path;
+      if (wsLabel) wsLabel.textContent = shortenPath(path);
+      closeWsMenu();
+      window.pi.postMessage({ type: 'reload' });
+    }).catch(function(e) { showToast('切换失败: ' + (e && e.message)); });
+  }
+
+  function addProject(pick) {
+    if (!window.pi) return;
+    var payload = pick ? { pick: true } : { path: window.__PI_WORKSPACE__ || '' };
+    window.pi.invoke('pi:add-project', payload).then(function(res) {
+      if (!res || res.ok === false) {
+        if (!(res && res.canceled)) showToast((res && res.error) || '添加失败');
+        return;
+      }
+      return loadProjects().then(function() {
+        renderWsMenu();
+        renderSessions();
+        showToast(res.added ? '已加入项目：' + res.project.name : '这个目录已经在项目里了');
+      });
+    }).catch(function(e) { showToast('添加失败: ' + (e && e.message)); });
+  }
+
+  if (wsMenu) {
+    wsMenu.addEventListener('click', function(e) {
+      var row = e.target.closest ? e.target.closest('.pi-ws-item') : null;
+      if (!row) return;
+      var kind = row.getAttribute('data-kind');
+      var path = row.getAttribute('data-path') || '';
+      if (e.target.closest && e.target.closest('[data-remove]')) {
+        e.stopPropagation();
+        window.pi.invoke('pi:remove-project', { path: path }).then(function() {
+          return loadProjects();
+        }).then(function() {
+          renderWsMenu();
+          renderSessions();
+          showToast('已从项目列表移除（目录没有动）');
+        });
+        return;
+      }
+      if (kind === 'add-current') return addProject(false);
+      if (kind === 'add-pick') return addProject(true);
+      if (kind === 'pick') {
+        window.pi.invoke('pi:pick-workspace').then(function(dir) { if (dir) switchTo(dir); });
+        return;
+      }
+      switchTo(path);
+    });
+  }
+
+  var groupBtn = document.getElementById('pi-group-by');
+  if (groupBtn) groupBtn.onclick = function() {
+    var next = groupBy === 'project' ? 'time' : 'project';
+    setGroupBy(next);
+    renderSessions();
+    if (window.pi) window.pi.invoke('pi:set-sidebar-group', next).catch(function() {});
+  };
+
+  // Workspace chip: opens the list, or closes it if it is already open.
   var pickBtn = document.getElementById('pi-pick-workspace');
   if (pickBtn) pickBtn.onclick = function() {
     if (!window.pi) return;
-    window.pi.invoke('pi:pick-workspace').then(function(dir) {
-      if (dir) {
-        if (wsLabel) wsLabel.textContent = shortenPath(dir);
-        window.pi.invoke('pi:set-workspace', dir).then(function() {
-          window.pi.postMessage({ type: 'reload' });
-        });
-      }
+    if (wsMenu && !wsMenu.hidden) { closeWsMenu(); return; }
+    loadProjects().then(function() {
+      renderWsMenu();
+      if (wsMenu) wsMenu.hidden = false;
     });
   };
+  document.addEventListener('click', function(e) {
+    if (!wsMenu || wsMenu.hidden) return;
+    if (e.target.closest && (e.target.closest('#pi-ws-menu') || e.target.closest('#pi-pick-workspace'))) return;
+    closeWsMenu();
+  });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeWsMenu(); });
 
   function wire(id, fn) {
     var el = document.getElementById(id);
@@ -671,11 +932,62 @@ export const SIDEBAR_SCRIPT = `
 
   function groupOf(s) {
     if (s.pinned) return '置顶';
+    if (groupBy === 'project') {
+      var p = projectFor(s.cwd);
+      return p ? p.name : '其他';
+    }
     var diff = Date.now() - (s.mtime || 0);
     if (diff < 86400000) return '今天';
     if (diff < 172800000) return '昨天';
     if (diff < 604800000) return '本周';
     return '更早';
+  }
+
+  /**
+   * Which project a session belongs to. Mirrors projects.ts: exact match first, then the longest
+   * prefix, so a session started in a subdirectory still groups under its project — and a nested
+   * project wins over its parent.
+   */
+  function projectFor(cwd) {
+    var key = normPath(cwd);
+    if (!key) return null;
+    var best = null, bestLen = -1;
+    for (var i = 0; i < projects.length; i++) {
+      var pk = normPath(projects[i].path);
+      if (!pk) continue;
+      if (key !== pk && key.indexOf(pk + '/') !== 0) continue;
+      if (pk.length > bestLen) { best = projects[i]; bestLen = pk.length; }
+    }
+    return best;
+  }
+
+  function normPath(p) {
+    // The separator is built with fromCharCode on purpose: this whole script lives inside a
+    // template literal, and a backslash written here has to survive two layers of escaping.
+    var s = String(p || '').split(String.fromCharCode(92)).join('/');
+    // Trailing slashes go with a loop rather than a regex, for the same reason.
+    while (s.length > 1 && s.charAt(s.length - 1) === '/') s = s.slice(0, -1);
+    return s.toLowerCase();
+  }
+
+  /**
+   * In project mode the list has to be grouped, and a group is a run of adjacent rows — so the order
+   * the main process sent (pinned first, then most recent) is re-sorted by project, keeping the
+   * project list's own order. "其他" is not a project and always comes last.
+   */
+  function orderForGroups(list) {
+    if (groupBy !== 'project') return list;
+    var rank = {};
+    projects.forEach(function(p, i) { rank[normPath(p.path)] = i; });
+    var keyOf = function(s) {
+      var p = projectFor(s.cwd);
+      return p ? rank[normPath(p.path)] : 9999;
+    };
+    return list.slice().sort(function(a, b) {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      var d = keyOf(a) - keyOf(b);
+      return d !== 0 ? d : (b.mtime || 0) - (a.mtime || 0);
+    });
   }
 
   function insideWindow(x, y) {
@@ -691,10 +1003,9 @@ export const SIDEBAR_SCRIPT = `
     setTimeout(function() { toast.className = 'toast'; }, 3000);
   }
 
-  function itemEl(s, idx) {
+  function itemEl(s) {
     var item = document.createElement('div');
     item.className = 'pi-session-item' + (s.pinned ? ' pinned' : '') + (s.file === currentFile ? ' active' : '');
-    item.setAttribute('data-idx', String(idx));
     item.setAttribute('data-file', s.file || '');
     item.setAttribute('role', 'listitem');
     // Drag a session out of the window to open it in its own — the browser-tab
@@ -760,7 +1071,7 @@ export const SIDEBAR_SCRIPT = `
       return;
     }
     var lastGroup = '';
-    filtered.forEach(function(s, idx) {
+    orderForGroups(filtered).forEach(function(s) {
       if (!filterText) {
         var g = groupOf(s);
         if (g !== lastGroup) {
@@ -771,7 +1082,7 @@ export const SIDEBAR_SCRIPT = `
           lastGroup = g;
         }
       }
-      listEl.appendChild(itemEl(s, idx));
+      listEl.appendChild(itemEl(s));
     });
   }
 
@@ -1074,6 +1385,12 @@ export const SIDEBAR_SCRIPT = `
     if (msg.type === 'workspaceChanged' && wsLabel && msg.path) {
       wsLabel.textContent = shortenPath(msg.path);
     }
+    if (msg.type === 'projects') {
+      // Pushed when the list changes — including from another window.
+      projects = Array.isArray(msg.items) ? msg.items : [];
+      renderSessions();
+      if (wsMenu && !wsMenu.hidden) renderWsMenu();
+    }
   });
 
   function requestSessions() {
@@ -1088,6 +1405,9 @@ export const SIDEBAR_SCRIPT = `
     }
   }
   requestSessions();
+  // Projects and the grouping axis both come from the main process (the list is shared by every
+  // window, so a project added in one shows up in the others).
+  loadProjects();
   // The main process caches parsed metadata, but a window left open overnight should
   // not be scanning a session directory every 15 seconds. This is the only periodic
   // disk work a window does, so it now follows the window's state: 15s while it is the

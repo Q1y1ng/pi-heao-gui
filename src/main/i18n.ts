@@ -362,6 +362,37 @@ export const CHAT_STRINGS: Record<string, string> = {
     "Imported (that session directory is not on this machine, so it now uses the current workspace): ",
   "导入失败: ": "Import failed: ",
 
+  // ── projects (the sidebar's switcher and its grouping)
+  //
+  // Every phrase here is added whole. The translator replaces the longest key first, so a full
+  // sentence wins over the shorter words inside it — which is why these read as sentences rather
+  // than as a pile of words that happen to sit next to each other.
+  "工作目录：点击切换项目": "Working directory — click to switch projects",
+  "分组方式：项目 / 时间": "Group by: project / time",
+  切换分组方式: "Switch grouping",
+  时间: "Time",
+  项目: "Projects",
+  其他: "Other",
+  最近使用: "Recent",
+  "还没有项目。把常用的目录加进来，以后一键切换。":
+    "No projects yet. Add the directories you keep coming back to.",
+  把当前目录加为项目: "Keep this directory as a project",
+  "添加项目…（选择目录）": "Add a project… (choose a directory)",
+  "只切换目录，不记住…": "Just switch, without saving it…",
+  "（目录不在了）": " (directory is gone)",
+  "从项目列表里移除（目录不会被删）": "Remove from the project list (the directory is not deleted)",
+  "分组：按项目（点击改为按时间）": "Grouped by project (click for time)",
+  "分组：按时间（点击改为按项目）": "Grouped by time (click for project)",
+  已加入项目: "Added project",
+  "已加入项目: ": "Added project: ",
+  这个目录已经在项目里了: "That directory is already a project",
+  添加失败: "Could not add",
+  "添加失败: ": "Could not add: ",
+  已从项目列表移除: "Removed from the project list",
+  "已从项目列表移除（目录没有动）": "Removed from the project list (the directory is untouched)",
+  没有这个项目: "No such project",
+  找不到那个目录: "That directory is not there",
+
   // ── window board (what every window is doing)
   窗口总览: "Windows",
   等待回答: "Waiting for you",

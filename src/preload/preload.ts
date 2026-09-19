@@ -96,6 +96,14 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:decisions-focus",
   "pi:get-windows",
   "pi:focus-window",
+  // Projects are the user's own list of directories: reading it and switching to one is the same
+  // class of action as the workspace picker, which is already here.
+  "pi:get-projects",
+  "pi:add-project",
+  "pi:remove-project",
+  "pi:rename-project",
+  "pi:use-project",
+  "pi:set-sidebar-group",
 ]);
 
 // Main -> renderer channels that should be forwarded as MessageEvents
@@ -135,6 +143,7 @@ const forwardChannels = [
   "pi:term-exit",
   "pi:decisions",
   "pi:window-status",
+  "pi:projects",
 ];
 
 let messageListener: ((msg: unknown) => void) | null = null;

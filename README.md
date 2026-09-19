@@ -123,6 +123,9 @@ here. Its origin, and the MIT notice it carries, are recorded in [NOTICE.md](NOT
   counts it and the panel lists every window that is waiting. Clicking an entry raises that window —
   the answer is given there. It is cross-window on purpose: a question raised in a child window shows
   up in the main one.
+- **Projects**: keep the directories you come back to as named projects — the workspace chip becomes a
+  one-click switcher, the sidebar can group sessions by project, and each session is filed under the
+  project it ran in (a session started in a subdirectory belongs to the project above it).
 - **Windows board**: what every window is doing (waiting / running / idle, plus unread counts), one
   click to raise the one you want.
 

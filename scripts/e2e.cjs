@@ -1932,7 +1932,9 @@ app.whenReady().then(async () => {
       // around it was happy. Spawning pi and reading the history takes seconds, so it polls.
       let nodes = -1;
       let nodesDetail = "";
-      for (let i = 0; i < 12 && nodes <= 0; i++) {
+      // 24 x 2.5s: the child spawns pi and waits for it to read the session, and the sessions this
+      // harness seeds are copies of real ones — tens of seconds of parsing is normal, not a defect.
+      for (let i = 0; i < 24 && nodes <= 0; i++) {
         await sleep(2500);
         try {
           nodes = await js(
@@ -2000,7 +2002,14 @@ app.whenReady().then(async () => {
       );
       const seen = await readChatFont().catch(() => null);
       const followed = !!seen && seen.chatFs === `${wanted}px`;
-      if (followed) {
+      if (followed && !Number.isFinite(parseFloat(seen.fs))) {
+        // The token followed the setting, but there is no message to measure — the window is still
+        // reading its session. Reporting "null -> null" here would be reporting the harness clock.
+        skip(
+          "the chat's message text follows the font-size setting",
+          `--chat-fs followed to ${seen.chatFs}, but the window has ${seen.nodes} message nodes to measure`,
+        );
+      } else if (followed) {
         check(
           "the chat's message text follows the font-size setting",
           Math.abs(parseFloat(seen.fs) - wanted) < 0.6,
@@ -2427,8 +2436,10 @@ app.whenReady().then(async () => {
         );
 
         // The window's pi really runs in the new directory.
+        // The rebind starts pi behind the spawn queue, so the spawn can wait for another start-up to
+        // finish before it happens at all.
         let ranThere = false;
-        for (let i = 0; i < 60 && !ranThere; i++) {
+        for (let i = 0; i < 100 && !ranThere; i++) {
           try {
             ranThere = fs
               .readFileSync(spawnLog, "utf8")
@@ -2488,6 +2499,215 @@ app.whenReady().then(async () => {
       }
     });
 
+    await section("Projects: a saved directory, and the list that groups by it", async () => {
+      if (!ISOLATED) {
+        // This section saves projects, switches the workspace and writes session files — all of it in
+        // the sandbox. In a read-only run those are the real profile's config and session store.
+        skip(
+          "Projects: a saved directory, and the list that groups by it",
+          "needs --isolated: it writes config, switches the workspace and seeds sessions",
+        );
+        return;
+      }
+      // A project is a directory plus a name (projects.ts). Two things have to follow a switch: the
+      // window's working directory — which the session, the terminal and the next turn all inherit —
+      // and the sidebar's grouping, so the sessions of one repository sit together.
+      // Not allWindows()[0]: by this point in the run the settings window and child windows exist, and
+      // the sidebar lives in the main one.
+      let win = null;
+      for (const w of allWindows()) {
+        if (await js(w, "!!document.getElementById('pi-sidebar')").catch(() => false)) {
+          win = w;
+          break;
+        }
+      }
+      if (!win) win = chatWindow();
+      const norm = (p) => String(p).replace(/\\/g, "/").toLowerCase();
+      const dirA = path.join(SANDBOX, "proj-a");
+      const dirB = path.join(SANDBOX, "proj-b");
+      fs.mkdirSync(dirA, { recursive: true });
+      fs.mkdirSync(dirB, { recursive: true });
+
+      // The grouping check uses the sessions the harness seeded: they all record this repository as
+      // their directory (the seeding re-points them at this workspace), so keeping the repository as a
+      // project is enough to have something real to group — no synthetic files in the shared store,
+      // which the sections after this one count and order.
+      // 1. The switcher opens, and with nothing saved it says so instead of showing an empty box.
+      await js(win, "document.getElementById('pi-pick-workspace').click()");
+      await sleep(600);
+      const menuText = await js(
+        win,
+        "(() => { const m = document.getElementById('pi-ws-menu'); return m && !m.hidden ? m.innerText : null; })()",
+      );
+      check("the project switcher opens", typeof menuText === "string", String(menuText));
+      check(
+        "with nothing saved yet it says so",
+        // The chat UI runs in English in this run (the app translates its own fragments), so the check
+        // accepts either language rather than pinning one.
+        typeof menuText === "string" && /No projects yet|还没有项目/.test(menuText),
+        String(menuText).slice(0, 120),
+      );
+
+      // Both directories are projects before the grouping check runs: a session whose directory is not
+      // in the list would land under "other", which is the fallback rather than the feature.
+      await js(win, `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirB)}})`);
+
+      // 2. Adding: the same directory twice (once with a trailing separator, which Windows hands out
+      //    for the same directory) is still one row.
+      await js(win, `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirA)}})`);
+      await js(
+        win,
+        `window.pi.invoke('pi:add-project',{path:${JSON.stringify(dirA + path.sep)}})`,
+      );
+      const listed = await js(win, "window.pi.invoke('pi:get-projects')");
+      const rows = Array.isArray(listed?.items) ? listed.items : [];
+      check(
+        "adding a directory twice keeps one project",
+        rows.filter((p) => norm(p.path) === norm(dirA)).length === 1,
+        JSON.stringify(rows.map((p) => p.path)),
+      );
+      check(
+        "and it is named after the directory",
+        rows.some((p) => p.name === "proj-a"),
+        JSON.stringify(rows.map((p) => p.name)),
+      );
+
+      // 3. Switching. The fake pi is the witness: it logs the directory it was started in, which is
+      //    the same directory the session, the terminal and the git pane are given.
+      const sw = byTitle(/设置|Settings/);
+      const beforeConfig = await js(sw, "window.pi.invoke('pi:get-config')");
+      // The session the main window has open right now. Switching the workspace rebinds the session —
+      // that is the point of the switch — so putting the workspace back is not enough to put the
+      // conversation back: the session has to be reopened too, or every section after this one reads
+      // an empty window.
+      const openFile = await js(
+        win,
+        "(() => { const a = document.querySelector('#pi-session-list .pi-session-item.active'); return a ? a.getAttribute('data-file') : ''; })()",
+      );
+      const fakePi = path.join(REPO_ROOT, "test", "fake-pi.cmd");
+      const spawnLog = path.join(SANDBOX, "projects-spawn.log");
+      // The fake logs one event per line; the line splitter is written out because this section no
+      // longer defines the one the removed synthetic-session block used to.
+      const nl = String.fromCharCode(10);
+      const readLog = () => {
+        try {
+          return fs.readFileSync(spawnLog, "utf8").split(nl).slice(-6).join(" | ").slice(0, 400);
+        } catch (e) {
+          return `<unreadable: ${e.message}>`;
+        }
+      };
+      process.env.PI_FAKE_LOG = spawnLog;
+      try {
+        await js(sw, `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(fakePi)}})`);
+        await sleep(300);
+        await js(win, `window.pi.invoke('pi:use-project',{path:${JSON.stringify(dirB)}})`);
+        await sleep(1500);
+
+        const cfg = await js(sw, "window.pi.invoke('pi:get-config')");
+        check(
+          "switching to a project moves the window's working directory",
+          norm(cfg?.workspaceRoot || "") === norm(dirB),
+          String(cfg?.workspaceRoot),
+        );
+
+        let ranThere = false;
+        for (let i = 0; i < 60 && !ranThere; i++) {
+          try {
+            ranThere = fs
+              .readFileSync(spawnLog, "utf8")
+              .split(nl)
+              .some((line) => {
+                if (!line.startsWith("cwd ")) return false;
+                const rest = line.slice(4);
+                return norm(rest.slice(0, rest.lastIndexOf(" ")).trim()) === norm(dirB);
+              });
+          } catch {
+            /* the session has not restarted yet */
+          }
+          if (!ranThere) await sleep(500);
+        }
+        check(
+          "and its pi really runs in that directory",
+          ranThere,
+          ranThere ? dirB : `no spawn with cwd=${dirB}; log=${readLog()}`,
+        );
+      } finally {
+        delete process.env.PI_FAKE_LOG;
+        if (beforeConfig && typeof beforeConfig.piPath === "string") {
+          await js(
+            sw,
+            `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(beforeConfig.piPath)}})`,
+          ).catch(() => null);
+        }
+        // Put the workspace back. This section moved the window into the sandbox, and the sections
+        // after it read the main window's conversation — which a switched workspace replaces with an
+        // empty one, so leaving it behind would fail them for a reason that has nothing to do with them.
+        if (beforeConfig?.workspaceRoot) {
+          await js(
+            win,
+            `window.pi.invoke('pi:set-workspace', ${JSON.stringify(beforeConfig.workspaceRoot)})`,
+          ).catch(() => null);
+          await sleep(1500);
+          if (openFile) {
+            await js(
+              win,
+              `window.pi.invoke('pi:switch-session', { type: 'switchSession', sessionFile: ${JSON.stringify(openFile)} })`,
+            ).catch(() => null);
+            await sleep(1000);
+          }
+        }
+      }
+
+      // 4. Grouping. The seeded sessions all record this repository as their directory, so keeping the
+      //    repository as a project is all the grouping needs. It also has to refresh its own copy of the
+      //    list first — a focus event is what a returning window does, and the sidebar listens for it.
+      const kept = await js(
+        win,
+        `window.pi.invoke('pi:add-project',{path:${JSON.stringify(REPO_ROOT)}})`,
+      );
+      check("the workspace itself can be kept as a project", kept?.ok === true, JSON.stringify(kept));
+      const projectName = path.basename(REPO_ROOT);
+
+      await js(win, "window.dispatchEvent(new Event('focus'))");
+      await sleep(1500);
+      const items = await js(win, "window.pi.invoke('pi:list-sessions')");
+      const withCwd = (Array.isArray(items) ? items : []).filter((s) => s.cwd);
+      check(
+        "the session list carries the directory each session ran in",
+        withCwd.some((s) => norm(s.cwd) === norm(REPO_ROOT)),
+        JSON.stringify({
+          total: Array.isArray(items) ? items.length : String(items),
+          withCwd: withCwd.length,
+          sample: (Array.isArray(items) ? items.slice(0, 4) : []).map((s) => ({
+            name: s.name,
+            cwd: s.cwd,
+          })),
+        }),
+      );
+
+      await js(win, "document.getElementById('pi-group-by').click()");
+      await sleep(400);
+      const grouped = await js(
+        win,
+        "(() => { const b = document.getElementById('pi-group-by'); return { label: b ? b.textContent : '', heads: Array.from(document.querySelectorAll('#pi-session-list .pi-group')).map((h) => h.textContent) }; })()",
+      );
+      check(
+        "the grouping button switches to projects",
+        grouped?.label === "项目" || grouped?.label === "Projects",
+        JSON.stringify(grouped),
+      );
+      check(
+        "and the list groups the sessions under them",
+        Array.isArray(grouped?.heads) && grouped.heads.includes(projectName),
+        JSON.stringify(grouped?.heads),
+      );
+      // Back to the default axis: the setting is persisted, and the next window should not inherit a
+      // grouping this section turned on.
+      await js(win, "document.getElementById('pi-group-by').click()");
+      await sleep(300);
+      const back = await js(win, "window.pi.invoke('pi:get-projects')");
+      check("the axis is remembered", back?.groupBy === "time", String(back?.groupBy));
+    });
     await section("Accessibility: text contrast in both themes", async () => {
       // Regression guard. Shipped defects this would have caught on the spot:
       //   .msg h1/h2/h3 pinned to #f2f4f8 -> 1.1:1 on a light background;

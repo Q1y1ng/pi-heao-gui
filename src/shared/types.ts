@@ -19,6 +19,15 @@ export interface AlertSettings {
   minIntervalMs: number;
 }
 
+/** One saved project. `path` is as the user chose it; comparison goes through projects.ts. */
+export interface Project {
+  path: string;
+  /** Defaults to the directory name; the user may rename it. */
+  name: string;
+  addedAt: number;
+  lastUsedAt: number;
+}
+
 export interface StandaloneConfig {
   piPath: string;
   language: "auto" | "en" | "zh-cn";
@@ -56,6 +65,14 @@ export interface StandaloneConfig {
   autoCheckUpdates: boolean;
   /** Most-recently used workspaces (per-window workspace switcher). */
   recentWorkspaces: string[];
+  /**
+   * Saved projects: a directory plus the name to call it. Not a container — a window still has
+   * exactly one working directory; this is the short list of the ones worth keeping, so switching
+   * does not mean walking the native picker every time.
+   */
+  projects: Project[];
+  /** Sidebar grouping: by project, or by when the session was last used. */
+  sidebarGroupBy: "time" | "project";
   /** Language of the app's own UI (chat UI has its own upstream locales). */
   uiLanguage: "auto" | "zh-cn" | "en";
   /** App version whose first-run guidance was already shown (empty = never). */
@@ -96,6 +113,8 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   restoreWindows: true,
   autoCheckUpdates: true,
   recentWorkspaces: [],
+  projects: [],
+  sidebarGroupBy: "time",
   uiLanguage: "auto",
   lastOnboardedVersion: "",
   commitLanguage: "English",
@@ -167,6 +186,13 @@ export const IPC = {
   GET_WINDOWS: "pi:get-windows",
   /** Bring any window to the front (the decision list and the board both use it). */
   FOCUS_WINDOW: "pi:focus-window",
+  /** Saved projects: the workspace switcher's short list. */
+  GET_PROJECTS: "pi:get-projects",
+  ADD_PROJECT: "pi:add-project",
+  REMOVE_PROJECT: "pi:remove-project",
+  RENAME_PROJECT: "pi:rename-project",
+  USE_PROJECT: "pi:use-project",
+  SET_SIDEBAR_GROUP_BY: "pi:set-sidebar-group",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",
@@ -195,4 +221,6 @@ export const IPC = {
   DECISIONS: "pi:decisions",
   /** Pushed to every window whenever the window board changes. */
   WINDOW_STATUS: "pi:window-status",
+  /** Pushed to every window when the project list changes. */
+  PROJECTS: "pi:projects",
 } as const;

@@ -4,8 +4,13 @@
  * Deliberately free of Electron and fs imports so it can be unit-tested
  * directly (see test/config.test.cjs) — main.ts keeps only the I/O around it.
  */
-import { extname, isAbsolute, resolve } from "node:path";
-import { DEFAULT_CONFIG, type AlertSettings, type StandaloneConfig } from "../shared/types";
+import { basename, extname, isAbsolute, resolve } from "node:path";
+import {
+  DEFAULT_CONFIG,
+  type AlertSettings,
+  type Project,
+  type StandaloneConfig,
+} from "../shared/types";
 
 // ─── JSON boundary ────────────────────────────────────────────────────
 
@@ -60,6 +65,36 @@ export function sanitizeAlerts(input: unknown): AlertSettings {
  * so the shape is never guaranteed. Coerce everything instead of trusting it
  * (a string `args` used to be spread into single-character argv entries).
  */
+/**
+ * Saved projects, straight from a file the user may have edited by hand. Anything that is not a
+ * usable absolute path is dropped rather than repaired: a half-read project would be a row that
+ * cannot be switched to, and re-adding one costs a native dialog.
+ */
+export function sanitizeProjects(input: unknown): Project[] {
+  if (!Array.isArray(input)) return [];
+  const out: Project[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Partial<Project>;
+    const path = typeof row.path === "string" ? row.path.trim() : "";
+    if (!path || !isAbsolute(path)) continue;
+    // The same directory spelled two ways is one project; the first spelling wins.
+    const key = path.replace(/[\\/]+$/, "").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      path,
+      name:
+        typeof row.name === "string" && row.name.trim() ? row.name.trim() : basename(path) || path,
+      addedAt: typeof row.addedAt === "number" && Number.isFinite(row.addedAt) ? row.addedAt : 0,
+      lastUsedAt:
+        typeof row.lastUsedAt === "number" && Number.isFinite(row.lastUsedAt) ? row.lastUsedAt : 0,
+    });
+  }
+  return out;
+}
+
 export function sanitizeConfig(input: unknown): StandaloneConfig {
   const raw: Record<string, unknown> =
     input && typeof input === "object" && !Array.isArray(input)
@@ -119,6 +154,8 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     restoreWindows: bool(raw.restoreWindows, DEFAULT_CONFIG.restoreWindows),
     autoCheckUpdates: bool(raw.autoCheckUpdates, DEFAULT_CONFIG.autoCheckUpdates),
     recentWorkspaces: strArray(raw.recentWorkspaces).slice(0, 8),
+    projects: sanitizeProjects(raw.projects),
+    sidebarGroupBy: raw.sidebarGroupBy === "project" ? "project" : "time",
     uiLanguage:
       raw.uiLanguage === "en" || raw.uiLanguage === "zh-cn" || raw.uiLanguage === "auto"
         ? raw.uiLanguage

@@ -19,6 +19,8 @@ export interface SessionListItem {
   name: string;
   mtime: number;
   sessionId: string;
+  /** Where pi ran. Used by the sidebar to group sessions under their project. */
+  cwd: string;
   pinned: boolean;
 }
 
@@ -27,6 +29,7 @@ interface CachedMeta {
   size: number;
   name: string;
   sessionId: string;
+  cwd: string;
 }
 
 const HEAD_BYTES = 64 * 1024;
@@ -69,6 +72,8 @@ function wholeLines(chunk: string, dropFirst: boolean, dropLast: boolean): strin
 interface ParsedMeta {
   name: string;
   sessionId: string;
+  /** The directory pi was started in (the session header's `cwd`). */
+  cwd: string;
   malformed: number;
   sawSessionInfo: boolean;
 }
@@ -80,6 +85,7 @@ function parseLines(lines: string[], fromTail: boolean, acc: ParsedMeta): void {
       type?: string;
       name?: unknown;
       id?: unknown;
+      cwd?: unknown;
       message?: { role?: string; content?: unknown };
     };
     try {
@@ -102,6 +108,26 @@ function parseLines(lines: string[], fromTail: boolean, acc: ParsedMeta): void {
     }
     if (obj.type === "session" && obj.id && !acc.sessionId) acc.sessionId = String(obj.id);
   }
+}
+
+/**
+ * The directory pi ran in, read from the session header.
+ *
+ * This is the first line of the file and it is read here, not inside `parseLines`, because that pass
+ * is skipped whenever the tail already supplied a session id — which is every session that has ever
+ * been named. A session whose tail carries `session_info` therefore never reported a directory at
+ * all, and the sidebar filed it under "other" instead of under its project.
+ */
+function readHeaderCwd(lines: string[]): string {
+  const first = lines[0];
+  if (!first) return "";
+  try {
+    const header: { type?: string; cwd?: unknown } = JSON.parse(first);
+    if (header?.type === "session" && typeof header.cwd === "string") return header.cwd;
+  } catch {
+    // A malformed header means no directory for this row, not a failed list.
+  }
+  return "";
 }
 
 /** First user message makes a decent fallback title. */
@@ -220,6 +246,7 @@ export function createSessionLister(opts: {
         name: cached.name,
         mtime: st.mtimeMs,
         sessionId: cached.sessionId,
+        cwd: cached.cwd,
         pinned: false,
       };
     }
@@ -232,11 +259,13 @@ export function createSessionLister(opts: {
     const acc: ParsedMeta = {
       name: "",
       sessionId: "",
+      cwd: "",
       malformed: 0,
       sawSessionInfo: false,
     };
     const headLines = wholeLines(headText, false, size > HEAD_BYTES);
     const tailLines = wholeLines(tailText, tailStart > 0, false);
+    acc.cwd = readHeaderCwd(headLines);
     parseLines(tailLines, true, acc);
     if (!acc.sessionId) parseLines(headLines, false, acc);
 
@@ -249,6 +278,7 @@ export function createSessionLister(opts: {
       size,
       name,
       sessionId: acc.sessionId,
+      cwd: acc.cwd,
     });
     cacheDirty = true;
     return {
@@ -256,6 +286,7 @@ export function createSessionLister(opts: {
       name,
       mtime: st.mtimeMs,
       sessionId: acc.sessionId,
+      cwd: acc.cwd,
       pinned: false,
     };
   }

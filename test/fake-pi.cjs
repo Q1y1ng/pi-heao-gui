@@ -37,6 +37,10 @@ const attempts = () => {
 };
 
 record("spawn");
+// Where the app started this process: the one thing about a session's working directory that the
+// app decides and the fake can witness. `pi` itself writes it into the session file it creates, but
+// only once there is something to write — a session nobody has spoken to has no file at all.
+record(`cwd ${process.cwd()}`);
 const failTimes = Number(process.env.PI_FAKE_FAIL_TIMES || 0);
 if (attempts() < failTimes) {
   process.stderr.write("fake pi: simulated start-up failure\n");

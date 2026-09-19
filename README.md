@@ -126,7 +126,9 @@ here. Its origin, and the MIT notice it carries, are recorded in [NOTICE.md](NOT
 
 - **Terminal**: a real PTY (node-pty), multiple tabs, the shell of your choice.
 - **Files**: browse and open the workspace without leaving the window.
-- **Changes**: git status and diffs; commit from the app.
+- **Changes**: git status and diffs; commit from the app. Worktrees are switchable from the pane, and
+  **one button makes a new one** — it creates `repo-branch` beside the repository and opens a window
+  running a session in it, while the window that asked keeps working.
 
 ### Telemetry
 

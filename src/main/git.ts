@@ -9,6 +9,7 @@
  */
 import { runPiCli } from "./pi-cli";
 import { log, errText } from "./log";
+import { basename, dirname, join } from "node:path";
 
 /** Upstream's default system prompt (conventional commits). */
 export const DEFAULT_COMMIT_SYSTEM_PROMPT =
@@ -189,4 +190,47 @@ export function parseWorktrees(raw: string): WorktreeEntry[] {
 export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
   const res = await git(["worktree", "list", "--porcelain"], cwd);
   return res.ok ? parseWorktrees(res.stdout) : [];
+}
+
+/**
+ * Whether a branch name is safe to hand to `git worktree add -b`.
+ *
+ * Checked rather than escaped: the name comes from a text field, git is spawned without a shell
+ * (so there is no shell injection to worry about), but a name that git *interprets* — one starting
+ * with `-` — would turn into a flag, and a name git rejects would leave a half-made worktree. The
+ * rules are git's own (`git check-ref-format`): no spaces or control characters, none of
+ * `~ ^ : ? * [ \`, no `..`, no `@{`, no leading or trailing `/` or `.`, no `//`, and no `.lock`
+ * suffix. The length cap is ours: the name becomes a directory name.
+ */
+export function isSafeBranchName(name: string): boolean {
+  const n = name.trim();
+  if (!n || n.length > 80) return false;
+  if (n.startsWith("-") || n.startsWith("/") || n.endsWith("/")) return false;
+  if (n.startsWith(".") || n.endsWith(".") || n.endsWith(".lock")) return false;
+  // `\p{Cc}` rather than a `\x00-\x1f` range: the rule that reads this file flags literal control
+  // characters in a regex, and a property escape says the same thing without them.
+  if (/[\s~^:?*\\\[\]\p{Cc}]/u.test(n)) return false;
+  if (n.includes("..") || n.includes("@{") || n.includes("//")) return false;
+  return n.split("/").every((part) => part.length > 0 && !part.startsWith("."));
+}
+
+/** The directory part of a branch name, as a file name: `feature/login` → `feature-login`. */
+export function worktreeSlug(branch: string): string {
+  return (
+    branch
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "worktree"
+  );
+}
+
+/**
+ * Where a new working copy of `repoRoot` for `branch` goes: a sibling directory named after the
+ * repository and the branch. A sibling rather than a subdirectory on purpose — a worktree inside the
+ * repository is untracked content inside its own tree, and every `git status` would mention it.
+ */
+export function worktreePathFor(repoRoot: string, branch: string): string {
+  return join(dirname(repoRoot), `${basename(repoRoot)}-${worktreeSlug(branch)}`);
 }

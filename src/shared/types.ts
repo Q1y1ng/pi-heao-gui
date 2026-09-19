@@ -159,6 +159,8 @@ export const IPC = {
   GET_DECISIONS: "pi:get-decisions",
   /** Bring the window that is waiting for an answer to the front. */
   DECISIONS_FOCUS: "pi:decisions-focus",
+  /** Make a new working copy of this repository and open a session window in it. */
+  WORKTREE_CREATE: "pi:worktree-create",
   // main -> renderer
   STATE: "pi:state",
   MODELS: "pi:models",

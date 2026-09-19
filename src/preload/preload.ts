@@ -60,6 +60,7 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:search-files",
   "pi:worktree-list",
   "pi:worktree-use",
+  "pi:worktree-create",
   "pi:append-input",
   "pi:rewind-diff",
   "pi:open-settings",

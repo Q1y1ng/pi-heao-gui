@@ -1130,6 +1130,9 @@ app.whenReady().then(async () => {
           } catch {}
         }
       });
+
+      // The one-click half of the same feature: a working copy *and* a session in it, in a window of
+      // its own — the current window is busy, which is why anyone wants a second copy.
     }
 
     // ══ 7. Diff window ═══════════════════════════════════════════════════
@@ -2112,11 +2115,7 @@ app.whenReady().then(async () => {
           20_000,
           "the badge in the main window",
         ).catch(() => null);
-        check(
-          "another window's badge counts it",
-          badge?.text === "1",
-          JSON.stringify(badge),
-        );
+        check("another window's badge counts it", badge?.text === "1", JSON.stringify(badge));
 
         // The panel lists it, with the title the request carried.
         await js(chatWin, "document.getElementById('pi-decisions-btn').click()");
@@ -2170,12 +2169,168 @@ app.whenReady().then(async () => {
         delete process.env.PI_FAKE_DIALOG;
         delete process.env.PI_FAKE_DIALOG_TITLE;
         if (before && typeof before.piPath === "string") {
-          await js(sw, `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(before.piPath)}})`).catch(
-            () => null,
-          );
+          await js(
+            sw,
+            `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(before.piPath)}})`,
+          ).catch(() => null);
         }
         if (child && !child.isDestroyed()) child.close();
         await sleep(600);
+      }
+    });
+
+    await section("Worktrees: a new copy opens a window of its own", async () => {
+      const { execFileSync } = require("node:child_process");
+      const gitIn = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+      if (!ISOLATED) {
+        // It makes a real branch and a real working copy beside the repository, and it points a
+        // session at the fake pi — none of which a read-only pass may do.
+        skip(
+          "a new working copy opens a window of its own",
+          "needs --isolated: the check creates a worktree and a branch",
+        );
+        return;
+      }
+      const norm = (p) => String(p).replace(/\\/g, "/").toLowerCase();
+      const branch = `e2e-dispatch-${Date.now().toString(36)}`;
+      // The app puts it beside the repository, named after repository and branch — asserted, not
+      // assumed: this is the path a person will find in their file manager afterwards.
+      const expected = path.join(
+        path.dirname(REPO_ROOT),
+        `${path.basename(REPO_ROOT)}-${branch.toLowerCase()}`,
+      );
+      let child = null;
+      // The settings window is the only one allowed to write the config, and this check has to point a
+      // session at the fake pi (see below). It is open by this point — the multi-window section above
+      // opens it and leaves it open for exactly this kind of use.
+      const sw = byTitle(/设置|Settings/);
+      if (!sw) {
+        check("settings window is available for the worktree checks", false, "no settings window");
+        return;
+      }
+      // The dock lives in the full shell, which is the window with the sidebar.
+      const isMainWindow = async (w) => {
+        try {
+          return await js(w, "!!document.getElementById('pi-sidebar')");
+        } catch {
+          return false;
+        }
+      };
+      let win = null;
+      for (const w of allWindows()) {
+        if (await isMainWindow(w)) {
+          win = w;
+          break;
+        }
+      }
+      if (!win) win = chatWindow();
+      // The window's pi is the fake, for one reason: a session nobody has spoken to has no session
+      // file at all (pi writes one when there is something to write), so the app's own record of
+      // "which directory is this session in" has to come from the process it started. The fake
+      // logs the working directory it was started in.
+      const beforeConfig = await js(sw, "window.pi.invoke('pi:get-config')");
+      const fakePi = path.join(REPO_ROOT, "test", "fake-pi.cmd");
+      const spawnLog = path.join(SANDBOX, "dispatch-spawn.log");
+      process.env.PI_FAKE_LOG = spawnLog;
+      await js(sw, `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(fakePi)}})`);
+      await sleep(300);
+      try {
+        await js(
+          win,
+          "(() => { const b = document.querySelector('.pi-dock-tab[data-dock=\"changes\"]'); if (b) b.click(); return true; })()",
+        );
+        await sleep(400);
+        await js(win, "document.getElementById('pi-worktree-new').click()");
+        await sleep(300);
+        const rowShown = await js(
+          win,
+          "(() => { const r = document.getElementById('pi-worktree-new-row'); return r ? !r.hidden : null; })()",
+        );
+        check("the new-copy row opens in place", rowShown === true, String(rowShown));
+
+        await js(
+          win,
+          `(() => { const i = document.getElementById('pi-worktree-new-branch'); if (!i) return false; i.value = ${JSON.stringify(branch)}; return true; })()`,
+        );
+        const beforeIds = new Set(allWindows().map((w) => w.id));
+        await js(win, "document.getElementById('pi-worktree-new-go').click()");
+
+        child = await waitFor(
+          () => allWindows().find((w) => !beforeIds.has(w.id)) ?? null,
+          90_000,
+          "the window for the new working copy",
+        ).catch(() => null);
+        check("one click opens a window for it", !!child, `${allWindows().length} windows`);
+        check(
+          "that window is titled after the branch",
+          child !== null && String(child.getTitle()).includes(branch),
+          child ? child.getTitle() : "no window",
+        );
+        check(
+          "the working copy is on disk where a person would look",
+          fs.existsSync(expected),
+          expected,
+        );
+
+        // The window's pi really runs in the new directory.
+        let ranThere = false;
+        for (let i = 0; i < 60 && !ranThere; i++) {
+          try {
+            ranThere = fs
+              .readFileSync(spawnLog, "utf8")
+              .split("\n")
+              .some((line) => {
+                if (!line.startsWith("cwd ")) return false;
+                // The fake logs `<event> <value> <timestamp>`; the path is everything between.
+                const rest = line.slice(4);
+                return norm(rest.slice(0, rest.lastIndexOf(" ")).trim()) === norm(expected);
+              });
+          } catch {
+            /* the child has not started yet */
+          }
+          if (!ranThere) await sleep(500);
+        }
+        check(
+          "the window's pi runs in the new working copy",
+          ranThere,
+          ranThere ? expected : `no spawn with cwd=${expected}`,
+        );
+
+        // And the panel knows about it — refresh is what makes a copy created while the app runs
+        // appear in the dropdown (the same check the section above makes for its own copy).
+        await js(win, "document.getElementById('pi-git-refresh').click()");
+        await sleep(1200);
+        const listed = await js(
+          win,
+          "(() => { const s = document.getElementById('pi-worktree'); return s ? Array.from(s.options).map((o) => o.value) : []; })()",
+        );
+        check(
+          "the panel lists the new working copy",
+          Array.isArray(listed) && listed.some((v) => norm(v) === norm(expected)),
+          JSON.stringify(listed),
+        );
+      } finally {
+        delete process.env.PI_FAKE_LOG;
+        if (beforeConfig && typeof beforeConfig.piPath === "string") {
+          await js(
+            sw,
+            `window.pi.invoke('pi:set-config',{piPath:${JSON.stringify(beforeConfig.piPath)}})`,
+          ).catch(() => null);
+        }
+        if (child && !child.isDestroyed()) child.close();
+        await sleep(600);
+        try {
+          gitIn(["worktree", "remove", "--force", expected], REPO_ROOT);
+        } catch {}
+        try {
+          gitIn(["worktree", "prune"], REPO_ROOT);
+        } catch {}
+        try {
+          gitIn(["branch", "-D", branch], REPO_ROOT);
+        } catch {}
+        try {
+          fs.rmSync(expected, { recursive: true, force: true });
+        } catch {}
       }
     });
 

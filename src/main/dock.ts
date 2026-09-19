@@ -50,8 +50,15 @@ export const DOCK_HTML = `
       <div class="pi-git-side">
         <div class="pi-files-head"><span id="pi-git-branch">git</span>
             <select id="pi-worktree" title="选择工作副本"></select>
+          <button class="pi-dock-btn" id="pi-worktree-new" type="button" title="新建一个工作副本，并在新窗口里开始一个会话">＋ 新副本</button>
           <button class="pi-dock-btn" id="pi-git-refresh" type="button" title="刷新">刷新</button>
         </div>
+        <div class="pi-worktree-new" id="pi-worktree-new-row" hidden>
+          <input type="text" id="pi-worktree-new-branch" placeholder="分支名，例如 feature/login" />
+          <button class="pi-dock-btn primary" id="pi-worktree-new-go" type="button">创建并新开窗口</button>
+          <button class="pi-dock-btn" id="pi-worktree-new-cancel" type="button">取消</button>
+        </div>
+        <div class="pi-worktree-new-hint" id="pi-worktree-new-hint" hidden></div>
         <div id="pi-git-list"></div>
         <div class="pi-git-actions">
           <input type="text" id="pi-git-notes" placeholder="给模型的备注（可选）" />
@@ -139,9 +146,25 @@ export const DOCK_CSS = `
   border: 1px solid var(--pi-border, #252a32);
   border-radius: var(--pi-radius, 6px);
   font-size: var(--pi-fs-sm, 12px);
-  font-family: inherit;
-  padding: 2px 4px;
+  font-family: inherit;  padding: 2px 4px;
 }
+.pi-worktree-new {
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  border-bottom: 1px solid var(--pi-border);
+}
+.pi-worktree-new[hidden] { display: none; }
+#pi-worktree-new-branch {
+  flex: 1; min-width: 0; padding: 4px 6px;
+  background: var(--pi-surface); color: var(--pi-text);
+  border: 1px solid var(--pi-border); border-radius: var(--pi-radius);
+  font-size: var(--pi-fs-sm); font-family: var(--pi-font-mono);
+}
+#pi-worktree-new-branch:focus { outline: none; border-color: var(--pi-accent); }
+.pi-worktree-new-hint {
+  padding: 4px 8px; font-size: var(--pi-fs-xs); color: var(--pi-text-dim);
+  border-bottom: 1px solid var(--pi-border); overflow-wrap: anywhere;
+}
+.pi-worktree-new-hint[hidden] { display: none; }
 .pi-files-row {
   display: flex; align-items: center; gap: 6px; padding: 3px 8px; cursor: pointer;
   font-size: var(--pi-fs-sm); color: var(--pi-text-dim); white-space: nowrap;
@@ -550,6 +573,64 @@ export const DOCK_SCRIPT = `
       refreshWorktrees();
     });
     refreshWorktrees();
+  }
+
+  // A new working copy, and a session of its own in it. The button is always available (the dropdown
+  // hides itself when there is only one working copy, but wanting a second one is exactly the case
+  // where there is only one), and the branch name is asked for in place rather than in a dialog.
+  var worktreeNewBtn = document.getElementById('pi-worktree-new');
+  var worktreeNewRow = document.getElementById('pi-worktree-new-row');
+  var worktreeNewBranch = document.getElementById('pi-worktree-new-branch');
+  var worktreeNewHint = document.getElementById('pi-worktree-new-hint');
+  function worktreeSay(text) {
+    if (!worktreeNewHint) return;
+    worktreeNewHint.textContent = text || '';
+    worktreeNewHint.hidden = !text;
+  }
+  async function createWorktree() {
+    var branch = ((worktreeNewBranch && worktreeNewBranch.value) || '').trim();
+    if (!branch) {
+      worktreeSay('先给新副本起个分支名');
+      if (worktreeNewBranch) worktreeNewBranch.focus();
+      return;
+    }
+    worktreeSay('正在创建…');
+    var res = await window.pi.invoke('pi:worktree-create', { branch: branch });
+    if (!res || !res.ok) {
+      worktreeSay((res && res.error) || '创建失败');
+      return;
+    }
+    worktreeSay('');
+    if (worktreeNewRow) worktreeNewRow.hidden = true;
+    if (worktreeNewBranch) worktreeNewBranch.value = '';
+    refreshWorktrees();
+    refreshGit();
+  }
+  if (worktreeNewBtn && worktreeNewRow) {
+    worktreeNewBtn.addEventListener('click', function () {
+      worktreeNewRow.hidden = !worktreeNewRow.hidden;
+      if (!worktreeNewRow.hidden && worktreeNewBranch) worktreeNewBranch.focus();
+      worktreeSay('');
+    });
+    var goBtn = document.getElementById('pi-worktree-new-go');
+    var cancelBtn = document.getElementById('pi-worktree-new-cancel');
+    if (goBtn) goBtn.addEventListener('click', createWorktree);
+    if (cancelBtn)
+      cancelBtn.addEventListener('click', function () {
+        worktreeNewRow.hidden = true;
+        worktreeSay('');
+      });
+    if (worktreeNewBranch) {
+      worktreeNewBranch.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          createWorktree();
+        } else if (e.key === 'Escape') {
+          worktreeNewRow.hidden = true;
+          worktreeSay('');
+        }
+      });
+    }
   }
   document.getElementById('pi-git-generate').addEventListener('click', async function () {
     var btn = this;

@@ -75,3 +75,68 @@ test("model output is cleaned of fences and quotes", () => {
   assert.equal(cleanCommitMessage("  \n feat: x \n "), "feat: x");
   assert.equal(cleanCommitMessage(""), "");
 });
+
+// ─── "new working copy": the names git will be handed ─────────────────────────
+
+test("a branch name git would accept is accepted", () => {
+  const { isSafeBranchName } = require("../dist/main/git.js");
+  for (const name of ["feature/login", "wt-20260919", "fix/npm-race", "a", "release/1.2.x"]) {
+    assert.equal(isSafeBranchName(name), true, name);
+  }
+});
+
+test("a branch name that would become a flag or a path is refused", () => {
+  const { isSafeBranchName } = require("../dist/main/git.js");
+  const bad = [
+    "",
+    "   ",
+    "-b",
+    "--force",
+    "has space",
+    "two words",
+    "a..b",
+    "a@{b}",
+    "a//b",
+    "a~b",
+    "a^b",
+    "a:b",
+    "a?b",
+    "a*b",
+    "a[b]",
+    "a\b",
+    ".hidden",
+    "trailing.",
+    "trailing/",
+    "/leading",
+    "nested/.hidden",
+    "branch.lock",
+    "tab\there",
+    "x".repeat(81),
+  ];
+  for (const name of bad) assert.equal(isSafeBranchName(name), false, JSON.stringify(name));
+});
+
+test("a branch becomes a directory name", () => {
+  const { worktreeSlug } = require("../dist/main/git.js");
+  assert.equal(worktreeSlug("feature/login"), "feature-login");
+  assert.equal(worktreeSlug("Fix/Ünicode Name"), "fix-nicode-name");
+  assert.equal(worktreeSlug("///"), "worktree", "never an empty directory name");
+  assert.equal(worktreeSlug("x".repeat(200)).length <= 60, true);
+});
+
+test("a new working copy goes beside the repository, named after both", () => {
+  const { worktreePathFor } = require("../dist/main/git.js");
+  const path = require("node:path");
+  assert.equal(
+    worktreePathFor(path.join("C:", "repos", "app"), "feature/login"),
+    path.join("C:", "repos", "app-feature-login"),
+  );
+  // A sibling, never a subdirectory: a worktree inside the repository would be untracked content
+  // inside its own tree, and every `git status` would mention it.
+  assert.equal(
+    worktreePathFor(path.join("C:", "repos", "app"), "wt").startsWith(
+      path.join("C:", "repos", "app") + path.sep,
+    ),
+    false,
+  );
+});

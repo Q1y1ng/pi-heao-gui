@@ -43,7 +43,7 @@ import {
   buildEnv,
 } from "./chat-session";
 import { createTerminal, type TerminalHandle, type TerminalKind } from "./terminal";
-import { generateCommitMessage, git, listWorktrees } from "./git";
+import { generateCommitMessage, git, isSafeBranchName, listWorktrees, worktreePathFor } from "./git";
 import { readPiChangelog } from "./changelog";
 import { resolveUiLang } from "./i18n";
 import {
@@ -667,7 +667,13 @@ const MAX_SESSION_WINDOWS = 6;
 async function openSessionWindow(
   sessionFile?: string,
   where?: { screenX?: number; screenY?: number; bounds?: Electron.Rectangle },
-): Promise<{ ok: boolean; focused?: boolean; error?: string }> {
+  /**
+   * Where this window's pi should run, when that is not the app-wide workspace — the one caller is
+   * "new working copy": the point of a worktree is to run something *else* in parallel, so the
+   * window that asked keeps its own directory. `label` is what the title bar calls it (the branch).
+   */
+  opts?: { cwd?: string; label?: string },
+): Promise<{ ok: boolean; focused?: boolean; error?: string; windowId?: number }> {
   if (sessionFile) {
     // Focusing the window that already drives this session is the whole point of
     // the guard: a second writer would corrupt the session file.
@@ -689,11 +695,15 @@ async function openSessionWindow(
   }
 
   const placement = where?.bounds ?? boundsNear(where);
+  // A window is titled after what it is about: the branch it was made for, the session it shows, or
+  // nothing at all (a fresh session that has not been written yet).
+  const label = opts?.label ?? (sessionFile ? basename(sessionFile, ".jsonl") : "");
+  const title = label ? `Pi — ${label}` : "Pi Heao GUI";
   const win = new BrowserWindow({
     ...placement,
     minWidth: 700,
     minHeight: 450,
-    title: sessionFile ? `Pi — ${basename(sessionFile, ".jsonl")}` : "Pi Heao GUI",
+    title,
     backgroundColor: "#1e1e1e",
     titleBarStyle: "hidden",
     titleBarOverlay: overlayColors(config.theme),
@@ -712,7 +722,7 @@ async function openSessionWindow(
   // indistinguishable from the main one. For these windows the session name wins.
   win.on("page-title-updated", (event) => {
     event.preventDefault();
-    win.setTitle(sessionFile ? `Pi — ${basename(sessionFile, ".jsonl")}` : "Pi Heao GUI");
+    win.setTitle(title);
     refreshWindowList();
   });
   registerShortcuts(win);
@@ -871,7 +881,7 @@ async function openSessionWindow(
         appPath: app.getAppPath(),
         config: childConfig,
         sessionFile,
-        cwd: config.workspaceRoot || homedir(),
+        cwd: opts?.cwd || config.workspaceRoot || homedir(),
         host: sessionHost(win),
       })) ?? null;
   } catch (e) {
@@ -1882,6 +1892,50 @@ ipcMain.handle(
       postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
     }
     return { ok: true };
+  },
+);
+
+/**
+ * Make a new working copy of this repository and start a session in it, in its own window.
+ *
+ * Switching a window to a worktree is `pi:worktree-use`; the reason to want a second working copy is
+ * usually that the current window is busy, so the new one gets its own window, its own pi and its own
+ * directory — and the window that asked keeps running. That is the whole of "dispatch": no new
+ * concept, just the two pieces the app already had (a worktree, and a window with a session in it)
+ * wired together in one click.
+ */
+ipcMain.handle(
+  "pi:worktree-create",
+  async (
+    _e,
+    arg: unknown,
+  ): Promise<{ ok: boolean; error?: string; path?: string; branch?: string }> => {
+    const branch = String((arg as { branch?: unknown } | null)?.branch ?? "").trim();
+    if (!isSafeBranchName(branch)) {
+      return {
+        ok: false,
+        error: "分支名不合法：不能有空格或 ~ ^ : ? * [ \\ 与 .. @{，也不能以 - 或 . 开头",
+      };
+    }
+    const cwd = workspaceRootDir();
+    const root = await git(["rev-parse", "--show-toplevel"], cwd);
+    if (!root.ok) return { ok: false, error: "当前工作目录不是 git 仓库" };
+    const repo = root.stdout.trim();
+    const path = worktreePathFor(repo, branch);
+    if (existsSync(path)) return { ok: false, error: `目标目录已存在：${path}` };
+    const added = await git(["worktree", "add", "-b", branch, path, "HEAD"], repo);
+    if (!added.ok) {
+      const why = (added.stderr || added.stdout || "").trim().split("\n").slice(0, 3).join(" ");
+      return { ok: false, error: why || "git worktree add 失败" };
+    }
+    // The working copy exists from here on. If the window cannot be opened (the window cap, say),
+    // say that too — the branch is real, and the dropdown will list it.
+    const opened = await openSessionWindow(undefined, undefined, { cwd: path, label: branch });
+    if (!opened.ok) {
+      return { ok: false, error: opened.error || "工作副本已创建，但新窗口没打开", path, branch };
+    }
+    log.info(`worktree created for ${branch} at ${path}, session window ${opened.windowId}`);
+    return { ok: true, path, branch };
   },
 );
 

@@ -140,6 +140,15 @@ export const CHAT_STRINGS: Record<string, string> = {
   已锁定: "locked",
   可清理: "prunable",
   切换失败: "Switch failed",
+  // ── dock: a new working copy, in a window of its own
+  "＋ 新副本": "+ New copy",
+  "新建一个工作副本，并在新窗口里开始一个会话":
+    "Make a new working copy and start a session in it, in its own window",
+  "分支名，例如 feature/login": "Branch name, for example feature/login",
+  创建并新开窗口: "Create and open a window",
+  先给新副本起个分支名: "Give the new copy a branch name first",
+  "正在创建…": "Creating…",
+  创建失败: "Could not create it",
   // ── sidebar
   会话: "Sessions",
   新建会话: "New session",

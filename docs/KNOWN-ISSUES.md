@@ -137,10 +137,24 @@ With the reason in hand the next step differs: a failed install wants the prefix
 (`npm install <packages> --prefix ~/.pi/agent/npm --legacy-peer-deps`), a killed process wants the
 cause of the kill (memory pressure or Task Manager), and an app crash wants the stack in that log.
 
-**Not fixed here:** the app does not retry a pi that dies at start-up — it says "click reload" and
-means it. Serialising the first spawn against a fresh install prefix would remove the race, but that
-window is narrow (a prefix that already has its packages never installs again) and it should be
-measured before it earns the complexity.
+**Fixed in the 未发布 build — both halves, and the measurement came first.** The race is now
+serialised (`spawn-queue.ts`) and a start-up that dies before it is ready is retried **once**
+(`chat-session.ts`). What decided the design:
+
+| Question | Measurement | What it settled |
+| --- | --- | --- |
+| How long can a start-up hold the queue? | 11 packages against an empty prefix: first stdout line at **+70.9 s** (warm npm cache) and **past +170 s** (cold cache, under load); nothing to install: **+1.0 s** | the ceiling is **300 s**, above the slow end — letting the next start-up through early would recreate the race, so waiting is the cheaper mistake |
+| Is "pi answered the app's first request" an honest "past start-up"? | a request written at **+1.0 s** was answered at **+70.9 s**, after the last `npm install` finished | yes — pi does not read stdin until its start-up work is behind it, so the queue releases on that answer |
+| What about a profile with no packages at all? | pi prints **nothing, ever** (260 s of silence, no install, no `settings.json` written) | the ready signal cannot be an extension's own event: the session provokes one instead, or that start-up would hold the queue for its whole ceiling |
+
+Two defects the tests then found, both real and both fixed: a start-up that fails twice used to
+`throw`, which would have left the window with **no session at all** — it now keeps the shape the app
+recovers from (session stays, banner says why, the next message or a reload restarts it); and a write
+to a pi that had just died raised `EPIPE` on the stdin pipe with **no `error` listener**, which is an
+uncaught exception in the main process.
+
+**Not fixed here:** a pi that dies *after* start-up is still not restarted automatically — the banner
+and "click reload or send a message" remain the way back, by design.
 
 ## The stripped child shell did not load the session — **fixed in 1.2.3**
 

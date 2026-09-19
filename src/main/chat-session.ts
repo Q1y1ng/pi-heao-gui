@@ -17,6 +17,13 @@ import { getRealBridgeDir } from "./bridge-extract";
 import { StatsCollector, type UsageLike, type StatsSnapshot } from "./stats";
 import type { StoredSessionStats } from "./stats-store";
 import { log, errText } from "./log";
+import { getSpawnQueue, profileKey } from "./spawn-queue";
+
+/**
+ * Pause before the one retry of a failed start-up. Long enough for a just-killed pi to let go of
+ * whatever it held, short enough that a person reads it as "it took a moment", not as a hang.
+ */
+const STARTUP_RETRY_DELAY_MS = 1500;
 
 // ─── Builtin commands (from upstream builtin-commands.ts) ─────────────
 
@@ -382,6 +389,9 @@ export async function createChatSession(opts: {
       }
       void sendContextUsage();
     } catch (e) {
+      // While a failed start-up is being retried, an error about the pi that is already being
+      // replaced is noise: the retry hydrates again, and reports itself if it fails too.
+      if (retryingStartup) return;
       post({
         type: "error",
         message: e instanceof Error ? e.message : String(e),
@@ -531,7 +541,6 @@ export async function createChatSession(opts: {
       if (rpcAlive) await rpc.dispose();
       rpcAlive = false;
       rpc = await bootRpc(sessionFile);
-      rpcAlive = true;
       await hydrate();
       post({ type: "toast", text: "Session reloaded", kind: "success" });
     } catch (e) {
@@ -876,8 +885,96 @@ export async function createChatSession(opts: {
 
   // Boot RPC
   let rpcGeneration = 0;
+  /** Whether a start-up that died before it was ready has already had its one retry. */
+  let startupRetried = false;
+  /** A failed start-up is being retried: an error about the pi already being replaced is noise. */
+  let retryingStartup = false;
 
+  /**
+   * Start pi, waiting for the spawn queue if another start-up is already installing the same agent
+   * packages (see spawn-queue.ts).
+   *
+   * Returns as soon as pi is spawned — the session has to be in the window while a start-up finishes,
+   * and on a profile whose packages still have to be installed that is a minute or more (measured:
+   * +70.9 s warm, past +170 s cold). pi reads stdin only once it is ready, so a message sent during
+   * that window is answered late rather than lost.
+   */
   async function bootRpc(sessionFileForSpawn?: string): Promise<RpcClient> {
+    const spawnKey = profileKey({ ...process.env, ...env });
+    let released = true;
+    const releaseSpawn = () => {
+      if (released) return;
+      released = true;
+      getSpawnQueue().release(spawnKey);
+    };
+
+    await getSpawnQueue().acquire(spawnKey);
+    released = false;
+    try {
+      const client = await spawnRpc(sessionFileForSpawn, releaseSpawn, (err) => {
+        // A start-up that never became usable must not hold the queue until its ceiling, and it is
+        // the one failure worth another try (see retryStartup).
+        releaseSpawn();
+        void retryStartup(err, sessionFileForSpawn);
+      });
+      rpc = client;
+      rpcAlive = true;
+      return client;
+    } catch (e) {
+      releaseSpawn();
+      throw e;
+    }
+  }
+
+  /**
+   * The one retry of a start-up that died before it was ready.
+   *
+   * A start-up can fail for a reason that does not repeat — a transient npm or filesystem error, a
+   * lock held by a pi that was just killed — and the person used to get a red banner and had to
+   * reload by hand. It cannot become a crash loop: a failure *after* start-up never reaches here,
+   * and a second start-up failure reports itself as before.
+   */
+  async function retryStartup(reason: unknown, sessionFileForSpawn?: string): Promise<void> {
+    if (startupRetried || sessionDisposed) {
+      // The retry is spent (or there is nothing left to retry for). Keep the shape the app already
+      // knows how to recover from: the session stays in the window, the banner says why pi went, and
+      // the next message — or a reload — starts it again.
+      if (!sessionDisposed) post({ type: "error", message: errText(reason) });
+      return;
+    }
+    startupRetried = true;
+    retryingStartup = true;
+    log.warn("pi exited during start-up; retrying once:", errText(reason));
+    await new Promise((resolve) => setTimeout(resolve, STARTUP_RETRY_DELAY_MS));
+    try {
+      if (sessionDisposed) return;
+      await bootRpc(sessionFileForSpawn);
+      await hydrate();
+      post({ type: "toast", text: "Session restarted", kind: "success" });
+    } catch (e) {
+      rpcAlive = false;
+      post({ type: "error", message: errText(e) });
+    } finally {
+      retryingStartup = false;
+    }
+  }
+
+  /**
+   * One pi child, plus the one thing `createRpcClient` cannot tell us: whether it is still there.
+   *
+   * `createRpcClient` hands back the client as soon as the process is spawned — the line that means
+   * "past start-up" is a minute or more away on a profile whose agent packages are still to be
+   * `createRpcClient` hands back the client as soon as the process is spawned — the line that means
+   * "past start-up" is a minute or more away on a profile whose agent packages are still to be
+   * installed. `onReady` fires on the first line pi writes, and `onStartupFailure` fires instead if
+   * pi exits (or cannot be spawned) before that — which is what lets the caller retry a start-up that
+   * failed, instead of showing a banner and leaving it there.
+   */
+  function spawnRpc(
+    sessionFileForSpawn: string | undefined,
+    onReady: () => void,
+    onStartupFailure: (err: Error) => void,
+  ): Promise<RpcClient> {
     const gen = ++rpcGeneration;
     const args = [
       ...extArgs,
@@ -886,11 +983,16 @@ export async function createChatSession(opts: {
       ...(sessionFileForSpawn ? ["--session", sessionFileForSpawn] : []),
       ...(opts.config.args || []),
     ];
-    return createRpcClient({
+    let readyReported = false;
+    const client = createRpcClient({
       piPath,
       args,
       env,
       cwd,
+      onReady: () => {
+        readyReported = true;
+        onReady();
+      },
       handlers: {
         onEvent: (event) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
@@ -958,21 +1060,43 @@ export async function createChatSession(opts: {
           if (gen !== rpcGeneration) return;
           updateStreaming(false);
           rpcAlive = false;
-          // Do NOT set sessionDisposed — allow reload/recovery. The message carries the tail of what
-          // pi printed before it went: "code 1" on its own is both unactionable and, on Windows, what
-          // a force-kill looks like — so it is not even evidence that anything went wrong.
+          // A pi that never got as far as printing anything is a start-up that failed, and the
+          // caller may retry it. A pi that dies later is the person's business: "code 1" on its own
+          // is both unactionable and, on Windows, what a force-kill looks like — so the message
+          // carries the tail of what pi printed before it went.
+          if (!readyReported) {
+            onStartupFailure(new Error(formatExitReason(code, signal, stderrTail)));
+            return;
+          }
           post({ type: "error", message: formatExitReason(code, signal, stderrTail) });
         },
         onError: (err) => {
           if (gen !== rpcGeneration || sessionDisposed) return;
+          // A spawn that never started is the same failure as an early exit.
+          if (!readyReported) {
+            onStartupFailure(err);
+            return;
+          }
           post({ type: "error", message: err.message });
         },
       },
     });
+    // Provoke that first line. pi does not read stdin until its start-up work is behind it, which
+    // is what makes the answer to this cheap request an honest "past start-up": measured with the
+    // 11 agent packages of a real profile against an empty prefix, a request written at +1.0 s was
+    // answered at +70.9 s — after the last `npm install` — and with nothing to install at +1.0 s.
+    // Waiting for an extension's own event instead would never report ready on a profile with no
+    // packages (pi prints nothing at all there), and that start-up would hold the spawn queue for
+    // its whole ceiling.
+    void client
+      .then((c) => c.getState())
+      .catch(() => {
+        // A start-up that dies here is reported through `onStartupFailure`.
+      });
+    return client;
   }
 
   rpc = await bootRpc(sessionFile);
-  rpcAlive = true;
 
   // Hydrate immediately so UI gets state/models even if webviewReady already fired
   void hydrate();

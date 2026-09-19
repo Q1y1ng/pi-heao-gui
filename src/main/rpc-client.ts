@@ -176,6 +176,14 @@ export interface CreateRpcClientOptions {
   env?: Record<string, string>;
   cwd?: string;
   handlers: RpcClientHandlers;
+  /**
+   * Called once, on pi's first line of stdout. The session sends a cheap request the moment pi is
+   * spawned and pi answers only after its start-up work is behind it — measured at +70.9 s with 11
+   * agent packages to install and +1.0 s with none — so this is the earliest honest "past
+   * start-up" signal available. The spawn queue uses it to let the next pi start; nothing else
+   * depends on it.
+   */
+  onReady?: () => void;
 }
 
 // ─── Diagnostics log (async, rotated — never blocks the main process) ──
@@ -376,6 +384,7 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
     }
   >();
   let disposed = false;
+  let reportedReady = false;
 
   const failAll = (message: string) => {
     for (const [, p] of pending) {
@@ -425,6 +434,11 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
   };
 
   attachJsonlReader(proc.stdout, (line) => {
+    // First line means pi is up and its start-up work is behind it (see onReady).
+    if (!reportedReady) {
+      reportedReady = true;
+      options.onReady?.();
+    }
     let msg: unknown;
     try {
       msg = JSON.parse(line);
@@ -467,10 +481,26 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
     options.handlers.onError(err);
     failAll(err.message);
   });
+  // A write to a pi that has just died raises EPIPE on the pipe itself, not on the process — an
+  // unhandled 'error' there is an uncaught exception in the main process. The request that was being
+  // written fails through the exit handler below, which is where the reason for it lives.
+  proc.stdin?.on("error", (err) => {
+    rpcLog(`STDIN ERROR: ${err.message}`);
+  });
   proc.on("exit", (code, signal) => {
     rpcLog(`EXIT: code=${code} signal=${signal}`);
-    failAll("Pi RPC process exited");
+    // Nothing can be written to it any more; say so before failing what was in flight.
+    try {
+      proc.stdin?.destroy();
+    } catch {
+      /* already gone */
+    }
+    // The handler runs first, and synchronously: a start-up that died before it was ready is
+    // decided there (retry, or say why), and it has to have decided before the requests in flight
+    // are failed — those failures are what a person sees, and a start-up that is already being
+    // retried should not paint an error about itself on the way out.
     options.handlers.onExit(code, signal, stderrTail.slice());
+    failAll("Pi RPC process exited");
   });
 
   const send = (command: Record<string, unknown>): void => {

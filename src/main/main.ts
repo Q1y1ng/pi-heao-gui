@@ -79,6 +79,7 @@ import {
 } from "./config";
 import { log, errText } from "./log";
 import { installNavigationGuards } from "./navigation";
+import { getSpawnQueue, profileKey } from "./spawn-queue";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
 import { disposeAlerts, fireAlert, isAlertNotifierWindow, playChime } from "./alerts";
@@ -1619,9 +1620,21 @@ ipcMain.handle(
     // replacement in the same tick made the new shell exit on its first write
     // (the dock then sat on a dead terminal that swallowed every keystroke).
     await new Promise((resolve) => setTimeout(resolve, 250));
+    // A pi terminal installs the same agent packages a chat session does, into the same prefix, so
+    // it must not race one. It cannot take a turn in the spawn queue either: the TUI is interactive
+    // from its first paint and prints nothing that means "past start-up" — on a fresh profile it
+    // asks about project trust before it installs anything — so there is no moment to report ready
+    // at. Waiting for the queue to clear costs a second when a session is starting, nothing
+    // otherwise. A shell terminal starts pi's agent dir not at all, so it does not wait.
+    const termKind: TerminalKind = msg?.kind === "shell" ? "shell" : "pi";
+    if (termKind === "pi") {
+      await getSpawnQueue().whenIdle(
+        profileKey({ ...process.env, ...buildEnv(config, app.getAppPath()) }),
+      );
+    }
     // The terminal follows the window's pi session so `pi` resumes the same chat.
     const session = sessionFor(sender);
-    const kind: TerminalKind = msg?.kind === "shell" ? "shell" : "pi";
+    const kind: TerminalKind = termKind;
     const result = createTerminal({
       kind,
       cwd: config.workspaceRoot || homedir(),
@@ -1800,9 +1813,16 @@ ipcMain.handle(
     saveConfig({ ...config, workspaceRoot: target, recentWorkspaces: recent });
     const win = BrowserWindow.fromWebContents(e.sender);
     const session = sessionFor(e.sender);
-    if (win && session && win.id === mainWindowId) await rebindMainSession(target);
-    else if (win)
+    if (win && session && win.id === mainWindowId) {
+      // The switch itself is done — the workspace is saved, and everything that reads it (the git
+      // pane, the file tree, the terminal) follows on its own. The chat session is rebound behind
+      // this reply, not in front of it: rebinding starts a pi, and starting a pi can wait for
+      // another one to finish installing the same agent packages (see spawn-queue.ts) — a pane that
+      // asked to switch directories must not sit on that.
+      void rebindMainSession(target);
+    } else if (win) {
       postToWindow(win, { type: "toast", text: `工作目录已切换：${target}`, kind: "success" });
+    }
     return { ok: true };
   },
 );

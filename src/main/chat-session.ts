@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join, sep } from "node:path";
 import {
   createRpcClient,
+  formatExitReason,
   type RpcClient,
   type ExtensionUiRequest,
   type RpcImage,
@@ -953,18 +954,14 @@ export async function createChatSession(opts: {
           if (gen !== rpcGeneration || sessionDisposed) return;
           handleExtUiRequest(req);
         },
-        onExit: (code) => {
+        onExit: (code, signal, stderrTail) => {
           if (gen !== rpcGeneration) return;
           updateStreaming(false);
           rpcAlive = false;
-          // Do NOT set sessionDisposed — allow reload/recovery
-          post({
-            type: "error",
-            message:
-              "Pi process exited" +
-              (code != null ? ` (code ${code})` : "") +
-              ". Click reload or send a message to restart.",
-          });
+          // Do NOT set sessionDisposed — allow reload/recovery. The message carries the tail of what
+          // pi printed before it went: "code 1" on its own is both unactionable and, on Windows, what
+          // a force-kill looks like — so it is not even evidence that anything went wrong.
+          post({ type: "error", message: formatExitReason(code, signal, stderrTail) });
         },
         onError: (err) => {
           if (gen !== rpcGeneration || sessionDisposed) return;

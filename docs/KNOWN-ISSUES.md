@@ -105,6 +105,43 @@ markdown *contains* the conversation moved to the daily suite, where a real turn
 > the harness is what needs to be made deterministic. The app-level e2e (87/0, run twice) does not
 > move this way.
 
+## A pi child can exit with code 1 on its own — what that does and does not mean
+
+**Investigated 2026-09-19, after a report of "Pi process exited (code 1). Click reload or send a
+message to restart." appearing repeatedly.**
+
+**What is established.**
+
+- `code 1` with `signal=null` and **no stderr at all** is what this app's own teardown produces:
+  closing a window, reloading a session or quitting calls `taskkill /PID <pid> /T /F`
+  (`rpc-client.ts`), and Windows reports a force-killed process as exit code 1. In the RPC log's
+  03:51–07:26 span that day, **140 of 150 exits were exactly that**, every one of them from test runs
+  opening and closing windows. So the code on its own is not evidence that anything went wrong —
+  which is why the banner now carries pi's last stderr lines instead (`CHANGELOG`, 未发布).
+- One failure mode that *is* real and reproducible: pi installs the agent packages listed in
+  `~/.pi/agent/settings.json` at start-up with `npm install … --prefix <agentDir>/npm`. **Two pi
+  children starting at once install into the same prefix**, and on Windows that loses the race:
+  `npm warn tar TAR_ENTRY_ERROR ENOENT … lstat '…\node_modules\ajv\dist'`, then
+  `npm error code ENOTEMPTY … rmdir '…\node_modules\zod\src\v4\locales'`, then pi exits 1.
+  Reproduced in an e2e sandbox that same day (a fresh profile installs 11 packages, and the harness
+  opens a second window while the install is still running). A profile that hits this can be left
+  with a half-removed tree that fails the same way on every later start — which would match "it keeps
+  dying".
+- The reporting machine's own profile was checked and is healthy: all 11 packages present under
+  `~/.pi/agent/npm/node_modules` (`zod`, `ajv`, `pi-mcp-adapter`, `undici` included), no `.staging`
+  leftovers, and `npm install` into that prefix is not failing. So that instance's exit was not this.
+
+**What to collect next time it happens.** The banner now shows pi's last lines; the full log is
+`%TEMP%\pi-standalone-rpc.log`, and the diagnostics bundle (**设置 → 诊断 → 生成诊断包**) contains it.
+With the reason in hand the next step differs: a failed install wants the prefix repaired
+(`npm install <packages> --prefix ~/.pi/agent/npm --legacy-peer-deps`), a killed process wants the
+cause of the kill (memory pressure or Task Manager), and an app crash wants the stack in that log.
+
+**Not fixed here:** the app does not retry a pi that dies at start-up — it says "click reload" and
+means it. Serialising the first spawn against a fresh install prefix would remove the race, but that
+window is narrow (a prefix that already has its packages never installs again) and it should be
+measured before it earns the complexity.
+
 ## The stripped child shell did not load the session — **fixed in 1.2.3**
 
 **Status:** fixed · the root cause was found by measurement, after two code-reading guesses turned out wrong.

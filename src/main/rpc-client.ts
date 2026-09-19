@@ -158,7 +158,15 @@ export interface RpcClient {
 export interface RpcClientHandlers {
   onEvent: (event: RpcEvent) => void;
   onExtensionUiRequest: (request: ExtensionUiRequest) => void;
-  onExit: (code: number | null, signal: NodeJS.Signals | null) => void;
+  /**
+   * pi exited. The last lines it printed on stderr come along: a start-up failure explains itself
+   * there and nowhere else the person can see.
+   */
+  onExit: (
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    stderrTail: readonly string[],
+  ) => void;
   onError: (err: Error) => void;
 }
 
@@ -177,6 +185,39 @@ const LOG_PATH = join(tmpdir(), "pi-standalone-rpc.log");
 /** Path of the rotated RPC log, for the diagnostics panel. */
 export function getRpcLogPath(): string {
   return LOG_PATH;
+}
+
+/** How many lines of pi's stderr the exit handler gets to see. */
+export const STDERR_TAIL_LINES = 6;
+const STDERR_TAIL_CHARS = 400;
+const EXIT_MESSAGE_LINES = 3;
+const EXIT_MESSAGE_CHARS = 300;
+
+/**
+ * What the app says when pi exits on its own.
+ *
+ * pi prints the reason for a failed start-up — an agent package that would not install, a config it
+ * cannot read — on stderr and then exits 1. The banner used to carry the exit code alone, which no
+ * one can act on, while that output went to a rotating file in %TEMP% that only the diagnostics
+ * bundle mentions. `code === 1` with nothing after it is also exactly what a force-kill looks like
+ * on Windows (this app's own close/reload path calls `taskkill /T /F`), so the code alone is not
+ * even evidence that something went wrong.
+ */
+export function formatExitReason(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  stderrTail: readonly string[] = [],
+): string {
+  const how = code != null ? ` (code ${code})` : signal ? ` (killed by ${signal})` : "";
+  const head = `Pi process exited${how}. Click reload or send a message to restart.`;
+  const lines = stderrTail
+    .map((line) => String(line ?? "").trim())
+    .filter(Boolean)
+    .slice(-EXIT_MESSAGE_LINES)
+    .map((line) =>
+      line.length > EXIT_MESSAGE_CHARS ? `${line.slice(0, EXIT_MESSAGE_CHARS)}…` : line,
+    );
+  return lines.length ? `${head}\n\n${lines.join("\n")}` : head;
 }
 const LOG_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -409,9 +450,16 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
     }
   });
 
+  // Keep the tail of pi's stderr: a failed start-up prints its reason here and then exits, and the
+  // exit handler is the only place that can put that reason in front of a person.
+  const stderrTail: string[] = [];
   attachJsonlReader(proc.stderr, (line) => {
     log.error("pi-rpc-stderr:", line);
     rpcLog(`STDERR: ${line}`);
+    const text = String(line ?? "").trim();
+    if (!text) return;
+    stderrTail.push(text.slice(0, STDERR_TAIL_CHARS));
+    if (stderrTail.length > STDERR_TAIL_LINES) stderrTail.shift();
   });
 
   proc.on("error", (err) => {
@@ -422,7 +470,7 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
   proc.on("exit", (code, signal) => {
     rpcLog(`EXIT: code=${code} signal=${signal}`);
     failAll("Pi RPC process exited");
-    options.handlers.onExit(code, signal);
+    options.handlers.onExit(code, signal, stderrTail.slice());
   });
 
   const send = (command: Record<string, unknown>): void => {

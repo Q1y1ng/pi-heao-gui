@@ -246,7 +246,7 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (172, none skipped)
+npm test              # unit tests (181, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
 npm run verify        # 38 DOM assertions against a real window

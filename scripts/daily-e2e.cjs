@@ -357,8 +357,7 @@ waitForWindow().then(async (win) => {
           if (!line.trim()) continue;
           const entry = JSON.parse(line);
           const role = entry.role || entry.message?.role;
-          const content =
-            entry.content !== undefined ? entry.content : entry.message?.content;
+          const content = entry.content !== undefined ? entry.content : entry.message?.content;
           if (role !== "assistant" || !Array.isArray(content)) continue;
           const text = content
             .filter((b) => b && b.type === "text" && b.text)
@@ -662,7 +661,9 @@ waitForWindow().then(async (win) => {
       consoleErrors.slice(0, 3).join(" | "),
     );
 
-    console.log(`\n─── ${passed}/${passed + failed} 项通过${skipped ? `（${skipped} 项跳过）` : ""} ───`);
+    console.log(
+      `\n─── ${passed}/${passed + failed} 项通过${skipped ? `（${skipped} 项跳过）` : ""} ───`,
+    );
     for (const n of notes) console.log(`  注: ${n}`);
     console.log(`  沙箱: ${SANDBOX}`);
     if (process.env.PI_DAILY_KEEP !== "1") {

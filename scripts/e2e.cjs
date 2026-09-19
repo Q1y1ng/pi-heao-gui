@@ -1215,7 +1215,7 @@ app.whenReady().then(async () => {
         // Do not report a skip without saying what happened: the channel itself answers with the
         // path it wrote (or null), so ask it instead of guessing at "maybe the session is empty".
         const direct = await js(win, "window.pi.invoke('pi:export-conversation')").catch((e) =>
-          `threw: ${e && e.message}`,
+          `threw: ${e?.message}`,
         );
         if (typeof direct === "string" && direct && fs.existsSync(direct)) {
           lastSavePath = direct;

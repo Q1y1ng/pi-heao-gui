@@ -17,6 +17,11 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 if (typeof app.setAppPath === "function") app.setAppPath(path.join(__dirname, ".."));
+
+// The navigation-guard section below clicks a real https: link. The app hands those to the OS
+// browser, and a browser tab appearing on whoever ran `npm run verify` would be a side effect of
+// measuring rather than of the app -- so the guard records the intent instead (see main.ts).
+process.env.PI_NAV_NO_OPEN = "1";
 require(path.join(__dirname, "..", "dist", "main", "main.js"));
 
 const OUT = path.join(__dirname, "..", "docs", "screenshots");
@@ -380,6 +385,50 @@ app.whenReady().then(async () => {
       "Ctrl+Z takes the paste back in one step",
       paste.restored === true,
       JSON.stringify(paste),
+    );
+
+    // ── Navigation guards ──────────────────────────────────────────────
+    // The conversation renders model output, and markdown-it turns a bare URL into a real
+    // <a href>. Clicking one used to navigate this very window to the remote page -- and Electron
+    // injects the preload into every navigation, so that page would have been handed window.pi,
+    // whose allowlist includes pi:term-input and pi:fs-write. This is the assertion that the app
+    // is still on its own page afterwards.
+    const nav = await win.webContents.executeJavaScript(
+      `(async () => {
+         const before = location.href;
+         const click = async (href) => {
+           const a = document.createElement('a');
+           a.href = href;
+           a.textContent = 'link';
+           document.body.appendChild(a);
+           a.click();
+           await new Promise(r => setTimeout(r, 1200));
+           const now = location.href;
+           a.remove();
+           return now;
+         };
+         const afterExternal = await click('https://example.com/pi-nav-guard');
+         // window.open must be refused as well, or a remote page gets a window of ours.
+         const opened = window.open('https://example.com/pi-nav-guard-tab', '_blank');
+         await new Promise(r => setTimeout(r, 600));
+         const afterOpen = location.href;
+         // file: is refused too -- and must not be handed to the shell, because pi:open-file
+         // validates paths (no executables) and this would be a way around that check.
+         const afterFile = await click('file:///C:/Windows/System32/calc.exe');
+         return { before, afterExternal, afterOpen, afterFile, opened: opened === null };
+       })()`,
+      true,
+    );
+    check(
+      "an external link does not navigate the chat window",
+      nav.afterExternal === nav.before && nav.afterFile === nav.before,
+      JSON.stringify(nav),
+    );
+    check("window.open cannot spawn a window of ours", nav.opened === true, JSON.stringify(nav));
+    check(
+      "the window is still on its own page",
+      win.webContents.getURL() === nav.before,
+      win.webContents.getURL(),
     );
 
     console.log(`\n--- ${passed}/${passed + failed} feature checks passed ---`);

@@ -78,6 +78,7 @@ import {
   type JsonValue,
 } from "./config";
 import { log, errText } from "./log";
+import { installNavigationGuards } from "./navigation";
 import { buildSettingsHtml } from "./settings-window";
 import { createTray, showNotification, destroyTray, markQuitting, isQuitting } from "./tray";
 import { disposeAlerts, fireAlert, isAlertNotifierWindow, playChime } from "./alerts";
@@ -2219,6 +2220,30 @@ if (singleInstance) {
 } else {
   app.quit();
 }
+
+/**
+ * Hand a link to the OS browser.
+ *
+ * `PI_NAV_NO_OPEN=1` records the intent instead of launching anything: the harnesses click a real
+ * `https:` link to prove the window did not follow it, and a browser tab opening on whoever ran
+ * `npm run verify` would be a side effect of measuring rather than of the app.
+ */
+function openExternalUrl(url: string): void {
+  if (process.env.PI_NAV_NO_OPEN === "1") {
+    log.info("navigation guard: PI_NAV_NO_OPEN=1, not launching a browser for", url);
+    return;
+  }
+  void shell
+    .openExternal(url)
+    .catch((e) => log.warn("navigation guard: openExternal failed:", errText(e)));
+}
+
+// Every window, present and future, shows only the pages this app builds. A model-written link
+// must not navigate one away: the preload is injected into every navigation, so the foreign page
+// would inherit `window.pi` (see src/main/navigation.ts).
+app.on("web-contents-created", (_event, contents) => {
+  installNavigationGuards(contents, { openExternal: openExternalUrl });
+});
 
 function setupChineseMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [

@@ -37,6 +37,19 @@ attacker-influenced values through a local `esc()`, and file paths are resolved 
 following symlinks and junctions — before they are used. Giving each injected
 script a nonce or hash is not implemented yet.
 
+**Navigation is guarded.** A window may only ever show the page this app built into
+it: `will-navigate` is cancelled for anything else, and `window.open` is always
+denied. This is not cosmetic — Electron injects a preload into **every** navigation a
+window makes, so a window that followed a link would hand that origin `window.pi`,
+whose allowlist contains `pi:term-input` and `pi:fs-write`. The conversation renders
+model output, so those links arrive with the model's text.
+
+`http(s)` and `mailto` are handed to the OS browser instead (a browser is not this
+app). `file:` is refused outright and deliberately **not** forwarded to the shell:
+`pi:open-file` already validates paths through `checkOpenPath` — no executables, no
+escaping the workspace — and forwarding a raw `file:` target would go around that
+check rather than through it.
+
 Outbound network traffic comes from the agent (model calls) and from
 `pi install` / `pi auth` when you ask for them. The shell itself makes no
 requests and collects no telemetry.

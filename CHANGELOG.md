@@ -4,6 +4,20 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 未发布
+
+### Fixed
+
+- **点开对话里的一条链接，不会再把这个应用本身替换掉。** 对话渲染的是模型写出来的内容，markdown-it 会把裸 URL
+  变成真的 `<a href>`，而此前没有任何东西拦着它 —— 点击即让**窗口自己**导航到那个远端页面。这不只是丢界面：
+  Electron 的 preload 会在窗口的**每一次**导航后重新注入，所以那个远端源会拿到 `window.pi`，而它的白名单里就有
+  `pi:term-input`（往活动终端写原始字节）与 `pi:fs-write`。CSP 拦不住这条路（`default-src` 不约束导航，
+  `navigate-to` 从未在 Chromium 实现）。
+  现在每个窗口只显示本应用自己装配的页面：`http(s)` / `mailto` 交给系统浏览器（这正是点链接的人期待的），
+  `file:` 之类一律拒绝，且**不转交系统 shell** —— `pi:open-file` 本来就对路径做校验（禁可执行文件、禁越出
+  工作区），把 `file:` 直接丢给系统等于绕开那道检查。判定本身是纯函数（15 条单测），接线只有两个监听器。
+  测试用的 `PI_NAV_NO_OPEN=1` 让门禁能点真链接而不弹出浏览器。
+
 ## 1.2.4 — 2026-09-19
 
 ### Added

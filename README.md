@@ -246,10 +246,10 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (157, none skipped)
+npm test              # unit tests (172, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
-npm run verify        # 35 DOM assertions against a real window
+npm run verify        # 38 DOM assertions against a real window
 npm run smoke         # 22 end-to-end checks
 npm run test:daily    # 20 checks driving a real model end-to-end
 npm run check:package # asserts the packaged asar contains all 13 runtime paths

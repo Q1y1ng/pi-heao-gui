@@ -247,7 +247,6 @@ app.whenReady().then(async () => {
          if (!window.__piDock) return { missing: true };
          window.__piDock.show('term');
          await new Promise(r => setTimeout(r, 600));
-         const meta = document.getElementById('pi-dock-meta').textContent;
          const deadline = Date.now() + 20000;
          let lines = 0;
          while (Date.now() < deadline) {
@@ -256,6 +255,11 @@ app.whenReady().then(async () => {
            if (lines > 2) break;
            await new Promise(r => setTimeout(r, 300));
          }
+         // Read the label only after the terminal is up: the dock writes it at the end of
+         // ensureTerm(), which waits on pi:term-open (a 250ms delay in the main process plus the
+         // ConPTY spawn), so a fixed 600ms read raced it and reported an empty label while the
+         // very next assertion saw real output from the same terminal.
+         const meta = document.getElementById('pi-dock-meta').textContent;
          return {
            missing: false,
            visible: !document.getElementById('pi-dock').hidden,
@@ -276,15 +280,41 @@ app.whenReady().then(async () => {
       `(async () => {
          window.__piDock.show('files');
          await new Promise(r => setTimeout(r, 1500));
-         const rows = [...document.querySelectorAll('#pi-files-list .pi-files-row')];
-         // pick a real file (directories would just navigate deeper)
-         const target = rows.find(r => r.getAttribute('data-dir') === '0');
-         if (target) { target.click(); await new Promise(r => setTimeout(r, 1500)); }
-         const name = document.getElementById('pi-files-name').textContent;
-         const cmEl = document.querySelector('.CodeMirror');
-         const cm = cmEl && cmEl.CodeMirror ? cmEl.CodeMirror : null;
-         const len = cm ? cm.getValue().length : 0;
-         return { rows: rows.length, name: name, cm: !!cm, opened: !!target, len: len };
+         const rowsOf = () => [...document.querySelectorAll('#pi-files-list .pi-files-row')];
+         const rootRows = rowsOf().length;
+         // The panel lists one level at a time, and a workspace root may hold nothing but
+         // directories (this machine's does), so descend until a file is on screen rather than
+         // assuming the first listing has one. An empty file would satisfy "a file is selected"
+         // while proving nothing, so up to five candidates are tried until one loads content.
+         let candidates = [];
+         for (let depth = 0; depth < 4 && candidates.length === 0; depth++) {
+           candidates = rowsOf().filter(r => r.getAttribute('data-dir') === '0');
+           if (candidates.length) break;
+           const dir = rowsOf().find(r => r.getAttribute('data-dir') === '1');
+           if (!dir) break;
+           dir.click();
+           await new Promise(r => setTimeout(r, 1200));
+         }
+         const editor = () => {
+           const el = document.querySelector('.CodeMirror');
+           return el && el.CodeMirror ? el.CodeMirror : null;
+         };
+         let opened = false;
+         let len = 0;
+         for (const row of candidates.slice(0, 5)) {
+           row.click();
+           await new Promise(r => setTimeout(r, 1200));
+           const cm = editor();
+           const value = cm ? cm.getValue().length : 0;
+           if (value > 0) { opened = true; len = value; break; }
+         }
+         return {
+           rows: rootRows,
+           name: document.getElementById('pi-files-name').textContent,
+           cm: !!editor(),
+           opened: opened,
+           len: len,
+         };
        })()`,
       true,
     );

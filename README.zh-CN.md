@@ -7,6 +7,22 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 
+## 1.2.4 更新报告
+
+发布于 2026-09-19 · [完整发布说明](docs/release-notes-1.2.4.md) · [下载 1.2.4](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.4)
+
+- **文件面板会预览图片与音频。** 点开 PNG / JPG / GIF / WebP / BMP / ICO / AVIF / SVG 直接显示图片（按比例缩放
+  适配、不拉伸），点开 MP3 / WAV / OGG / M4A / AAC / FLAC / OPUS 显示带控件的播放器。上限 10 MB，走 `data:` URL ——
+  页面的 CSP 本来就对 `img-src` / `media-src` 放行 `data:`，所以**没有放宽任何安全策略**。其余文件仍进编辑器：
+  判定只看扩展名，`logo.png.bak` 这种备份仍是文本。
+- **`Ctrl+S` 再也不会把二进制文件覆盖成空文本。** 快捷键是全局的，它并不知道面板在显示什么；e2e 会校验
+  PNG 的字节在按下 `Ctrl+S` 之后**逐字节不变**。
+- **编辑器与文件树跟着主题走。** CodeMirror 自带配色是给白底设计的，两套主题上都不可读（门禁量到：浅色下
+  行号 **2.85:1**、暗色下字符串 **2.59:1**）；文件树的箭头列叠了 0.7 透明度，把 5.59:1 合成为 **2.99:1**；错误
+  横幅的红字压在自己的 14% 红底上只有 **4.0:1**。现在两套主题都过 4.5:1。
+- **变更面板的「刷新」会一并刷新工作副本下拉**：应用运行期间用 `git worktree add` 新建的工作副本，不必整页
+  重载就能出现在下拉里。
+
 ## 1.2.3 更新报告
 
 发布于 2026-09-18 · [完整发布说明](docs/release-notes-1.2.3.md) · [下载 1.2.3](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.3)

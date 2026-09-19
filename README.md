@@ -6,6 +6,25 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.2.4 — images, audio, and a readable editor in both themes
+
+Released 2026-09-19 · [release notes](docs/release-notes-1.2.4.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.4)
+
+- **The file panel previews images and audio.** PNG / JPG / GIF / WebP / BMP / ICO / AVIF / SVG render in
+  place (scaled to fit, never stretched), and MP3 / WAV / OGG / M4A / AAC / FLAC / OPUS get a player with
+  controls. The 10 MB cap rides on `data:` URLs, which the page's CSP already allows — no security policy
+  was widened. Everything else still opens in the editor: the decision is made on the extension alone, so
+  `logo.png.bak` stays text.
+- **`Ctrl+S` can no longer overwrite a binary file with an empty editor.** The shortcut is global and does
+  not know what the panel is showing. The e2e asserts a PNG's bytes are byte-identical after the keypress.
+- **The editor and the file tree follow the theme.** CodeMirror's built-in colours are made for a white
+  background and were unreadable on both themes — the accessibility gate measured line numbers at 2.85:1
+  in light and strings at 2.59:1 in dark, the file tree's arrow column composited 5.59:1 down to 2.99:1
+  behind 0.7 opacity, and the error banner's red text sat at 4.0:1 on its own 14% red background. Both
+  themes now pass 4.5:1.
+- **The Changes panel's refresh button refreshes the worktree dropdown**, so a working copy created by
+  `git worktree add` while the app is running shows up without a page reload.
+
 ## 1.2.3 — the child shell, and a font size that finally moves
 
 Released 2026-09-18 · [release notes](docs/release-notes-1.2.3.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.2.3)
@@ -227,7 +246,7 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (150, none skipped)
+npm test              # unit tests (157, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
 npm run verify        # 35 DOM assertions against a real window

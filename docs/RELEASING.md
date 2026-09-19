@@ -9,7 +9,7 @@ npm ci
 npm run build:renderer     # needed on a fresh clone: the UI bundle is gitignored
 npm run lint
 npm run typecheck
-npm test                   # 125 unit tests
+npm test                   # 157 unit tests
 npm run smoke              # 22 checks, boots a real window
 npm run verify             # 33 checks, includes terminal + dock
 npm run test:daily         # real window + real model: the app actually finishes a task

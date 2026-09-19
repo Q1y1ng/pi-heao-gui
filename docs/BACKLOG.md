@@ -68,15 +68,32 @@
 
 - **来源**：`README.zh-CN.md` 安全节 + `ROADMAP` P2-14
 - **现状**：聊天页与设置页都还是 `script-src 'unsafe-inline'`
-  （`src/main/chat-adapter.ts:54`、`src/main/settings-window.ts:23`），注入点靠逐一 `esc()` 兜底
-- **为什么**：现在 CSP 只防外联，不承担防 XSS；策略里去掉 `unsafe-inline` 才是那一层防线
-- **成本**：改法不难（页面由我们自己拼，每个 `<script>` 上写 nonce），**难在验证**：
-  聊天页里还有 vendored pi-chat 自己的内联 `type="module"` 脚本（那份 5.6M 字符的页面），漏一个就是白屏
-- **验收标准**：页面上每一个内联脚本都有 nonce 或 hash，`unsafe-inline` 从两个 CSP 里消失，
-  两套 e2e（含"无渲染层错误"门禁）全绿
-- **第一步**：先做一次测量 —— 列出聊天页与设置页上**全部**内联脚本（数量、来源、能否被 nonce 覆盖），
-  再决定 nonce 还是 hash
+  （`src/main/chat-adapter.ts` 的 `CSP_META`、`src/main/settings-window.ts` 顶部的 meta），注入点靠逐一 `esc()` 兜底。
+  设置页的占位页 `dist/renderer/index.html` 反而已经带 `nonce="pi-standalone"` —— 那条路已经会写 nonce 了。
+- **为什么**：现在 CSP 只防外联，不承担防 XSS；策略里去掉 `unsafe-inline` 才是那一层防线。
 
+#### 测量结果（2026-09-19，数 `<script` 标签，不看体积）
+
+| 页面 / 来源 | 内联 `<script>` | 谁写的 |
+| --- | --- | --- |
+| 聊天页：vendored pi-chat 构建（`studio/pi-chat/dist/index.html`，5.5 MB 单文件） | 2（其中 1 个 `type="module" crossorigin`） | 上游构建产物，**但由我们插进最终页面** |
+| 聊天页：本仓库注入的片段（sidebar / dock / stats / decisions / windows / palette） | 6 | 我们的模板字面量 |
+| 聊天页：适配器自己（标题栏 / tokens / `__PI_HOME__` / minimal 标题 / 其他） | 7 | 我们的模板字面量 |
+| 设置窗口 | 1 | 我们的模板字面量 |
+| 差异窗口 | 1 | 我们的模板字面量 |
+| **合计** | **17** | 除上游那 2 个，全部由我们的代码写出 |
+
+**结论：nonce 可行，且比 hash 简单。** 17 个标签里 15 个是我们自己的模板字面量，另 2 个虽然来自上游构建，
+但同样是被我们拼进最终页面的 —— 所以只要在**拼完最后一刻**扫一遍整页、给每个 `<script` 盖上同一个 nonce 即可
+（`chat-adapter` 里已经有 `PI_WORKSPACE_PLACEHOLDER` 这种"最后一步替换"的先例）。hash 反而更麻烦：内容一变就得重算，
+而那 5.5 MB 的上游构建每次升级都会变。
+
+- **要先确认的风险**（这是唯一的坑）：盖戳是**字符串替换**，如果哪个脚本的字符串字面量里含 `<script`，盖戳会改坏它。
+  实测：本次统计里除模板标签与 1 处注释外没有多余命中，但实现时必须再确认一次，并给盖戳函数写单测
+  （含"字符串里出现 `<script` 时不误伤"这一条）。
+- **验收标准**：两个 CSP 里的 `'unsafe-inline'` 消失；两套 e2e 全绿，特别是"无渲染层错误"那条门禁；
+  盖戳函数单测（正常页面 / 无脚本页面 / 字符串里含 `<script` 的页面）；页面重新拼装（`{type:"reload"}` 那条路）同样盖戳
+- **下一步**：写 `stampNonce(html, nonce)` + 单测，再改两处 CSP —— 实现点已明确，剩的是改动与验证
 ### 4. e2e 的偶发失败（记录，不是功能）
 
 - **来源**：`KNOWN-ISSUES.md`（已闭环条目的补充段）

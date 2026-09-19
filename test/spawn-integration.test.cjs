@@ -155,7 +155,11 @@ test("a start-up that fails twice is reported, not retried forever", async () =>
     { postToRenderer: (msg) => posted.push(msg) },
   );
   assert.ok(await waitUntil(() => events(log).length >= 4), "both attempts ran");
-  assert.deepEqual(events(log), ["spawn", "fail", "spawn", "fail"], "a second failure is the end of it");
+  assert.deepEqual(
+    events(log),
+    ["spawn", "fail", "spawn", "fail"],
+    "a second failure is the end of it",
+  );
   // The session still exists, and the window is told why pi is not there: that is the shape a person
   // recovers from (reload, or send a message). A throw here would leave the window with no session
   // to recover in at all.
@@ -186,7 +190,10 @@ test("a second start-up waits for the first to report ready", async () => {
   assert.ok(second);
 
   // The child writes its own log line; give it the moment it takes to start.
-  assert.ok(await waitUntil(() => events(logB).length >= 1), "the second start-up logged its spawn");
+  assert.ok(
+    await waitUntil(() => events(logB).length >= 1),
+    "the second start-up logged its spawn",
+  );
   const firstReadyAt = at(logA, "ready");
   const secondSpawnAt = at(logB, "spawn");
   assert.notEqual(firstReadyAt, undefined, "the first start-up reported ready");

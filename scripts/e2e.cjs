@@ -936,14 +936,17 @@ app.whenReady().then(async () => {
             "(() => { const b = document.getElementById('pi-git-refresh'); if (b) b.click(); return true; })()",
           );
           await sleep(1000);
-          const listed = await js(win, `(() => {
+          const listed = await js(
+            win,
+            `(() => {
             const sel = document.getElementById('pi-worktree');
             return {
               hidden: !sel || sel.hidden === true || sel.style.display === 'none',
               values: sel ? Array.from(sel.options).map((o) => o.value) : [],
               labels: sel ? Array.from(sel.options).map((o) => o.textContent) : [],
             };
-          })()`);
+          })()`,
+          );
           const wtIndex = listed.values.findIndex((v) => norm(v) === wtKey);
           // The main working copy is always first (parseWorktrees documents that), so "back" is the
           // other entry — no path comparison is needed on the renderer side, where a backslash would
@@ -956,14 +959,17 @@ app.whenReady().then(async () => {
           );
 
           // Pick it the way a person does — set the value and let the change handler run.
-          const picked = await js(win, `(() => {
+          const picked = await js(
+            win,
+            `(() => {
             const sel = document.getElementById('pi-worktree');
             const opt = sel.options[${wtIndex}];
             if (!opt) return { ok: false, values: Array.from(sel.options).map((o) => o.value) };
             sel.value = opt.value;
             sel.dispatchEvent(new Event('change'));
             return { ok: true };
-          })()`);
+          })()`,
+          );
           await sleep(1800);
           const moved = await js(win, "window.pi.invoke('pi:worktree-list')");
           check(
@@ -1003,14 +1009,17 @@ app.whenReady().then(async () => {
           );
 
           // Back to the main working copy, so the sections after this one run where they expect to.
-          const back = await js(win, `(() => {
+          const back = await js(
+            win,
+            `(() => {
             const sel = document.getElementById('pi-worktree');
             const opt = sel.options[${backIndex}];
             if (!opt) return { ok: false };
             sel.value = opt.value;
             sel.dispatchEvent(new Event('change'));
             return { ok: true, to: opt.value };
-          })()`);
+          })()`,
+          );
           await sleep(1800);
           const info = await js(win, "window.pi.invoke('pi:git-info')");
           check(
@@ -1023,14 +1032,17 @@ app.whenReady().then(async () => {
           // to lose that working copy, and every section after this one expects the workspace to be the
           // repository. Selecting an option is a no-op switch when we are already back.
           try {
-            await js(win, `(() => {
+            await js(
+              win,
+              `(() => {
               const sel = document.getElementById('pi-worktree');
               const opt = sel && sel.options[${backIndex}];
               if (!opt) return false;
               sel.value = opt.value;
               sel.dispatchEvent(new Event('change'));
               return true;
-            })()`);
+            })()`,
+            );
             await sleep(1500);
           } catch {}
           try {

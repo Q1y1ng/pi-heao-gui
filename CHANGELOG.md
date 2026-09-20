@@ -17,6 +17,15 @@
 
 ### Fixed
 
+- **便携版不再去下载“安装包版”的自动更新。** 便携版与安装版共用同一个 release 通道，`latest.yml` 里只有 NSIS
+  安装程序，而 electron-updater 没有便携版分支 —— 也就是说点“检查更新”会下个安装包下来（装完是第二个副本，
+  而不是替换正在跑的那个文件）。现在便携版（认 `PORTABLE_EXECUTABLE_FILE`，这是 electron-builder 的便携启动器
+  唯一留下的痕迹）一律报告“请从 Releases 下载新的 Portable.exe”，不请求、不下载、也不安装。
+- **诊断包里不再捎带明文密钥。** 那份文件是给人贴到公开 issue 上的（SECURITY.md 就是这么说的），而它包含 RPC
+  日志：里面有 pi 的 stderr 和每条子进程的完整命令行。config 的 `env` 值此前已掩码，现在日志与信息文本再过一道
+  `redactSecrets()` —— 只挡**已知的密钥形状**（`sk-`/`AIza`/`ghp_`/`npm_`/`xai-`/`hf_`/`xox*`、`Bearer …`、
+  `token=`/`password=` 这类键值、足够长的裸 base64），路径、哈希、行号、exit code 全部原样保留：
+  掩得太宽，诊断包就白生成了。
 - **MCP 请求不再能永久挂住一个回合。** 此前只有 `connect` 有 30s 超时；`callTool` / `readResource` / `getPrompt`
   完全没有 —— 一个接受了连接却不再回包的 server，会让工具永远不返回，而那就是“回合永不结束”。“生成提交信息”那类
   长操作也不是不可能，所以上限给得宽松（120s），但必须存在。

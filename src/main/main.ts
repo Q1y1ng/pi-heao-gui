@@ -81,6 +81,7 @@ import {
   authToPublic,
   checkOpenPath,
   parseJsonObject,
+  redactSecrets,
   restoreMaskedSecrets,
   sanitizeConfig,
   type JsonValue,
@@ -101,13 +102,29 @@ import {
   unreadFor,
 } from "./tray";
 import { disposeAlerts, fireAlert, isAlertNotifierWindow, playChime } from "./alerts";
-import { createUpdateController, type UpdateController, type UpdaterLike } from "./updater";
+import {
+  createUpdateController,
+  PORTABLE_REASON,
+  type UpdateController,
+  type UpdaterLike,
+} from "./updater";
 
 // ─── Updates ────────────────────────────────────────────────────────────────
 // electron-updater is loaded lazily: it is optional at runtime, and a build that
 // cannot load it must still start and answer "updates unavailable".
 let updateController: UpdateController | null = null;
 let updaterLoading: Promise<void> | null = null;
+
+/**
+ * Whether this process is the portable build.
+ *
+ * electron-builder's portable launcher sets `PORTABLE_EXECUTABLE_FILE` (and the `_DIR` / app-name
+ * siblings) in the child environment — that is the only way it is distinguishable at runtime from
+ * the installed build, and the two need different answers to "is there an update?".
+ */
+function isPortableBuild(): boolean {
+  return !!process.env.PORTABLE_EXECUTABLE_FILE;
+}
 
 async function ensureUpdater(): Promise<void> {
   if (updateController) return;
@@ -124,6 +141,7 @@ async function ensureUpdater(): Promise<void> {
         updater: candidate,
         currentVersion: app.getVersion(),
         isPackaged: app.isPackaged,
+        isPortable: isPortableBuild(),
         onStatus: (status) => {
           // Progress events fire constantly; log only the states that matter.
           if (status.state !== "downloading") log.warn("updater:", JSON.stringify(status));
@@ -141,9 +159,9 @@ async function ensureUpdater(): Promise<void> {
 
 ipcMain.handle("pi:update-status", () => {
   if (updateController) return updateController.status();
-  return app.isPackaged
-    ? { state: "idle" }
-    : { state: "unavailable", reason: "当前为源码运行，不检查更新" };
+  if (!app.isPackaged) return { state: "unavailable", reason: "当前为源码运行，不检查更新" };
+  if (isPortableBuild()) return { state: "unavailable", reason: PORTABLE_REASON };
+  return { state: "idle" };
 });
 
 ipcMain.handle("pi:update-check", async () => {
@@ -2307,10 +2325,11 @@ function diagnosticsInfo(): string {
   ].join("\n");
 }
 
-async function tailLog(lines = 200): Promise<string> {
+async function tailLog(lines = 200, redact = true): Promise<string> {
   try {
     const raw = await readFile(getRpcLogPath(), "utf8");
-    return raw.split("\n").slice(-lines).join("\n");
+    const tail = raw.split("\n").slice(-lines).join("\n");
+    return redact ? redactSecrets(tail) : tail;
   } catch (e) {
     return `（无法读取日志：${errText(e)}）`;
   }
@@ -2318,9 +2337,12 @@ async function tailLog(lines = 200): Promise<string> {
 
 ipcMain.handle("pi:diagnostics", async (_e, op: string) => {
   const action = String(op || "info");
-  if (action === "info") return { ok: true, info: diagnosticsInfo() };
+  // Everything this returns is meant to be pasted into a public issue (SECURITY.md says so), and
+  // the log carries pi's stderr and the exact command line each child was started with. The
+  // config's own secrets are masked above; `redactSecrets` covers the free text.
+  if (action === "info") return { ok: true, info: redactSecrets(diagnosticsInfo()) };
   if (action === "log") return { ok: true, info: await tailLog() };
-  if (action === "copy") return { ok: true, info: diagnosticsInfo() };
+  if (action === "copy") return { ok: true, info: redactSecrets(diagnosticsInfo()) };
   if (action === "open-logs") {
     void shell.openPath(dirname(getRpcLogPath()));
     return { ok: true };
@@ -2333,7 +2355,7 @@ ipcMain.handle("pi:diagnostics", async (_e, op: string) => {
     const dir = join(app.getPath("userData"), "diagnostics");
     await mkdir(dir, { recursive: true });
     const file = join(dir, `diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`);
-    const body = `${diagnosticsInfo()}\n\n===== rpc log (tail 400) =====\n${await tailLog(400)}\n`;
+    const body = `${redactSecrets(diagnosticsInfo())}\n\n===== rpc log (tail 400) =====\n${await tailLog(400)}\n`;
     await writeFile(file, body, "utf8");
     void shell.openPath(dir);
     return { ok: true, path: file };

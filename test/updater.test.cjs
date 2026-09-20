@@ -168,3 +168,33 @@ test("autoDownload follows the caller's choice", () => {
   controller.init();
   assert.equal(updater.autoDownload, false);
 });
+
+test("a portable build is told to download, not offered the installer", () => {
+  // The portable target shares the installer's release channel: latest.yml lists the NSIS setup
+  // program, so the updater must not even ask — downloading it would leave a second, installed
+  // copy behind instead of replacing the file being run.
+  const updater = fakeUpdater();
+  const controller = createUpdateController({
+    updater,
+    currentVersion: "1.0.0",
+    isPackaged: true,
+    isPortable: true,
+    logWarn: () => {},
+  });
+  controller.init();
+  assert.equal(controller.status().state, "unavailable");
+  assert.match(controller.status().reason, /便携版/);
+  assert.equal(
+    updater.calls.check,
+    0,
+    "the updater was never even asked — nothing was downloaded",
+  );
+  return controller.check({ manual: true }).then((status) => {
+    assert.equal(status.state, "unavailable");
+    assert.equal(updater.calls.check, 0, "a manual check is refused too");
+    const install = controller.install();
+    assert.equal(install.ok, false);
+    assert.match(install.error, /便携版/);
+    assert.equal(updater.calls.install, 0);
+  });
+});

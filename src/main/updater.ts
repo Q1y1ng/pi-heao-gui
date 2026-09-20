@@ -34,6 +34,12 @@ export interface UpdaterDeps {
   currentVersion: string;
   /** Update checks are meaningless for a source checkout. */
   isPackaged: boolean;
+  /**
+   * A portable build cannot replace itself — see the constructor's reason in main.ts. It shares
+   * the release channel with the installer, so without this the "check for updates" button offers
+   * a portable user the NSIS setup program.
+   */
+  isPortable?: boolean;
   autoDownload?: boolean;
   logWarn?: (message: string, error?: unknown) => void;
   onStatus?: (status: UpdateStatus) => void;
@@ -51,14 +57,32 @@ function messageOf(error: unknown): string {
   return typeof error === "string" ? error : JSON.stringify(error);
 }
 
+/**
+ * Why a portable build does not update itself.
+ *
+ * The portable target shares the installer's release channel: `latest.yml` lists the NSIS setup
+ * program, and installing it over a portable copy would leave a second, installed copy behind
+ * rather than replacing the file being run. electron-updater has no portable-specific path, so the
+ * honest answer is to say so and point at the download instead of offering an update.
+ */
+const PORTABLE_REASON =
+  "便携版不自动更新：请从 Releases 下载新的 Portable.exe 替换当前文件（安装版才有自动更新）";
+
+export { PORTABLE_REASON };
+
+/** The state a fresh controller starts in, before anything is checked. */
+function initialState(deps: UpdaterDeps): UpdateStatus {
+  if (!deps.isPackaged) return { state: "unavailable", reason: "当前为源码运行，不检查更新" };
+  if (deps.isPortable) return { state: "unavailable", reason: PORTABLE_REASON };
+  return { state: "idle" };
+}
+
 export function createUpdateController(deps: UpdaterDeps): UpdateController {
   const warn =
     deps.logWarn ?? ((message: string, error?: unknown) => log.warn(message, errText(error)));
   const autoDownload = deps.autoDownload !== false;
 
-  let current: UpdateStatus = deps.isPackaged
-    ? { state: "idle" }
-    : { state: "unavailable", reason: "当前为源码运行，不检查更新" };
+  let current: UpdateStatus = initialState(deps);
   let checking = false;
 
   const set = (status: UpdateStatus): UpdateStatus => {
@@ -72,7 +96,7 @@ export function createUpdateController(deps: UpdaterDeps): UpdateController {
   };
 
   function init(): void {
-    if (!deps.isPackaged) return;
+    if (!deps.isPackaged || deps.isPortable) return;
     const updater = deps.updater;
     // Download in the background; the user is told when it is ready to install.
     updater.autoDownload = autoDownload;
@@ -106,6 +130,11 @@ export function createUpdateController(deps: UpdaterDeps): UpdateController {
     if (!deps.isPackaged) {
       return set({ state: "unavailable", reason: "当前为源码运行，不检查更新" });
     }
+    // Refused before the updater is asked anything: `latest.yml` on the release lists the NSIS
+    // installer, and downloading it would either fail or install a second copy over nothing.
+    if (deps.isPortable) {
+      return set({ state: "unavailable", reason: PORTABLE_REASON });
+    }
     if (checking) return current;
     checking = true;
     set({ state: "checking" });
@@ -121,6 +150,9 @@ export function createUpdateController(deps: UpdaterDeps): UpdateController {
   }
 
   function install(): { ok: boolean; error?: string } {
+    if (deps.isPortable) {
+      return { ok: false, error: PORTABLE_REASON };
+    }
     if (current.state !== "ready") {
       return { ok: false, error: "还没有下载完成的更新" };
     }

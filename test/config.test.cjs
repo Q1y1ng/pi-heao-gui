@@ -14,6 +14,7 @@ const {
   restoreMaskedSecrets,
   parseJsonObject,
   checkOpenPath,
+  redactSecrets,
   MASK,
 } = require("../dist/main/config.js");
 const { DEFAULT_CONFIG } = require("../dist/shared/types.js");
@@ -225,4 +226,32 @@ test("checkOpenPath: protected locations are refused, whatever the workspace is"
   assert.equal(checkOpenPath(path.join(home, ".ssh", "id_rsa"), home).ok, true);
   // A sibling whose name merely starts with the protected one is not inside it.
   assert.equal(checkOpenPath(path.join(home, ".ssh-backup", "x.txt"), home, protectedPaths).ok, true);
+});
+
+test("redactSecrets: keys that reach the diagnostic log are masked, evidence is not", () => {
+  // The bundle this feeds is meant to be attached to a public issue: it carries pi's stderr and
+  // every SPAWN line. Provider keys and Authorization headers must not survive it.
+  const cases = [
+    'OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345',
+    'key: "AIzaSyA1234567890abcdefghijklmnopqrs"',
+    'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig',
+    'token=ghp_abcdefghijklmnopqrstuvwxyz0123456789',
+    'codewhisperer: npm_abcdefghijklmnopqrstuvwxyz',
+    'x-api-key: xai-abcdefghijklmnopqrstuvwxyz',
+    'password=hunter2hunter2hunter2',
+    'secret: AKIAIOSFODNN7EXAMPLE0123456789abcdefghijklmnop==',
+  ];
+  for (const line of cases) {
+    const out = redactSecrets(line);
+    assert.ok(out.includes(MASK), `not masked: ${line} -> ${out}`);
+    assert.ok(!/eyJhbGciOi|ghp_abcdefg|AIzaSyA1234567|hunter2hunter2/.test(out), `leaked: ${out}`);
+  }
+
+  // A normal log line survives: masking paths, hashes and numbers would make the bundle useless.
+  const normal =
+    '[2026-09-20T10:00:00.000Z] SPAWN: node C:\\Users\\me\\pi\\dist\\cli.js -e bridge\\todo.ts\\n  cwd=E:\\AI\\repo';
+  assert.equal(redactSecrets(normal), normal);
+  assert.equal(redactSecrets("EXIT: code=1 signal=null"), "EXIT: code=1 signal=null");
+  assert.equal(redactSecrets(42), "");
+  assert.equal(redactSecrets(""), "");
 });

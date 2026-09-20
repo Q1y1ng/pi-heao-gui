@@ -211,6 +211,42 @@ export function maskSecret(value: unknown): string {
   return value.slice(0, 4) + MASK + value.slice(-4);
 }
 
+/**
+ * Secret shapes that turn up in *text* rather than in a field — the RPC log is attached to a
+ * diagnostics bundle the user is told to attach to a public issue, and it carries pi's own stderr
+ * and the exact command line every child was started with.
+ *
+ * Deliberately a blacklist of known shapes rather than "anything long and random": a redactor that
+ * also eats commit hashes, file paths and line numbers makes the bundle useless, and the bundle is
+ * the point. Every pattern keeps a short prefix so the reader can still tell which provider failed.
+ */
+const TEXT_SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
+  // Provider key prefixes (OpenAI/Anthropic, Google, GitHub, GitLab, Slack, npm, xAI, HF).
+  [/\b(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
+  [/\b(AIza[0-9A-Za-z_-]{4})[0-9A-Za-z_-]{10,}/g, "$1" + MASK],
+  [/\b(gh[pousr]_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, "$1" + MASK],
+  [/\b(glpat-)[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
+  [/\b(npm_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, "$1" + MASK],
+  [/\b(xai-)[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
+  [/\b(hf_)[A-Za-z0-9]{10,}/g, "$1" + MASK],
+  [/\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, "$1" + MASK],
+  // Headers and query parameters.
+  [/(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, "$1" + MASK],
+  [/((?:api[-_]?key|access[-_]?token|auth[-_]?token|refresh[-_]?token|client[-_]?secret|password|token|secret)["']?\s*[:=]\s*["']?)([^"'\s,;}{)]{8,})/gi, "$1" + MASK],
+  // A bare base64 blob long enough to be a key rather than a fragment of code.
+  [/(?<![A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?![A-Za-z0-9+/=])/g, MASK],
+];
+
+/** Redact secret-shaped text. Pure; the caller decides what to do with the result. */
+export function redactSecrets(text: unknown): string {
+  if (typeof text !== "string" || !text) return typeof text === "string" ? text : "";
+  let out = text;
+  for (const [pattern, replacement] of TEXT_SECRET_PATTERNS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
 /** auth.json -> masked copy that is safe to render. Real values stay in main. */
 export function authToPublic(rawJson: string): string {
   const obj = parseJsonObject(rawJson);

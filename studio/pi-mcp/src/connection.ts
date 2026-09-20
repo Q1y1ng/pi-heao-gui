@@ -19,6 +19,16 @@ import type {
 
 const CONNECT_TIMEOUT_MS = 30_000;
 
+/**
+ * How long one request may take before it is reported as hung.
+ *
+ * Only the connect used to be bounded: a server that accepted the connection and then stopped
+ * answering left `callTool` unsettled forever — and that is the agent's turn, because the tool
+ * never returns, so the turn never ends. A long server operation can legitimately take a while, so
+ * this is generous.
+ */
+const CALL_TIMEOUT_MS = 120_000;
+
 function buildEnv(extra?: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
@@ -31,7 +41,7 @@ function buildEnv(extra?: Record<string, string>): Record<string, string> {
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} connect timed out after ${ms}ms`)), ms);
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
@@ -44,6 +54,8 @@ export class McpSession {
   readonly metadataCache: MetadataCache | null;
   private connections = new Map<string, McpConnection>();
   private connectPromises = new Map<string, Promise<McpConnection>>();
+  /** Servers this session refuses to start (see block()). */
+  private blocked = new Set<string>();
 
   constructor(cwd: string) {
     this.cwd = cwd;
@@ -64,6 +76,28 @@ export class McpSession {
 
   serverNames(): string[] {
     return [...this.connections.keys()];
+  }
+
+  /** Enabled servers that came from the project's own `.pi/mcp.json`. */
+  projectServerNames(): string[] {
+    return [...this.connections.values()]
+      .filter((c) => c.source === "project" && !c.entry.disabled && !this.blocked.has(c.name))
+      .map((c) => c.name);
+  }
+
+  /**
+   * Refuse a server for the rest of this session.
+   *
+   * Remembered rather than merely skipped at start-up: the proxy tools connect on demand, so a
+   * server that was not trusted would otherwise come online the first time the model asked for one
+   * of its tools.
+   */
+  block(name: string, reason: string): void {
+    const conn = this.connections.get(name);
+    if (!conn) return;
+    this.blocked.add(name);
+    conn.state = "error";
+    conn.error = reason;
   }
 
   /** Names of servers that are enabled in config (not disabled). */
@@ -147,6 +181,9 @@ export class McpSession {
   async ensureConnected(name: string): Promise<McpConnection> {
     const existing = this.connections.get(name);
     if (!existing) throw new Error(`MCP server "${name}" is not configured`);
+    if (this.blocked.has(name)) {
+      throw new Error(existing.error || `MCP server "${name}" is not trusted in this session`);
+    }
     if (existing.state === "connected" && existing.client && existing.discovered) return existing;
 
     const pending = this.connectPromises.get(name);
@@ -216,7 +253,14 @@ export class McpSession {
   }
 
   private async createHttpTransport(entry: ServerEntry, name: string) {
-    const url = new URL(entry.url!);
+    let url: URL;
+    try {
+      url = new URL(entry.url!);
+    } catch {
+      // The URL comes from a JSON file the user (or a cloned repository) wrote; say which server
+      // and what the value was instead of letting a bare TypeError out of the constructor.
+      throw new Error(`MCP server "${name}": url is not a valid URL: ${entry.url}`);
+    }
     const headers: Record<string, string> = { ...entry.headers };
     if (entry.bearerToken) headers["Authorization"] = `Bearer ${entry.bearerToken}`;
     const requestInit = Object.keys(headers).length > 0 ? { headers } : undefined;
@@ -283,10 +327,18 @@ export class McpSession {
     this.touch(name);
     this.incrementInFlight(name);
     try {
-      return (await conn.client!.callTool({
-        name: toolName,
-        arguments: args,
-      })) as unknown as CallToolResult;
+      // SAFETY: the SDK's CallToolResult and the one this extension imports describe the same wire
+      // shape (same SDK version, re-exported through pi); the assertion is only needed because the
+      // two `content` unions are declared in different modules.
+      const result = (await withTimeout(
+        conn.client!.callTool({
+          name: toolName,
+          arguments: args,
+        }),
+        CALL_TIMEOUT_MS,
+        `${name}.${toolName}`,
+      )) as unknown as CallToolResult;
+      return result;
     } finally {
       this.decrementInFlight(name);
       this.touch(name);
@@ -304,7 +356,7 @@ export class McpSession {
     this.touch(name);
     this.incrementInFlight(name);
     try {
-      return conn.client!.readResource({ uri });
+      return await withTimeout(conn.client!.readResource({ uri }), CALL_TIMEOUT_MS, `${name}!read`);
     } finally {
       this.decrementInFlight(name);
       this.touch(name);
@@ -320,7 +372,11 @@ export class McpSession {
     this.touch(name);
     this.incrementInFlight(name);
     try {
-      return conn.client!.getPrompt({ name: promptName, arguments: args });
+      return await withTimeout(
+        conn.client!.getPrompt({ name: promptName, arguments: args }),
+        CALL_TIMEOUT_MS,
+        `${name}!prompt`,
+      );
     } finally {
       this.decrementInFlight(name);
       this.touch(name);

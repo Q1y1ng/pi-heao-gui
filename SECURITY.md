@@ -13,7 +13,7 @@ stating plainly for anyone installing or reviewing it.
 | **Integrated terminal (Dock)** | The terminal panel is a **real PTY** (node-pty + ConPTY) running `pi` or a shell. Anything that can drive that renderer can execute commands. It is never opened automatically, but treat a compromised chat window as a compromised shell. |
 | Local file access from the UI | The file panel can read/write inside the workspace root only (`pi:fs-*` resolves and re-checks every path, and refuses `~/.pi` plus the other credential/system locations outright). |
 | Read `~/.pi/agent/*` | Settings are read/written through the settings window's preload only. API keys are returned **masked** and the real values are restored on save. |
-| Project resources (`.pi/mcp.json`) | A project's MCP servers are started from that file when a session opens in the directory — treat a cloned repository as able to run code through it. pi's own project-trust gate does not cover `mcp.json`. |
+| Project resources (`.pi/mcp.json`) | A project's MCP servers are started from that file when a session opens in the directory, **after a prompt** that names them (remembered per directory, keyed by the file's hash; a changed file asks again). pi's own project-trust gate does not cover `mcp.json`, which is why this one exists — until you answer, the project's servers do not run. |
 | Open files with the OS | "Open in default app" is restricted to non-executable extensions; UNC/device paths are rejected. |
 
 ## Trust boundary (what the renderer may reach)

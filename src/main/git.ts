@@ -18,7 +18,21 @@ export const DEFAULT_COMMIT_SYSTEM_PROMPT =
 export const DEFAULT_COMMIT_USER_PROMPT =
   "Notes from developer (ignore if not relevant): {{USER_CURRENT_INPUT}}";
 
-const TRUNCATED_DIFF_SIZE = 64 * 1024;
+/**
+ * How much of a diff may go into the prompt, and why there is a ceiling at all.
+ *
+ * The commit message is asked for by putting the prompt in **argv**: `pi -p <diff> --system-prompt
+ * <text>`. Windows caps a whole command line at 32 767 characters — and a `cmd.exe` shim, which is
+ * what an npm-installed `pi` is, at 8 191 — so the old 64 KB diff budget was over the ceiling on
+ * its own: any change big enough to be truncated was also big enough to fail with a spawn error.
+ * The budget below is for the whole prompt, with room left for the executable path, the flags and
+ * the system prompt.
+ */
+export const MAX_PROMPT_CHARS = 24_000;
+/** A developer note is a sentence or two; anything longer is not a note. */
+const MAX_NOTES_CHARS = 2_000;
+const MAX_SYSTEM_PROMPT_CHARS = 8_000;
+
 export const FILE_TRUNCATED_MARK = "\n[... file diff truncated ...]";
 
 /**
@@ -67,16 +81,35 @@ export interface CommitPromptInput {
 }
 
 /** Build the system + user prompt exactly as upstream does. */
-export function buildCommitPrompt(input: CommitPromptInput): { system: string; user: string } {
-  const system = input.systemPrompt?.trim() || DEFAULT_COMMIT_SYSTEM_PROMPT;
-  const language = (input.language || "English").trim() || "English";
+export interface CommitPrompt { system: string; user: string; /** What the diff was allowed to use. */ diffBudget: number }
+
+/**
+ * Build the system + user prompt exactly as upstream does — except for the size of the diff, which
+ * upstream caps at 64 KB and which has to fit a Windows command line here (see MAX_PROMPT_CHARS).
+ */
+export function buildCommitPrompt(input: CommitPromptInput): CommitPrompt {
+  const system = (input.systemPrompt?.trim() || DEFAULT_COMMIT_SYSTEM_PROMPT).slice(
+    0,
+    MAX_SYSTEM_PROMPT_CHARS,
+  );
+  const language = (input.language || "English").trim().slice(0, 60) || "English";
+  const languageLine = `\n\nGenerate commit message in ${language}.`;
+  const notes = (input.currentInput || "").trim().slice(0, MAX_NOTES_CHARS);
+  const notesBlock = notes
+    ? DEFAULT_COMMIT_USER_PROMPT.replace("{{USER_CURRENT_INPUT}}", notes)
+    : "";
+  // Everything else is fixed; the diff gets what is left of the command line.
+  const diffBudget = Math.max(
+    1000,
+    MAX_PROMPT_CHARS - system.length - languageLine.length - notesBlock.length - 2,
+  );
   const parts: string[] = [];
-  const notes = (input.currentInput || "").trim();
-  if (notes) parts.push(DEFAULT_COMMIT_USER_PROMPT.replace("{{USER_CURRENT_INPUT}}", notes));
-  parts.push(truncateDiffByFile(input.diff, TRUNCATED_DIFF_SIZE));
+  if (notesBlock) parts.push(notesBlock);
+  parts.push(truncateDiffByFile(input.diff, diffBudget));
   return {
-    system: `${system}\n\nGenerate commit message in ${language}.`,
+    system: `${system}${languageLine}`,
     user: parts.join("\n\n"),
+    diffBudget,
   };
 }
 
@@ -116,6 +149,16 @@ export async function generateCommitMessage(opts: {
     systemPrompt: opts.systemPrompt,
   });
   const args = ["-p", prompt.user, "--system-prompt", prompt.system, "--no-session", "--no-tools"];
+  // Belt and braces: `buildCommitPrompt` keeps the prompt inside the budget, and if anything ever
+  // gets past it the honest answer is one sentence rather than a `spawn EINVAL` from Windows.
+  const argvChars = args.reduce((n, a) => n + a.length + 1, 0) + opts.piPath.length;
+  if (argvChars > MAX_PROMPT_CHARS + 4000) {
+    log.warn(`commit prompt too long for a command line: ${argvChars} chars`);
+    return {
+      ok: false,
+      error: `改动太大（命令行 ${argvChars} 字符，超过 Windows 上限），请分次提交`,
+    };
+  }
   const res = await runPiCli(opts.piPath, args, {
     cwd: opts.cwd,
     timeoutMs: opts.timeoutMs ?? 180_000,
@@ -126,7 +169,7 @@ export async function generateCommitMessage(opts: {
   }
   const message = cleanCommitMessage(res.stdout);
   if (!message) return { ok: false, error: "模型没有返回内容" };
-  return { ok: true, message, truncated: opts.diff.length > TRUNCATED_DIFF_SIZE };
+  return { ok: true, message, truncated: opts.diff.length > prompt.diffBudget };
 }
 
 /** `git` runner used by the status/diff IPC handlers. */

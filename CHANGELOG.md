@@ -8,6 +8,12 @@
 
 ### Fixed
 
+- **改动很大时“生成提交信息”不再报一个看不懂的 spawn 错误。** 提交信息的 prompt 是走 **argv** 传给 pi 的
+  （`-p <diff> --system-prompt <text>`），而 Windows 的整条命令行上限是 32767 字符（npm 装的 `pi` 是 `.cmd`，
+  经 cmd.exe 时更是 8191）—— 而原来给 diff 的预算就是 64KB，**单它一项就已经超了**，所以“正好被截断的那批大改动”
+  必然失败。现在预算是整条 prompt 的 24000 字符（给可执行文件路径、参数、system prompt 都留了位置），
+  开发者备注与自定义 system prompt 也各自封顶，而不是吃掉 diff 的空间；万一仍有东西溢出去，报一句人话
+  （“改动太大，请分次提交”）而不是 `spawn EINVAL`。
 - **diff 窗口不再是一个“多大都读”的任意文件读取口。** `pi:show-diff` / `pi:rewind-diff` 的 `absPath` 直接进
   `readFile`，读多少都行；快照的两个参数（`sessionId` / `baselineHash`，都来自渲染进程）也是原样 `join` 到
   `~/.pi/snapshots/…`，`..` 可以走到快照根之外随便读。而那个看上去像“上限”的 `MAX_HTML` 是在

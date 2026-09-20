@@ -12,6 +12,7 @@ const {
   cleanCommitMessage,
   DEFAULT_COMMIT_SYSTEM_PROMPT,
   FILE_TRUNCATED_MARK,
+  MAX_PROMPT_CHARS,
 } = require("../dist/main/git.js");
 
 const fileDiff = (name, lines) =>
@@ -139,4 +140,37 @@ test("a new working copy goes beside the repository, named after both", () => {
     ),
     false,
   );
+});
+
+test("the commit prompt fits in a Windows command line", () => {
+  // The prompt travels in argv (-p <diff> --system-prompt <text>): 32 767 characters is the
+  // whole command line, and the old 64 KB diff budget was over it on its own - the request
+  // failed with a spawn error for exactly the changes that had been truncated.
+  const huge = fileDiff("big.ts", 200_000) + fileDiff("other.ts", 50_000);
+  const { system, user } = buildCommitPrompt({ diff: huge, currentInput: "note" });
+  assert.ok(
+    system.length + user.length <= MAX_PROMPT_CHARS,
+    `prompt is ${system.length + user.length} chars, budget ${MAX_PROMPT_CHARS}`,
+  );
+  assert.ok(user.includes(FILE_TRUNCATED_MARK), "and it says so where it cut");
+  // Every file is still represented, which is the property upstream's truncation exists for.
+  assert.ok(user.includes("a/big.ts") && user.includes("a/other.ts"));
+
+  // A long developer note and a long custom system prompt are bounded too, instead of eating the
+  // diff's budget silently.
+  const withLongBits = buildCommitPrompt({
+    diff: huge,
+    currentInput: "n".repeat(50_000),
+    systemPrompt: "s".repeat(50_000),
+  });
+  assert.ok(
+    withLongBits.system.length + withLongBits.user.length <= MAX_PROMPT_CHARS,
+    "still inside the budget",
+  );
+
+  // ...and a short diff is still passed through untouched.
+  const small = fileDiff("a.ts", 4);
+  const plain = buildCommitPrompt({ diff: small });
+  assert.equal(plain.user, small);
+  assert.equal(plain.diffBudget, MAX_PROMPT_CHARS - plain.system.length - 2);
 });

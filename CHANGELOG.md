@@ -25,6 +25,17 @@
 
 ### Changed
 
+- **文件面板默认的工作目录就是家目录，而“在工作目录内”过去等于“整个用户目录”。** 于是聊天窗口 —— 那个专门渲染
+  模型输出、被明确定义为“不能碰 agent 配置”的窗口 —— 可以通过 `pi:fs-read` 读 `~/.pi/agent/auth.json`、通过
+  `pi:fs-write` 改写 `~/.pi/standalone/config.json`（下一轮 pi 启动就按里面的 `env`/`args` 跑），
+  与 SECURITY.md 的承诺相反。现在 `pi:fs-tree/read/media/write` 一律拒绝受保护位置：`~/.pi`（会话、快照、
+  settings/auth、应用配置、pi 装的扩展包）、`~/.ssh`、`~/.aws`、`~/.gnupg`、`~/.docker`、`~/.config`、
+  `~/.npmrc`、`~/.git-credentials`、`~/.gitconfig`（git 的 `core.sshCommand` 就是一个命令执行入口），
+  以及 `%APPDATA%`（`userData/bridge-extracted/*.ts` 是每个 pi 都拿 `-e` 执行的，Startup 目录也在里面）。
+  判断交给新的 `isWithin()`：它与 `safeWorkspacePath()` 故意相反，**文本命中或真实路径命中任一条即算命中** ——
+  工作区里指向 `~/.pi` 的 junction 必须被拦下，而“只拦两种写法都一致的那一个”恰好放过这个故事的主角。
+  仓库自己的 `.pi/`（settings、mcp.json）**不在**名单里：那是用户的仓库，不是 agent 状态。
+  `pi:open-file`（交给系统默认程序打开）同样过这张名单：否则它就成了绕过文件面板那道门的另一条路。
 - `SECURITY.md` 里关于权限与文件面板的两段描述改成与实现一致：默认规则表、工作区外的写入确认、
   `pi:fs-*` 拒绝 `~/.pi` 等位置、以及“克隆来的仓库可以通过 `.pi/mcp.json` 跑代码”（pi 自己的项目信任门并不覆盖 `mcp.json`）。
 

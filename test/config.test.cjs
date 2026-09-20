@@ -200,3 +200,29 @@ test("the shipped dangerous-command list is upstream's, byte for byte", () => {
   assert.ok(rm.some((r) => r.test("git push --force origin main")), "force push is in the list");
   assert.ok(!rm.some((r) => r.test("npm run build")), "and a build is not");
 });
+
+test("checkOpenPath: protected locations are refused, whatever the workspace is", () => {
+  const home = path.resolve("C:/Users/me");
+  const protectedPaths = [path.join(home, ".ssh"), path.join(home, ".pi")];
+
+  // The workspace IS the home directory in the default install, so "inside the workspace"
+  // cannot be the only rule: handing a key file to the OS default application is a way
+  // around the file panel's guard, not through it.
+  for (const raw of [
+    path.join(home, ".ssh", "id_rsa"),
+    path.join(home, ".pi", "agent", "auth.json"),
+    path.join(home, ".pi"),
+  ]) {
+    const check = checkOpenPath(raw, home, protectedPaths);
+    assert.equal(check.ok, false, `${raw} must be refused`);
+    assert.match(check.error, /protected location/);
+  }
+
+  // A normal file in the same workspace still opens, and an unprotected dot-directory too.
+  assert.equal(checkOpenPath(path.join(home, "notes.md"), home, protectedPaths).ok, true);
+  assert.equal(checkOpenPath(path.join(home, ".config", "x.json"), home, []).ok, true);
+  // Without the list (the old call shape) nothing about it changes.
+  assert.equal(checkOpenPath(path.join(home, ".ssh", "id_rsa"), home).ok, true);
+  // A sibling whose name merely starts with the protected one is not inside it.
+  assert.equal(checkOpenPath(path.join(home, ".ssh-backup", "x.txt"), home, protectedPaths).ok, true);
+});

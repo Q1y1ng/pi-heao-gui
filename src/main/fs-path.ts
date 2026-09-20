@@ -19,6 +19,50 @@ export function realPathOrNull(path: string): string | null {
   }
 }
 
+/** The nearest existing ancestor's real path, with the missing tail appended. */
+function realPathOfNearest(target: string): string | null {
+  let probe = target;
+  for (;;) {
+    const real = realPathOrNull(probe);
+    if (real) {
+      return probe === target ? real : resolve(real, relative(probe, target));
+    }
+    const parent = dirname(probe);
+    if (parent === probe) return null; // walked past the drive root
+    probe = parent;
+  }
+}
+
+/**
+ * Whether `target` is `root` or inside it — the *protected-path* question, asked of the
+ * real location as well as the spelled one.
+ *
+ * Deliberately the opposite logic to `safeWorkspacePath`: that one ANDs its two checks
+ * (the path must be inside the workspace textually **and** after links are followed), while
+ * this one ORs them. The workspace guard is asking "may this path be touched at all?" and
+ * must refuse the link that leaves; this one is asking "is this path one of the ones that
+ * must never be touched?", and refusing only when both spellings agree would let a junction
+ * inside the workspace deliver `~/.pi/agent/auth.json` — textually "inside the workspace",
+ * which is exactly the escape this exists to stop.
+ *
+ * Over-blocking is the accepted cost: a path that *reads* as protected and resolves
+ * elsewhere is still refused.
+ */
+export function isWithin(root: string, target: string): boolean {
+  if (!root || !target) return false;
+  const contains = (base: string, full: string): boolean => {
+    const rel = relative(base, full);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  };
+  const textRoot = resolve(root);
+  const textFull = resolve(target);
+  if (contains(textRoot, textFull)) return true;
+  const realRoot = realPathOrNull(textRoot) ?? realPathOfNearest(textRoot);
+  const realFull = realPathOfNearest(textFull);
+  if (!realRoot || !realFull) return false;
+  return contains(realRoot, realFull);
+}
+
 /**
  * Resolve a workspace-relative path, or return null if it escapes the workspace.
  *

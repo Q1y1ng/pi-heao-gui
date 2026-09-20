@@ -35,7 +35,7 @@ import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { type StandaloneConfig, DEFAULT_CONFIG, DEFAULT_DANGEROUS_PATTERNS, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
-import { safeWorkspacePath } from "./fs-path";
+import { isWithin, safeWorkspacePath } from "./fs-path";
 import {
   createChatSession,
   type ChatSession,
@@ -483,7 +483,7 @@ function writePiFile(name: string, content: string): void {
 // ─── Secrets + path guards live in ./config (pure, unit-tested) ────────
 
 function openPathSafely(raw: string): { ok: boolean; error?: string } {
-  const check = checkOpenPath(raw, config.workspaceRoot);
+  const check = checkOpenPath(raw, config.workspaceRoot, protectedPaths());
   if (!check.ok) {
     log.warn(`openPath blocked (${check.error}):`, raw);
     return { ok: false, error: check.error };
@@ -1884,6 +1884,54 @@ function workspaceRootDir(): string {
   return config.workspaceRoot || homedir();
 }
 
+/**
+ * Places the file panel refuses, wherever the workspace points.
+ *
+ * The panel's root defaults to the home directory, so "inside the workspace" used to mean
+ * "anywhere in the profile": the chat window — the one window that renders model output and
+ * is explicitly *not* allowed to touch agent config — could read `~/.pi/agent/auth.json` and
+ * overwrite `~/.pi/standalone/config.json` through `pi:fs-read` / `pi:fs-write`, which is the
+ * opposite of what SECURITY.md promises. Two things are being protected here:
+ *
+ *   - credentials and agent state: pi's own directory (sessions, snapshots, settings.json,
+ *     auth.json, the app config, and the extension packages pi installs), the usual key and
+ *     config directories, and `~/.gitconfig` (a git `core.sshCommand` is a command runner);
+ *   - `%APPDATA%`: `userData/bridge-extracted/*.ts` is executed by every pi this app spawns
+ *     (`-e <path>`), and the Startup folder lives in there too — a writable path whose content
+ *     runs later is worth more to an attacker than anything it could read.
+ *
+ * A project's own `.pi/` (settings, mcp.json) is deliberately *not* on this list: that one is
+ * the user's repository, not agent state.
+ */
+function protectedPaths(): string[] {
+  const home = homedir();
+  const roots = [
+    join(home, ".pi"),
+    join(home, ".ssh"),
+    join(home, ".aws"),
+    join(home, ".gnupg"),
+    join(home, ".docker"),
+    join(home, ".config"),
+    join(home, ".npmrc"),
+    join(home, ".git-credentials"),
+    join(home, ".gitconfig"),
+    app.getPath("appData"),
+    app.getPath("userData"),
+  ];
+  return roots.filter(Boolean);
+}
+
+let protectedRoots: string[] | null = null;
+
+/** The protected root `full` falls under, or null when it is allowed. */
+function protectedHit(full: string): string | null {
+  if (!protectedRoots) protectedRoots = protectedPaths();
+  for (const root of protectedRoots) {
+    if (isWithin(root, full)) return root;
+  }
+  return null;
+}
+
 const FS_SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -1902,6 +1950,8 @@ ipcMain.handle("pi:fs-tree", async (_e, relPath: string) => {
   const root = String(relPath || ".");
   const dir = safeWorkspacePath(workspaceRootDir(), root);
   if (!dir) return { ok: false, error: "路径无效" };
+  const blocked = protectedHit(dir);
+  if (blocked) return { ok: false, error: `该位置受保护，不能在文件面板里浏览：${blocked}` };
   try {
     const entries = await readdirAsync(dir, { withFileTypes: true });
     const items = entries
@@ -1922,6 +1972,8 @@ ipcMain.handle("pi:fs-tree", async (_e, relPath: string) => {
 ipcMain.handle("pi:fs-read", async (_e, relPath: string) => {
   const full = safeWorkspacePath(workspaceRootDir(), relPath);
   if (!full) return { ok: false, error: "路径无效" };
+  const blocked = protectedHit(full);
+  if (blocked) return { ok: false, error: `该位置受保护，不能在文件面板里读取：${blocked}` };
   try {
     const st = await stat(full);
     if (st.size > 4 * 1024 * 1024) return { ok: false, error: "文件过大（上限 4 MB）" };
@@ -1943,6 +1995,8 @@ const MEDIA_MAX_BYTES = 10 * 1024 * 1024;
 ipcMain.handle("pi:fs-media", async (_e, relPath: string) => {
   const full = safeWorkspacePath(workspaceRootDir(), relPath);
   if (!full) return { ok: false, error: "路径无效" };
+  const blocked = protectedHit(full);
+  if (blocked) return { ok: false, error: `该位置受保护，不能在文件面板里读取：${blocked}` };
   const kind = previewKindFor(relPath);
   const mime = mediaMimeFor(relPath);
   if (kind === "text" || !mime) return { ok: false, error: "不是图片或音频" };
@@ -1968,6 +2022,8 @@ ipcMain.handle("pi:fs-media", async (_e, relPath: string) => {
 ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string }) => {
   const full = safeWorkspacePath(workspaceRootDir(), String(msg?.path || ""));
   if (!full) return { ok: false, error: "路径无效" };
+  const blocked = protectedHit(full);
+  if (blocked) return { ok: false, error: `该位置受保护，不能在文件面板里写入：${blocked}` };
   const content = String(msg?.content ?? "");
   if (content.length > 4 * 1024 * 1024) return { ok: false, error: "内容过大（上限 4 MB）" };
   try {

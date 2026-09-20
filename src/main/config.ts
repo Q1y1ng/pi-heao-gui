@@ -4,7 +4,7 @@
  * Deliberately free of Electron and fs imports so it can be unit-tested
  * directly (see test/config.test.cjs) — main.ts keeps only the I/O around it.
  */
-import { basename, extname, isAbsolute, resolve } from "node:path";
+import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 import {
   DEFAULT_CONFIG,
   DEFAULT_DANGEROUS_PATTERNS,
@@ -299,8 +299,17 @@ export type OpenCheck = { ok: true; path: string } | { ok: false; error: string 
 /**
  * Decide whether a path may be handed to shell.openPath. Pure on purpose: the
  * caller does the actual shell call (and logs the rejection).
+ *
+ * `protectedPaths` is the same list the file panel refuses (see main.ts): handing
+ * `~/.ssh/id_rsa` or `~/.pi/agent/auth.json` to the OS default application is a way
+ * *around* the panel's guard rather than through it — the extension whitelist below only
+ * stops a file's *type* from executing, not its content from being handed out.
  */
-export function checkOpenPath(raw: string, workspaceRoot: string): OpenCheck {
+export function checkOpenPath(
+  raw: string,
+  workspaceRoot: string,
+  protectedPaths: readonly string[] = [],
+): OpenCheck {
   const p = String(raw ?? "");
   if (!p) return { ok: false, error: "empty path" };
   // UNC (\\host\share) and device paths (\\.\, \\?\) — network / device access
@@ -322,5 +331,15 @@ export function checkOpenPath(raw: string, workspaceRoot: string): OpenCheck {
   // refused rather than guessed at; genuinely extension-less files ("Makefile",
   // ".gitignore") still pass.
   if (!ext && extname(normalized) !== "") return { ok: false, error: "suspicious filename" };
+  // Credential / agent-state locations, compared the way the file panel compares them
+  // (this is the text half; the panel's guard has the realpath half, and a name that
+  // only *looks* like one of these is refused here rather than resolved later).
+  for (const root of protectedPaths) {
+    if (!root) continue;
+    const rel = relative(resolve(root), resolve(full));
+    if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+      return { ok: false, error: `protected location: ${root}` };
+    }
+  }
   return { ok: true, path: full };
 }

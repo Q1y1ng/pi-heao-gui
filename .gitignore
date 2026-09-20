@@ -7,7 +7,6 @@ studio/.git/
 studio/node_modules/
 studio/pi-chat/node_modules/
 studio/pi-chat/dist/
-studio/pi-chat/package-lock.json
 studio/pi-chat/src/chat-dist.html
 studio/pi-chat/src/model-icons-data.ts
 # artifact of the vendored pi-chat build (upstream VS Code extension copy step)

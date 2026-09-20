@@ -43,6 +43,14 @@ jobs:
       - name: Unit tests (node:test, runs against dist/)
         run: npm test
 
+      # Blocking on purpose, like `package` and unlike `smoke`: the
+      # terminal is a native module in an Electron ABI, and nothing else
+      # in CI loads it — smoke boots a window but never spawns a PTY, and
+      # check-package only asserts node-pty's files are *present*. A
+      # broken prebuild used to ship as "the dock is blank", all green.
+      - name: Terminal (node-pty spawns and echoes under Electron)
+        run: npm run check:pty
+
       # Advisory: a new advisory in a dependency should be seen, but it should
       # not turn every unrelated pull request red.
       - name: Dependency audit (advisory)

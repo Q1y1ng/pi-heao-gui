@@ -4,6 +4,50 @@ Open defects with their measured evidence, so the next person can continue inste
 
 ---
 
+## Closing a terminal costs the process its exit code — **open, measured, workaround in place**
+
+**Found 2026-09-20 while adding `npm run check:pty` (the terminal was the one stack CI never loaded).**
+
+**The measurement.** An Electron script that loads the app's own `dist/main/terminal.js`, spawns a
+shell PTY, waits for its output and then calls `handle.kill()` exits with **code 127** and prints this
+from node-pty's forked helper:
+
+```text
+node_modules/node-pty/lib/conpty_console_list_agent.js:13
+Error: AttachConsole failed
+```
+
+Same script, same spawn, but the shell is ended by writing `exit` to it: **exit code 0**, no helper
+error. Killing the tree with `taskkill /PID <shell> /T /F` instead of `proc.kill()`: the probe hung.
+Killing and then exiting after 6 s instead of immediately: the probe hung too.
+
+| how the PTY was ended | process exit code | helper error |
+| --- | --- | --- |
+| `proc.kill()` then exit | **127** | yes |
+| `proc.kill()`, exit 6 s later | *hung* (killed at 90 s) | yes |
+| `write("exit")`, shell exits on its own | 0 | no |
+| `taskkill /T /F` the shell | *hung* | no |
+| nothing (app exits with the PTY open) | 0 | no |
+
+**Why.** `pty.kill()` on Windows/ConPTY forks `conpty_console_list_agent` to enumerate the console's
+processes before signalling them (`node-pty/lib/windowsPtyAgent.js:184`). Under Electron the fork is
+`electron.exe` in `ELECTRON_RUN_AS_NODE` mode, and once the console is going away it cannot
+`AttachConsole`, so the helper throws — and the app's exit code is already gone by then.
+
+**What is already done about it.** `scripts/e2e.cjs` ends with `app.quit()` plus a delayed
+`app.exit(...)` and a final `process.exit(...)` 6 s later, with a comment naming this exact failure;
+that belt is why the suites report the code they expect. The new `scripts/check-pty.cjs` ends its
+shell by writing `exit`, so the check reports what it measured rather than inheriting this.
+
+**What is not done.** The app itself still calls `handle.kill()` (dock “close”, window close, and
+`will-quit` when a terminal is open), so a GUI exit after any terminal was closed returns 127. It is
+invisible for a desktop app — nothing reads its exit code — but it is wrong, and it is the first
+thing to fix if anything starts depending on that code. Options, none of them tried yet: upgrade
+node-pty (1.1.0 here), patch the helper's failure path, or end the shell (taskkill, then `proc.kill()`
+only as a fallback) and accept that node-pty's own cleanup no longer runs.
+
+---
+
 ## Our theme tokens are not visible in the sidebar's scope — **closed: a measurement taken across a theme switch**
 
 **Status:** closed 2026-09-19 · not a defect · reproduced arithmetically from the two quoted readings

@@ -83,6 +83,12 @@
 
 ### Changed
 
+- **终端现在是 CI 里真的会被加载一次的东西。** CI 里没有任何一步会 `require("node-pty")`：`smoke` 开真窗口
+  但不碰终端（全文没有 terminal 引用），`check-package` 只断言文件在 asar 里“存在”。于是“原生模块在 Electron
+  下装不起来”这种事可以一路绿灯发出去，表现形式就是用户看到的“终端面板一片空白”。新增 `npm run check:pty`
+  （Electron 下 spawn 一个 ConPTY、要求它回显一行），作为 `check` 作业里的**阻塞**步骤。
+- **`studio/pi-chat/package-lock.json` 重新入库。** 打包用的 vendored UI 依赖此前每次 `npm install` 都可以
+  漂移（lock 被 .gitignore 掉了），也就是说同一个 tag 两次构建可以不一样；现在锁定版本进库。
 - **文件面板默认的工作目录就是家目录，而“在工作目录内”过去等于“整个用户目录”。** 于是聊天窗口 —— 那个专门渲染
   模型输出、被明确定义为“不能碰 agent 配置”的窗口 —— 可以通过 `pi:fs-read` 读 `~/.pi/agent/auth.json`、通过
   `pi:fs-write` 改写 `~/.pi/standalone/config.json`（下一轮 pi 启动就按里面的 `env`/`args` 跑），

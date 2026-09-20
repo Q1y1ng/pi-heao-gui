@@ -26,6 +26,7 @@
     "e2e:isolated": "electron scripts/e2e.cjs --isolated",
     "measure-load": "electron scripts/measure-load.cjs",
     "check:package": "node scripts/check-package.cjs",
+    "check:pty": "electron scripts/check-pty.cjs",
     "dist:portable": "npm run build && electron-builder --win portable --publish never",
     "test:daily": "electron scripts/daily-e2e.cjs"
   },

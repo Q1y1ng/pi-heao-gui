@@ -247,15 +247,29 @@ export interface ImportResult {
   cwdRewritten?: boolean;
 }
 
+/** How much of a session file this will read; a session is text, and a real one is a few MB. */
+const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
+
 /** Copy a session file into this profile's session store. */
 export async function importSession(opts: {
   from: string;
   sessionsDir: string;
   /** Where to point a session whose own working directory does not exist on this machine. */
   fallbackCwd: string;
+  /** Overridable so a test does not have to write 64 MB to prove the ceiling exists. */
+  maxBytes?: number;
 }): Promise<ImportResult> {
+  const maxBytes = opts.maxBytes ?? MAX_IMPORT_BYTES;
+  // The path arrives from the renderer (`pi:import-session` takes it without a dialog, so the e2e
+  // can drive the same code), and the read below used to be unbounded: any file on the machine
+  // was read whole into the main process. The size is checked before the read, not after.
   let text: string;
   try {
+    const info = await stat(opts.from);
+    if (!info.isFile()) return { ok: false, error: "不是一个文件" };
+    if (info.size > maxBytes) {
+      return { ok: false, error: `文件太大（上限 ${Math.round(maxBytes / 1024 / 1024)} MB）` };
+    }
     text = await readFile(opts.from, "utf8");
   } catch (e) {
     return { ok: false, error: `读不了这个文件：${errText(e)}` };

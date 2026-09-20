@@ -200,3 +200,27 @@ test("junk is refused and nothing is written", async () => {
   assert.ok(result.error);
   assert.equal(fs.existsSync(sessionsDir), false, "no directory is created for a file that is not one");
 });
+
+test("importing refuses a file that is too large, before reading it", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-import-big-"));
+  const from = path.join(dir, "huge.jsonl");
+  fs.writeFileSync(from, `${header(dir)}\n${"x".repeat(4096)}\n`, "utf8");
+  const sessionsDir = path.join(dir, "sessions");
+
+  // The path arrives from the renderer without a dialog, and the read used to be unbounded: any
+  // file on the machine went into the main process whole.
+  const tooBig = await importSession({ from, sessionsDir, fallbackCwd: dir, maxBytes: 1024 });
+  assert.equal(tooBig.ok, false);
+  assert.match(tooBig.error, /太大/);
+  assert.equal(fs.existsSync(sessionsDir), false, "nothing was written");
+
+  // The same file under a ceiling that fits is imported as before.
+  const fits = await importSession({ from, sessionsDir, fallbackCwd: dir, maxBytes: 64 * 1024 });
+  assert.equal(fits.ok, true, fits.error);
+
+  const notAFile = await importSession({ from: dir, sessionsDir, fallbackCwd: dir });
+  assert.equal(notAFile.ok, false);
+  assert.match(notAFile.error, /不是一个文件/);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});

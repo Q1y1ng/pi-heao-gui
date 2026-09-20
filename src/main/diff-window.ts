@@ -7,7 +7,7 @@
  * "after" is the file on disk. Nothing is opened in the OS default app anymore.
  */
 import { BrowserWindow } from "electron";
-import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { unifiedDiff, type DiffResult } from "./diff";
@@ -33,9 +33,44 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-async function readIfExists(path: string | null): Promise<string | null> {
+/** The one path shape a rewind snapshot can have: a hash or a session id, never a path. */
+export const SAFE_SNAPSHOT_SEGMENT = /^[A-Za-z0-9._-]{1,128}$/;
+
+/**
+ * A snapshot segment straight from the renderer. It becomes part of a path
+ * (`~/.pi/snapshots/<sessionId>/<baselineHash>`), so it is not trusted to be a path itself:
+ * `..` used to walk out of the snapshot root and read whatever it found there.
+ */
+export function safeSnapshotSegment(value: unknown): string {
+  // A string, or nothing: the caller is the IPC boundary, and "42" from a number is a directory
+  // name nobody asked for.
+  if (typeof value !== "string") return "";
+  const text = value;
+  // `.` and `..` are the two names that are *always* a path rather than a segment, and Windows
+  // silently drops a trailing dot or space when it resolves a name — none of which a session id or
+  // a snapshot hash ($sha256 of the file's content) can legitimately contain.
+  if (text === "." || text === "..") return "";
+  if (/[ .]$/.test(text)) return "";
+  return SAFE_SNAPSHOT_SEGMENT.test(text) ? text : "";
+}
+
+/**
+ * How much of a file the diff window will read, and how much markup it will render.
+ *
+ * Both were unbounded: `pi:show-diff` / `pi:rewind-diff` take an `absPath` from the renderer, and a
+ * 500 MB file used to be read whole into the main process, split into lines, rendered into an HTML
+ * string several times its size and written to disk — with `MAX_HTML` checked *after* the write, so
+ * its only effect was a log line. Refusing is the honest answer: a diff of a file that big is not
+ * readable anyway.
+ */
+export const MAX_DIFF_BYTES = 8 * 1024 * 1024;
+export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+
+async function readIfExists(path: string | null, maxBytes = MAX_DIFF_BYTES): Promise<string | null> {
   if (!path) return null;
   try {
+    const info = await stat(path);
+    if (!info.isFile() || info.size > maxBytes) return null;
     return await readFile(path, "utf8");
   } catch {
     return null;
@@ -44,9 +79,13 @@ async function readIfExists(path: string | null): Promise<string | null> {
 
 /** Resolve the "before" text: snapshot when the hash is known, else git HEAD. */
 async function resolveBefore(req: DiffRequest): Promise<{ text: string | null; label: string }> {
-  if (req.sessionId && req.baselineHash) {
-    const snap = join(SNAP_ROOT, req.sessionId, req.baselineHash);
-    const text = await readIfExists(snap);
+  const sessionId = safeSnapshotSegment(req.sessionId);
+  const baselineHash = safeSnapshotSegment(req.baselineHash);
+  if (sessionId && baselineHash) {
+    // Both segments are renderer-supplied and were joined into a path as-is: `..` walked
+    // straight out of the snapshot root and read whatever it found there.
+    const snap = join(SNAP_ROOT, sessionId, baselineHash);
+    const text = await readIfExists(snap, MAX_SNAPSHOT_BYTES);
     if (text !== null) return { text, label: "回退快照" };
   }
   if (req.baselineHash === null) {
@@ -186,6 +225,14 @@ export async function openDiffWindow(req: DiffRequest): Promise<{ ok: boolean; e
   const diff = unifiedDiff(before.text ?? "", after, { context: CONTEXT_LINES });
   const title = `变更：${req.basename || basename(abs)}`;
   const html = renderHtml({ title, subtitle: abs, diff, note });
+  // Rendered size is what actually fills memory and disk; the read cap above does not bound it
+  // (one line of one character becomes ~60 bytes of markup). Checked here, before writing.
+  if (html.length > MAX_HTML) {
+    return {
+      ok: false,
+      error: `这个文件的差异太大，不渲染（${Math.round(html.length / 1024 / 1024)} MB）`,
+    };
+  }
 
   const dir = join(homedir(), ".pi", "standalone", "diff");
   const file = join(dir, `diff-${Date.now().toString(36)}.html`);
@@ -211,9 +258,6 @@ export async function openDiffWindow(req: DiffRequest): Promise<{ ok: boolean; e
   win.on("closed", () => {
     void unlink(file).catch(() => undefined);
   });
-  if (html.length > MAX_HTML) {
-    log.warn(`diff window: large document (${html.length} bytes)`);
-  }
   await win.loadFile(file);
   return { ok: true };
 }

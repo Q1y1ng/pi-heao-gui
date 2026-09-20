@@ -4,6 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { unifiedDiff, diffStat } = require("../dist/main/diff.js");
+const { safeSnapshotSegment, MAX_DIFF_BYTES } = require("../dist/main/diff-window.js");
 
 const lines = (d) => d.hunks.flatMap((h) => h.lines);
 
@@ -99,4 +100,24 @@ test("diffStat matches the detailed result", () => {
   assert.equal(stat.removed, full.removed);
   assert.equal(stat.added, 2);
   assert.equal(stat.removed, 1);
+});
+
+test("snapshot segments from the renderer cannot be paths", () => {
+  // They are joined into ~/.pi/snapshots/<sessionId>/<baselineHash>; ".." used to walk out of
+  // that root and read whatever it found there.
+  assert.equal(safeSnapshotSegment("abc-123_hash.Z"), "abc-123_hash.Z");
+  assert.equal(safeSnapshotSegment(".."), "");
+  assert.equal(safeSnapshotSegment("../.."), "");
+  assert.equal(safeSnapshotSegment("a/b"), "");
+  assert.equal(safeSnapshotSegment("a\\b"), "");
+  assert.equal(safeSnapshotSegment(""), "");
+  assert.equal(safeSnapshotSegment("x".repeat(200)), "");
+  for (const value of [undefined, null, 42, {}, []]) {
+    assert.equal(safeSnapshotSegment(value), "", `${String(value)} must not pass`);
+  }
+});
+
+test("the diff window has a ceiling it checks before writing", () => {
+  assert.ok(Number.isFinite(MAX_DIFF_BYTES) && MAX_DIFF_BYTES > 0);
+  assert.ok(MAX_DIFF_BYTES <= 32 * 1024 * 1024, "a diff nobody can read is not worth rendering");
 });

@@ -1831,15 +1831,35 @@ ipcMain.handle(
       }
       await queue.whenIdle(key);
     }
+    // The waits above can last everything from 250 ms to the queue's five-minute ceiling, and a
+    // window that was closed while it waited must not get a PTY: the handle would sit in
+    // `terminals` under a dead id with a live pi TUI (or shell) behind it, invisible and with no
+    // way to close it before the app quits. `onData` already guards the send; this guards the
+    // process.
+    if (sender.isDestroyed()) {
+      log.info("term-open: window closed while waiting — no terminal started");
+      return { ok: false, error: "窗口已关闭，终端未启动" };
+    }
     // The terminal follows the window's pi session so `pi` resumes the same chat.
     const session = sessionFor(sender);
+    // A session file from the renderer is a path, and it goes straight into pi's argv — so it is
+    // checked to be a real session file under the agent's session directory, the way
+    // `pi:switch-session` already checks the same value. An invalid one is refused rather than
+    // silently swapped for the window's own: a caller that asks for a path outside the session
+    // store has a bug worth seeing (this used to be a way to hand pi any path on the machine).
+    const asked = String(msg?.sessionFile ?? "").trim();
+    if (asked && !isSessionFile(asked)) {
+      log.warn("term-open: refused a session file outside the session store:", asked);
+      return { ok: false, error: "不是 pi 的会话文件，已拒绝" };
+    }
+    const own = session?.sessionFile ?? "";
     const kind: TerminalKind = termKind;
     const result = createTerminal({
       kind,
       cwd: config.workspaceRoot || homedir(),
       piPath: findPiBinary(config.piPath || undefined),
       extensionArgs: buildExtensionArgs(app.getAppPath(), config),
-      sessionFile: msg?.sessionFile || session?.sessionFile,
+      sessionFile: asked || (isSessionFile(own) ? own : undefined),
       env: buildEnv(config, app.getAppPath()),
       cols: Number(msg?.cols) || 80,
       rows: Number(msg?.rows) || 24,
@@ -1853,6 +1873,12 @@ ipcMain.handle(
     });
     if (!result.ok) return { ok: false, error: result.error };
     const handle = result.handle;
+    // Between creating the PTY and recording it the window can still disappear; a handle nobody
+    // can reach is a process nobody can close.
+    if (sender.isDestroyed()) {
+      handle.kill();
+      return { ok: false, error: "窗口已关闭，终端未保留" };
+    }
     terminals.set(sender.id, handle);
     return { ok: true, kind: handle.kind, shell: handle.shell, cwd: handle.cwd, pid: handle.pid };
   },

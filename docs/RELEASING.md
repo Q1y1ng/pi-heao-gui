@@ -9,7 +9,8 @@ npm ci
 npm run build:renderer     # needed on a fresh clone: the UI bundle is gitignored
 npm run lint
 npm run typecheck
-npm test                   # 235 unit tests
+npm test                   # 257 unit tests
+npm run check:pty          # the terminal stack: node-pty spawns a ConPTY under Electron
 npm run smoke              # 22 checks, boots a real window
 npm run verify             # 38 checks, includes terminal + dock + navigation guard
 npm run test:daily         # real window + real model: the app actually finishes a task
@@ -217,3 +218,11 @@ from 设置 → 诊断 → 版本与更新.
 Unsigned builds can still update themselves: electron-updater verifies the
 downloaded file against the hash in `latest.yml`, not against an Authenticode
 signature.
+
+**The portable build does not update itself, and now says so.** It shares this
+release channel, `latest.yml` lists the NSIS installer, and electron-updater has
+no portable path — so a portable user who pressed “检查更新” used to be offered a
+setup program that installs a *second* copy instead of replacing the file they
+run. `updater.ts` detects the portable launcher (`PORTABLE_EXECUTABLE_FILE`) and
+reports “便携版不自动更新：请从 Releases 下载新的 Portable.exe 替换当前文件”.
+Release notes for a portable build must repeat that instruction.

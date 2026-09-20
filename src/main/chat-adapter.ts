@@ -171,6 +171,14 @@ const SHIM_SCRIPT = `
       });
       console.log("[pi-shim] bridge ready");
     } else {
+      // Bounded: a window whose preload never arrived cannot be fixed by waiting, and at 50 ms this
+      // loop ran 20 times a second for the life of the page. 20 seconds is already far past any
+      // plausible load, and the give-up line says what is wrong instead of spinning silently.
+      window.__piShimTries = (window.__piShimTries || 0) + 1;
+      if (window.__piShimTries > 400) {
+        console.error("[pi-shim] window.pi never appeared — the preload did not load; giving up");
+        return;
+      }
       setTimeout(setupBridge, 50);
     }
   }
@@ -842,6 +850,12 @@ const TOKENS_SCRIPT = `
       window.addEventListener('message', function(e) { onMsg(e.data); });
       // Also try direct onMessage if available (won't override shim since shim already set)
     } else {
+      // Bounded for the same reason as the shim's own loop: 10 Hz forever is not a plan.
+      window.__piStatsTries = (window.__piStatsTries || 0) + 1;
+      if (window.__piStatsTries > 200) {
+        console.error("[pi-stats] window.pi never appeared — the stats panel stays empty");
+        return;
+      }
       setTimeout(setup, 100);
     }
   }

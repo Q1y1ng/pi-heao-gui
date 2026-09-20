@@ -222,17 +222,17 @@ export function maskSecret(value: unknown): string {
  */
 const TEXT_SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Provider key prefixes (OpenAI/Anthropic, Google, GitHub, GitLab, Slack, npm, xAI, HF).
-  [/\b(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
-  [/\b(AIza[0-9A-Za-z_-]{4})[0-9A-Za-z_-]{10,}/g, "$1" + MASK],
-  [/\b(gh[pousr]_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, "$1" + MASK],
-  [/\b(glpat-)[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
-  [/\b(npm_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, "$1" + MASK],
-  [/\b(xai-)[A-Za-z0-9_-]{10,}/g, "$1" + MASK],
-  [/\b(hf_)[A-Za-z0-9]{10,}/g, "$1" + MASK],
-  [/\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, "$1" + MASK],
+  [/\b(sk-[A-Za-z0-9_-]{6})[A-Za-z0-9_-]{10,}/g, `$1${MASK}`],
+  [/\b(AIza[0-9A-Za-z_-]{4})[0-9A-Za-z_-]{10,}/g, `$1${MASK}`],
+  [/\b(gh[pousr]_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, `$1${MASK}`],
+  [/\b(glpat-)[A-Za-z0-9_-]{10,}/g, `$1${MASK}`],
+  [/\b(npm_[A-Za-z0-9]{4})[A-Za-z0-9]{10,}/g, `$1${MASK}`],
+  [/\b(xai-)[A-Za-z0-9_-]{10,}/g, `$1${MASK}`],
+  [/\b(hf_)[A-Za-z0-9]{10,}/g, `$1${MASK}`],
+  [/\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, `$1${MASK}`],
   // Headers and query parameters.
-  [/(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, "$1" + MASK],
-  [/((?:api[-_]?key|access[-_]?token|auth[-_]?token|refresh[-_]?token|client[-_]?secret|password|token|secret)["']?\s*[:=]\s*["']?)([^"'\s,;}{)]{8,})/gi, "$1" + MASK],
+  [/(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, `$1${MASK}`],
+  [/((?:api[-_]?key|access[-_]?token|auth[-_]?token|refresh[-_]?token|client[-_]?secret|password|token|secret)["']?\s*[:=]\s*["']?)([^"'\s,;}{)]{8,})/gi, `$1${MASK}`],
   // A bare base64 blob long enough to be a key rather than a fragment of code.
   [/(?<![A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?![A-Za-z0-9+/=])/g, MASK],
 ];

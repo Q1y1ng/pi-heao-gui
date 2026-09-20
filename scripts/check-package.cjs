@@ -63,6 +63,7 @@ const REQUIRED = [
   "/studio/pi-chat/dist/", // the vendored chat UI (any file under it)
   "/studio/bridge/todo.ts", // bundled extensions, mounted via -e
   "/studio/bridge/permission-gate.ts",
+  "/studio/bridge/permission-policy.mjs", // the gate's decision, imported by the above
   "/studio/bridge/rewind-code.ts",
   "/studio/bridge/subagent/index.ts",
   "/studio/bridge/mcp/index.js",

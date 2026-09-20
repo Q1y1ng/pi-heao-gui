@@ -85,6 +85,60 @@ export interface StandaloneConfig {
   alerts: AlertSettings;
 }
 
+/**
+ * The commands the permission gate asks about, shipped as the default.
+ *
+ * These are upstream pi-agent-studio's own defaults, verbatim (they live in the VS Code
+ * extension's `package.json`): the standalone app used to default to an **empty** list, and an
+ * empty list means `permission-gate.ts` matches nothing — the settings screen said "危险命令需确认"
+ * while every command ran. Copied rather than imported because `studio/` is vendored upstream and
+ * the app must not depend on its packaging.
+ *
+ * The gate compiles them case-insensitively; an invalid one is reported in the chat rather than
+ * silently dropped.
+ */
+export const DEFAULT_DANGEROUS_PATTERNS: readonly string[] = [
+  "\\brm\\s+(?:-[rR][fF]?|-[fF][rR]|--recursive)\\b",
+  "\\b(?:ri|rm|remove-item)\\b.*\\s+-(?:recurse|force)\\b",
+  "\\b(?:rd|rmdir|del|erase)\\b.*\\s+[/-][a-z]*s[a-z]*\\b",
+  "\\bshred\\b",
+  "\\bdd\\b",
+  "\\b(?:format\\s+[a-z]:|format-volume\\b|clear-disk\\b|diskpart\\b)",
+  "\\bvssadmin\\s+delete\\s+shadows\\b",
+  "\\b(?:chmod|chown)\\b.*\\s0?777\\b",
+  "\\b(?:reg\\s+delete\\b|remove-item\\s+(?:hklm|hkcr|hku):)",
+  "\\b(?:Set-ItemProperty|sp)\\b",
+  "\\bSet-Acl\\b",
+  "\\bdrop\\s+(database|table|schema)\\b",
+  "\\btruncate\\s+table\\b",
+  "\\b(flushall|flushdb)\\b",
+  "\\b(?:restart-computer|stop-computer)\\b",
+  "\\b(?:taskkill(?:\\.exe)?\\s+/f|spps|stop-process)\\b",
+  "\\b(killall|pkill)\\b",
+  "\\bkill\\s+-9\\b",
+  "\\bsc\\s+delete\\b",
+  "\\bbcdedit\\s+(?:/delete|/set)\\b",
+  ":\\(\\)\\s*\\{",
+  "\\bsudo\\b",
+  "\\b(curl|wget)\\s+.*\\|\\s*(ba)?sh\\b",
+  "(?:\\bsource\\s+<\\(|\\.\\s+<\\()",
+  "(?:\\binvoke-expression\\b|\\biex\\s*\\(|\\|\\s*iex\\b)",
+  "\\b(?:Invoke-(?:RestMethod|WebRequest)|irm|iwr)\\b",
+  "\\beval\\b",
+  "\\b(git\\s+push\\s+(--force|-f))\\b",
+  "\\bgit\\s+branch\\b.*\\s+-(?:d|D|m|M|-delete|-force)\\b",
+  "\\bgit\\s+log\\b.*--output\\b",
+  "\\bfind\\b.*\\s+-(?:delete|exec|execdir|fprint|fprintf|fls|ok|okdir)\\b",
+  "\\brg\\b.*\\s+--(?:pre|hostname-bin)\\b",
+  "\\bsed\\b.*\\s+-(?:[a-zA-Z]*[ef][a-zA-Z]*|expression|file)\\b",
+  "\\bsed\\b(?:\\s+-[a-zA-Z]+)*\\s+[\"']s\\/[^/\"]*\\/[^/\"]*\\/[a-zA-Z]*[ew]",
+  "\\bsed\\b(?:\\s+-[a-zA-Z]+)*\\s+[\"'][^\"']*;W",
+  "\\bsort\\b.*\\s+-(?:o|S)\\b",
+  "\\btree\\b.*\\s+-o\\b",
+  "\\bcolumn\\b.*\\s+-c\\s+\\d+",
+  "\\bdate\\b.*\\s+(?:-s|--set)\\b",
+];
+
 export const DEFAULT_CONFIG: StandaloneConfig = {
   piPath: "",
   language: "auto",
@@ -92,7 +146,7 @@ export const DEFAULT_CONFIG: StandaloneConfig = {
   args: [],
   disabledTools: [],
   permissionMode: "AskForApproval",
-  dangerousPatterns: [],
+  dangerousPatterns: [...DEFAULT_DANGEROUS_PATTERNS],
   mcpEnabled: true,
   mcpIdleTimeout: 10,
   chatFontSize: 13,

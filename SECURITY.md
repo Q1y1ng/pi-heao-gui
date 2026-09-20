@@ -8,11 +8,12 @@ stating plainly for anyone installing or reviewing it.
 
 | Capability | Notes |
 | --- | --- |
-| Spawn the `pi` CLI | The agent runs with **your** user account and **your** API keys. Its tool permissions are enforced by pi's `permission-gate` extension; the app sets the mode from the settings window (`AskForApproval` by default). |
-| Prompt-driven tool use | File edits, bash commands and MCP calls are the agent's, not the shell's — review the approval prompts. |
+| Spawn the `pi` CLI | The agent runs with **your** user account and **your** API keys. Its tool permissions are enforced by pi's `permission-gate` extension; the app sets the mode from the settings window (`AskForApproval` by default), ships a **default list of dangerous-command patterns** (the same one upstream pi-agent-studio ships, editable and restorable from 设置 → 权限), and mounts the same gate on **subagents** — a delegated pi used to run bash with no prompts at all. |
+| Prompt-driven tool use | File edits, bash commands and MCP calls are the agent's, not the shell's — review the approval prompts. Under `AskForApproval`, a `write`/`edit` whose path resolves **outside the session's working directory** is asked about as well: that is how a run that looks like “it only touched the repo” rewrites `~/.pi/agent/settings.json` instead. |
 | **Integrated terminal (Dock)** | The terminal panel is a **real PTY** (node-pty + ConPTY) running `pi` or a shell. Anything that can drive that renderer can execute commands. It is never opened automatically, but treat a compromised chat window as a compromised shell. |
-| Local file access from the UI | The file panel can read/write inside the workspace root only (`pi:fs-*` resolves and re-checks every path). |
+| Local file access from the UI | The file panel can read/write inside the workspace root only (`pi:fs-*` resolves and re-checks every path, and refuses `~/.pi` plus the other credential/system locations outright). |
 | Read `~/.pi/agent/*` | Settings are read/written through the settings window's preload only. API keys are returned **masked** and the real values are restored on save. |
+| Project resources (`.pi/mcp.json`) | A project's MCP servers are started from that file when a session opens in the directory — treat a cloned repository as able to run code through it. pi's own project-trust gate does not cover `mcp.json`. |
 | Open files with the OS | "Open in default app" is restricted to non-executable extensions; UNC/device paths are rejected. |
 
 ## Trust boundary (what the renderer may reach)

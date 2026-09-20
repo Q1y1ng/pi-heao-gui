@@ -208,7 +208,7 @@ function truncateParallelOutput(output: string): string {
 
 type DisplayItem =
   | { type: "text"; text: string }
-  | { type: "toolCall"; name: string; args: Record<string, any> };
+  | { type: "toolCall"; name: string; args: Record<string, unknown> };
 
 function getDisplayItems(messages: Message[]): DisplayItem[] {
   const items: DisplayItem[] = [];
@@ -234,11 +234,10 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
   const results: TOut[] = Array.from({ length: items.length });
   let nextIndex = 0;
   const workers = Array.from({ length: limit }, async () => {
-    while (true) {
-      const current = nextIndex++;
-      if (current >= items.length) return;
+    for (let current = nextIndex++; current < items.length; current = nextIndex++) {
       results[current] = await fn(items[current], current);
     }
+    return;
   });
   await Promise.all(workers);
   return results;
@@ -258,6 +257,26 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
   }
 
   return { command: "pi", args };
+}
+
+/**
+ * The permission gate this session was started with, so the child can mount the same one.
+ *
+ * A subagent is a second `pi` process. The host mounts the gate with `-e` on the session it
+ * spawns — and only there — so without this line the delegate would run bash with **no**
+ * prompts at all, which made "dangerous commands need confirmation" a rule that the agent
+ * could step around by asking a subagent to do it. The directory comes from the host
+ * (`PI_VSCODE_BRIDGE_DIR`); a missing one is reported once rather than swallowed.
+ */
+function permissionGateArgs(): string[] {
+  const bridgeDir = process.env.PI_VSCODE_BRIDGE_DIR;
+  if (!bridgeDir) return [];
+  const gate = path.join(bridgeDir, "permission-gate.ts");
+  if (!fs.existsSync(gate)) {
+    console.error(`[pi-subagent] 权限门未找到（${gate}）—— 子代理的 bash 将不会被确认`);
+    return [];
+  }
+  return ["-e", gate];
 }
 
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
@@ -301,7 +320,7 @@ async function runSingleAgent(
     };
   }
 
-  const args: string[] = ["--mode", "json", "-p", "--no-session"];
+  const args: string[] = ["--mode", "json", "-p", "--no-session", ...permissionGateArgs()];
   if (agent.model) args.push("--model", agent.model);
   if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 

@@ -33,7 +33,7 @@ import {
 } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { type StandaloneConfig, DEFAULT_CONFIG, IPC } from "../shared/types";
+import { type StandaloneConfig, DEFAULT_CONFIG, DEFAULT_DANGEROUS_PATTERNS, IPC } from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
 import { safeWorkspacePath } from "./fs-path";
 import {
@@ -521,6 +521,7 @@ function openSettingsWindow(): void {
       config.theme,
       config.accent,
       config.chatFontSize,
+      DEFAULT_DANGEROUS_PATTERNS,
     ),
   );
   settingsWindow.loadFile(tmp);

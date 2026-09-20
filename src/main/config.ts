@@ -7,6 +7,7 @@
 import { basename, extname, isAbsolute, resolve } from "node:path";
 import {
   DEFAULT_CONFIG,
+  DEFAULT_DANGEROUS_PATTERNS,
   type AlertSettings,
   type Project,
   type StandaloneConfig,
@@ -109,6 +110,22 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
   const strArray = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 
+  /**
+   * The command rules for the permission gate.
+   *
+   * `undefined` (a config.json written before the defaults existed, or a fresh install) means
+   * "use the shipped defaults" — this is the difference between an empty list meaning *nothing is
+   * checked* and meaning *the user emptied it on purpose*. An explicit `[]` is kept as written.
+   * Bounded on the way in: this array is compiled into regular expressions on every pi start-up.
+   */
+  const dangerousPatterns = (v: unknown): string[] => {
+    const list = v === undefined ? [...DEFAULT_DANGEROUS_PATTERNS] : strArray(v);
+    return list
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0 && p.length <= 300)
+      .slice(0, 200);
+  };
+
   const env: Record<string, string> = {};
   if (raw.env && typeof raw.env === "object" && !Array.isArray(raw.env)) {
     for (const [k, v] of Object.entries(raw.env as Record<string, unknown>)) {
@@ -126,7 +143,7 @@ export function sanitizeConfig(input: unknown): StandaloneConfig {
     args: strArray(raw.args),
     disabledTools: strArray(raw.disabledTools),
     permissionMode: raw.permissionMode === "FullAccess" ? "FullAccess" : "AskForApproval",
-    dangerousPatterns: strArray(raw.dangerousPatterns),
+    dangerousPatterns: dangerousPatterns(raw.dangerousPatterns),
     mcpEnabled: bool(raw.mcpEnabled, DEFAULT_CONFIG.mcpEnabled),
     mcpIdleTimeout: num(raw.mcpIdleTimeout, DEFAULT_CONFIG.mcpIdleTimeout, 0, 1440),
     chatFontSize: num(raw.chatFontSize, DEFAULT_CONFIG.chatFontSize, 8, 32),

@@ -186,6 +186,10 @@ export function buildEnv(config: StandaloneConfig, appPath: string): Record<stri
     }),
     PI_VSCODE_MCP_IDLE_TIMEOUT: String(config.mcpIdleTimeout ?? 10),
     PI_VSCODE_BUILTIN_AGENTS_DIR: join(bridgeDir, "agents"),
+    // Where this process's bridge extensions live. The subagent extension spawns a second pi,
+    // and a subagent that does not mount the gate has no permission prompts at all — so it
+    // needs a way to find the sibling extension without guessing (see subagent/index.ts).
+    PI_VSCODE_BRIDGE_DIR: bridgeDir,
     // No bridge — extensions that need it will no-op
   };
   return { ...config.env, ...env };

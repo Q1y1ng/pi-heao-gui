@@ -14,6 +14,7 @@ export function buildSettingsHtml(
   theme: ThemeName,
   accent: string,
   chatFontSize: number,
+  defaultPatterns: readonly string[] = [],
 ): string {
   return `<!DOCTYPE html>
 <!-- Pi Heao GUI V1.3.0 · made by HEAOZIE -->
@@ -844,6 +845,13 @@ body {
       </select>
     </div>
     <div class="field">
+      <label>危险命令规则（每行一个正则；留空 = 不拦截任何命令）
+        <button type="button" id="cfg-patterns-reset" class="btn-sm">恢复默认</button>
+      </label>
+      <textarea id="cfg-dangerousPatterns" rows="6" spellcheck="false"></textarea>
+      <div class="hint">“危险命令需确认”只在命令命中这里的规则时才弹确认；写入工作目录之外的文件另外单独确认。留空 = 不拦截任何命令。</div>
+    </div>
+    <div class="field">
       <label>禁用的工具（逗号分隔）</label>
       <input type="text" id="cfg-disabledTools" placeholder="todo, subagent, questionnaire">
     </div>
@@ -928,6 +936,10 @@ body {
 <div class="status" id="status">就绪</div>
 <div class="brand" title="Pi Heao GUI V1.3.0 — made by HEAOZIE">made by HEAOZIE</div>
 <script>
+// The command rules this build ships, so "恢复默认" has something to restore:
+// a pattern list is only editable here, and an empty textarea previously looked
+// the same whether it was a deliberate choice or a config that never had one.
+window.__PI_DEFAULT_PATTERNS__ = ${JSON.stringify(defaultPatterns).replace(/</g, "\\u003c")};
 const $ = id => document.getElementById(id);
 const status = $('status');
 function setStatus(msg, ok) {
@@ -1601,6 +1613,19 @@ $('ap-fontSize').onchange = async () => {
 };
 
 // ── General: launch / sidebar / budget ──
+$('cfg-patterns-reset').onclick = async () => {
+  const defaults = window.__PI_DEFAULT_PATTERNS__ || [];
+  if (!defaults.length) {
+    setStatus('这个构建里没有内置规则', false);
+    return;
+  }
+  $('cfg-dangerousPatterns').value = defaults.join('\\n');
+  // Saved like every other field on this page: the button only fills the box, and the
+  // status line says so, because a restore that is not written is a restore that
+  // disappears on the next window.
+  setStatus('已填入 ' + defaults.length + ' 条默认规则 —— 点「保存」后生效', true);
+};
+
 $('cfg-openAtLogin').onchange = async () => {
   const on = $('cfg-openAtLogin').checked;
   try {
@@ -1932,6 +1957,7 @@ async function loadAll() {
     $('cfg-mcpEnabled').checked = !!currentConfig.mcpEnabled;
     $('cfg-mcpIdleTimeout').value = currentConfig.mcpIdleTimeout ?? 10;
     $('cfg-permissionMode').value = currentConfig.permissionMode || 'AskForApproval';
+    $('cfg-dangerousPatterns').value = (currentConfig.dangerousPatterns || []).join('\\n');
     $('cfg-disabledTools').value = (currentConfig.disabledTools || []).join(', ');
 
     $('cfg-openAtLogin').checked = !!currentConfig.openAtLogin;
@@ -1995,6 +2021,8 @@ async function saveAll() {
       mcpEnabled: $('cfg-mcpEnabled').checked,
       mcpIdleTimeout: Number($('cfg-mcpIdleTimeout').value) || 0,
       permissionMode: $('cfg-permissionMode').value,
+      dangerousPatterns: $('cfg-dangerousPatterns').value
+        .split('\\n').map(function(s) { return s.trim(); }).filter(Boolean),
       disabledTools,
       openAtLogin: $('cfg-openAtLogin').checked,
       showArchived: $('cfg-showArchived').checked,

@@ -158,3 +158,45 @@ test("sanitizeConfig: projects and the grouping axis survive a hand-edited file"
   assert.deepEqual(fallback.projects, []);
   assert.equal(fallback.sidebarGroupBy, "time", "an unknown axis falls back to time");
 });
+
+test("sanitizeConfig: dangerous patterns fall back to the shipped rules, not to nothing", () => {
+  const { DEFAULT_DANGEROUS_PATTERNS } = require("../dist/shared/types.js");
+
+  // A config written before the defaults existed has no key at all. Reading that as
+  // [] is what made "危险命令需确认" a screen that said one thing and a gate that did
+  // another — every command ran, and nothing on screen disagreed.
+  const old = sanitizeConfig({ permissionMode: "AskForApproval" });
+  assert.deepEqual(old.dangerousPatterns, [...DEFAULT_DANGEROUS_PATTERNS]);
+  assert.ok(old.dangerousPatterns.length > 20, "the shipped list is a real one");
+
+  // An explicit empty list is a decision, and it is kept as written.
+  assert.deepEqual(sanitizeConfig({ dangerousPatterns: [] }).dangerousPatterns, []);
+
+  // Every shipped pattern compiles: the gate drops what does not, silently.
+  for (const p of DEFAULT_DANGEROUS_PATTERNS) new RegExp(p, "i");
+
+  const messy = sanitizeConfig({
+    dangerousPatterns: ["  \bfoo\b  ", "", "   ", 42, null, "x".repeat(400)],
+  });
+  assert.deepEqual(messy.dangerousPatterns, ["\bfoo\b"], "trimmed, non-strings and blobs dropped");
+  assert.ok(
+    sanitizeConfig({ dangerousPatterns: Array.from({ length: 500 }, () => "a") }).dangerousPatterns
+      .length <= 200,
+    "bounded: every pattern is compiled on every pi start-up",
+  );
+});
+
+test("the shipped dangerous-command list is upstream's, byte for byte", () => {
+  const { DEFAULT_DANGEROUS_PATTERNS } = require("../dist/shared/types.js");
+  const upstream =
+    require("../studio/package.json").contributes.configuration.properties[
+      "pi-agent-studio.permission.dangerousPatterns"
+    ].default;
+  // Copied rather than imported (studio/ is vendored), so the copy is pinned here:
+  // a real command has to be caught by the standalone gate too.
+  assert.deepEqual([...DEFAULT_DANGEROUS_PATTERNS], upstream);
+  const rm = DEFAULT_DANGEROUS_PATTERNS.map((p) => new RegExp(p, "i"));
+  assert.ok(rm.some((r) => r.test("rm -rf /tmp/x")), "rm -rf is in the list");
+  assert.ok(rm.some((r) => r.test("git push --force origin main")), "force push is in the list");
+  assert.ok(!rm.some((r) => r.test("npm run build")), "and a build is not");
+});

@@ -363,6 +363,43 @@ export function resolveSpawnTarget(
   return { command: piPath, args: [...args] };
 }
 
+/**
+ * Kill a child process **and everything it spawned**.
+ *
+ * `proc.kill()` signals the process we spawned, and on Windows that is often not the process doing
+ * the work: an npm shim runs through `cmd.exe` (`resolveSpawnTarget`), so killing the shell leaves
+ * the `node`/`npm` grandchild running — still writing into the agent prefix, still holding the
+ * files a later start-up needs. `taskkill /T` walks the tree, which is why the RPC client's own
+ * teardown has always used it. Exported so the one-shot CLI runner cannot drift back to the
+ * half-kill it had (see pi-cli.ts).
+ *
+ * Only a process that is actually alive is signalled: a recycled PID would make `/F` kill an
+ * unrelated program, which is worse than leaving a zombie.
+ */
+export function killProcessTree(proc: {
+  pid?: number;
+  killed?: boolean;
+  exitCode?: number | null;
+  signalCode?: NodeJS.Signals | null;
+  kill: (signal?: NodeJS.Signals) => boolean;
+}): void {
+  const pid = proc.pid;
+  const alive = proc.exitCode === null && !proc.signalCode && !proc.killed;
+  if (!alive || pid === undefined) return;
+  if (process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
+    } catch (e) {
+      log.warn("taskkill failed:", errText(e));
+    }
+  }
+  try {
+    proc.kill();
+  } catch (e) {
+    log.warn("kill failed:", errText(e));
+  }
+}
+
 export async function createRpcClient(options: CreateRpcClientOptions): Promise<RpcClient> {
   const target = resolveSpawnTarget(options.piPath, options.args);
   rpcLog(
@@ -592,26 +629,7 @@ export async function createRpcClient(options: CreateRpcClientOptions): Promise<
       if (disposed) return Promise.resolve();
       disposed = true;
       failAll("Pi RPC client disposed");
-      const pid = proc.pid;
-      // Only signal a process that is actually alive — a recycled PID would
-      // make taskkill /T /F kill an unrelated process.
-      const alive = proc.exitCode === null && proc.signalCode === null && !proc.killed;
-      if (alive && pid !== undefined) {
-        if (process.platform === "win32") {
-          try {
-            spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
-              windowsHide: true,
-            });
-          } catch (e) {
-            log.warn("taskkill failed:", errText(e));
-          }
-        }
-        try {
-          proc.kill();
-        } catch (e) {
-          log.warn("kill failed:", errText(e));
-        }
-      }
+      killProcessTree(proc);
       return Promise.resolve();
     },
   };

@@ -11,7 +11,7 @@
  * Uses JSON mode to capture structured output from subagents.
  */
 
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -27,6 +27,18 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
+
+/**
+ * How long one subagent may run before it is killed.
+ *
+ * Generous on purpose — a real subagent task is minutes, not seconds — but finite: without a
+ * deadline the only exit was the caller's abort signal, and a wedged child left the parent's turn
+ * unsettled forever. Overridable for the rare task that legitimately needs longer.
+ */
+const SUBAGENT_TIMEOUT_MS =
+  Number(process.env.PI_SUBAGENT_TIMEOUT_MS) > 0
+    ? Number(process.env.PI_SUBAGENT_TIMEOUT_MS)
+    : 15 * 60 * 1000;
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
@@ -233,14 +245,48 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
   const limit = Math.max(1, Math.min(concurrency, items.length));
   const results: TOut[] = Array.from({ length: items.length });
   let nextIndex = 0;
-  const workers = Array.from({ length: limit }, async () => {
+  // Each worker pulls the next index until the list runs out; written as a named function
+  // rather than an `Array.from` mapper so the callback's result is not what carries the work.
+  async function worker(): Promise<void> {
     for (let current = nextIndex++; current < items.length; current = nextIndex++) {
       results[current] = await fn(items[current], current);
     }
-    return;
-  });
+  }
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < limit; i++) workers.push(worker());
   await Promise.all(workers);
   return results;
+}
+
+/**
+ * Kill a subagent and everything it spawned.
+ *
+ * Windows needs `taskkill /T`: the child is usually an npm shim run through `cmd.exe`, and
+ * signalling the shell leaves the real `pi` (and its npm install) running — the same half-kill the
+ * host fixed on its side. SIGTERM then SIGKILL is the POSIX half, kept so the timeout and the
+ * abort behave the same wherever this runs.
+ */
+function killTree(proc: ChildProcess): void {
+  const pid = proc.pid;
+  if (pid !== undefined && process.platform === "win32") {
+    try {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true });
+    } catch {
+      /* taskkill missing: the kill below is the fallback */
+    }
+  }
+  try {
+    proc.kill("SIGTERM");
+  } catch {
+    /* already gone */
+  }
+  setTimeout(() => {
+    try {
+      if (!proc.killed) proc.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }, 5000).unref?.();
 }
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
@@ -360,6 +406,7 @@ async function runSingleAgent(
     }
 
     let wasAborted = false;
+    let timedOut = false;
 
     const exitCode = await new Promise<number>((resolve) => {
       const invocation = getPiInvocation(args);
@@ -378,7 +425,24 @@ async function runSingleAgent(
       const cleanup = () => {
         if (killProc && signal) signal.removeEventListener("abort", killProc);
         killProc = undefined;
+        clearTimeout(watchdog);
       };
+
+      /*
+       * A subagent with no deadline is a turn that can never end.
+       *
+       * The only exit this used to have was the caller's abort signal, so a child that hung — a
+       * pi wedged on a network call, or one of the extension event-loop leaks that has hit this
+       * project before — left the parent's turn unsettled forever: the chat window sat on
+       * "streaming" with no way back except killing the app. The deadline is generous (a real
+       * subagent task can legitimately run for minutes) and overridable through
+       * PI_SUBAGENT_TIMEOUT_MS for the rare task that needs longer.
+       */
+      const watchdog = setTimeout(() => {
+        timedOut = true;
+        killTree(proc);
+      }, SUBAGENT_TIMEOUT_MS);
+      watchdog.unref?.();
 
       const processLine = (line: string) => {
         if (!line.trim()) return;
@@ -442,10 +506,7 @@ async function runSingleAgent(
       if (signal) {
         killProc = () => {
           wasAborted = true;
-          proc.kill("SIGTERM");
-          setTimeout(() => {
-            if (!proc.killed) proc.kill("SIGKILL");
-          }, 5000);
+          killTree(proc);
         };
         if (signal.aborted) killProc();
         else signal.addEventListener("abort", killProc, { once: true });
@@ -457,6 +518,14 @@ async function runSingleAgent(
       currentResult.exitCode = currentResult.exitCode || 1;
       currentResult.stopReason = "aborted";
       currentResult.errorMessage = currentResult.errorMessage || "Subagent was aborted";
+    } else if (timedOut) {
+      // The kill produces a non-zero code of its own, but the reason is what the parent needs to
+      // report: "the subagent timed out", not "exit code 1".
+      currentResult.exitCode = currentResult.exitCode || 1;
+      currentResult.stopReason = "timeout";
+      currentResult.errorMessage =
+        currentResult.errorMessage ||
+        `Subagent timed out after ${Math.round(SUBAGENT_TIMEOUT_MS / 1000)}s`;
     }
   } catch (err) {
     // Spawn / promise-level failure: surface as a failed result rather than

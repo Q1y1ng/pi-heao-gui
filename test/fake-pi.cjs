@@ -53,8 +53,37 @@ const sessionArg = (() => {
   return i >= 0 ? process.argv[i + 1] : undefined;
 })();
 
+/*
+ * The shape a killed install leaves behind: a child that spawns something and then hangs.
+ *
+ * `pi` on Windows is usually an npm `.cmd`, so killing the shim the app spawned leaves the real
+ * `node`/`npm` grandchild running — still writing into the agent package prefix, which is what
+ * makes the next start-up fail. PI_FAKE_GRANDCHILD_LOG records the grandchild's pid so a test can
+ * check whether it outlived the kill.
+ */
+const hangMs = Number(process.env.PI_FAKE_HANG_MS || 0);
+const hanging = hangMs > 0;
+if (hanging) {
+  const { spawn } = require("node:child_process");
+  const grandchild = spawn(process.execPath, ["-e", `setTimeout(() => {}, ${hangMs})`], {
+    stdio: "ignore",
+  });
+  const pidLog = process.env.PI_FAKE_GRANDCHILD_LOG;
+  if (pidLog) {
+    try {
+      fs.appendFileSync(pidLog, `${grandchild.pid}\n`);
+    } catch {
+      /* the test will report the missing pid */
+    }
+  }
+  setTimeout(() => {}, hangMs);
+}
+
 const readyAfter = Number(process.env.PI_FAKE_STARTUP_MS || 0);
 setTimeout(() => {
+  // A hanging fake never gets here: it is the shape of a `pi` that never reports and never exits,
+  // which is the whole point of PI_FAKE_HANG_MS (see the grandchild block above).
+  if (hanging) return;
   // What pi really emits first: an extension event, unprompted, after its start-up work.
   process.stdout.write(
     `${JSON.stringify({
@@ -90,6 +119,9 @@ setTimeout(() => {
 }, readyAfter);
 
 function readCommands() {
+  // A hanging fake does not read stdin, and does not exit when stdin closes — that is what a
+  // wedged process looks like, and why only a kill can end it.
+  if (hanging) return;
   const rl = readline.createInterface({ input: process.stdin });
   rl.on("line", (line) => {
     let command;

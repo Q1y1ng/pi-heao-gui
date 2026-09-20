@@ -8,7 +8,7 @@
  * argument injection stays impossible and npm `.cmd` shims still work.
  */
 import { spawn } from "node:child_process";
-import { resolveSpawnTarget } from "./rpc-client";
+import { killProcessTree, resolveSpawnTarget } from "./rpc-client";
 import { log, errText } from "./log";
 
 export interface CliResult {
@@ -80,11 +80,10 @@ export function runPiCli(
     }
 
     const timer = setTimeout(() => {
-      try {
-        proc.kill();
-      } catch {
-        /* already gone */
-      }
+      // The tree, not just the shim: on Windows `pi` is usually an npm `.cmd`, and killing
+      // `cmd.exe` leaves the npm/node grandchild installing into the agent prefix — the
+      // half-finished prefix that makes every later start-up fail. See killProcessTree.
+      killProcessTree(proc);
       finish({
         ok: false,
         code: null,

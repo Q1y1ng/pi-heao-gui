@@ -8,6 +8,20 @@
 
 ### Fixed
 
+- **pi 死掉时连发两条消息，不会再留下一个改不了也看不见的 pi 进程。** `reloadSession` 没有重入保护：两条消息
+  在 `rpcAlive === false` 时都会各启动一个 pi，后者覆盖 `rpc` 引用而前者没人 dispose —— 它不在
+  `windowSessions` 里，所以连退出也扫不到它（活到系统重启），两个进程又在往同一个会话文件里写。现在重载是
+  一个共享的 in-flight Promise：并发的调用者等同一次重启，而不是各自开一个。关闭窗口时也在重启完成后补一次
+  检查，避免 “重启完才发现窗口没了” 这种孤儿。
+- **子代理不再能无限期挂着。** `subagent` 工具 spawn 第二个 pi，而它此前**只有一个出口：调用方的 abort** ——
+  子 pi 一旦卡住（网络、或这个项目历史上真发生过的扩展事件循环泄漏），父会话的回合就永远不会 settle，聊天窗
+  永久停在 streaming，只能杀应用。现在有 15 分钟的总超时（`PI_SUBAGENT_TIMEOUT_MS` 可改），超时杀掉整棵进程树，
+  并把原因写回结果（`stopReason: "timeout"`），而不是只留一个 exit code 1。
+- **超时的 `pi install` 不再把 npm 子进程留在后台。** `runPiCli` 超时只调 `proc.kill()`，而 Windows 上 pi 通常是
+  一个 npm `.cmd`：真正在干活的是 `cmd.exe` 下的 node/npm 孙进程，杀外壳等于没杀 —— 它会继续往 `~/.pi/agent/npm`
+  里装，正是 docs/KNOWN-ISSUES.md 里那类“半个树”失败。现在杀整棵树（`taskkill /T /F`，与 RPC client 早就有的
+  做法对齐），子代理的 abort/超时也走同一套。新单测用一个会 spawn 孙进程、然后挂住的假 pi 验证孙进程真的没了
+  （Windows 上跑，其他平台 skip）。
 - **终端的会话文件不再是一条可以递给 pi 的任意路径。** `pi:term-open` 的 `sessionFile` 直接变成 pi 的
   `--session <path>` 参数，而 `pi:switch-session` 对同一个值是有校验的 —— 这里是漏的，于是渲染进程可以要求
   终端把机器上任意一个文件当会话恢复/追加。现在与切换会话用同一道栅栏（必须在 `~/.pi/agent/sessions` 下的

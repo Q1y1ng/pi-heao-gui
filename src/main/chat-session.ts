@@ -531,28 +531,53 @@ export async function createChatSession(opts: {
     return true;
   }
 
-  async function reloadSession() {
-    if (streaming) return;
+  /**
+   * One reload at a time, and everyone who asked waits for the same one.
+   *
+   * `handleMessage` calls this whenever `rpcAlive` is false — and IPC handlers are not serialised,
+   * so two messages arriving while pi is gone both found `rpcAlive === false` and both started a
+   * start-up. The second `bootRpc` overwrote the `rpc` reference without disposing the first
+   * client: one pi stayed alive for the life of the machine (it is not in `windowSessions`, so
+   * nothing else can reach it), and both wrote the same session file. Returning early instead
+   * would trade that for the other failure — a message sent with a disposed client. So the callers
+   * share the promise.
+   */
+  let reloadInFlight: Promise<void> | null = null;
+
+  function reloadSession(): Promise<void> {
+    if (reloadInFlight) return reloadInFlight;
+    if (streaming) return Promise.resolve();
     if (!sessionFile && rpcAlive) {
       post({
         type: "toast",
         text: "This session has not been saved yet.",
         kind: "error",
       });
-      return;
+      return Promise.resolve();
     }
-    try {
-      if (rpcAlive) await rpc.dispose();
-      rpcAlive = false;
-      rpc = await bootRpc(sessionFile);
-      await hydrate();
-      post({ type: "toast", text: "Session reloaded", kind: "success" });
-    } catch (e) {
-      post({
-        type: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
-    }
+    reloadInFlight = (async () => {
+      try {
+        if (rpcAlive) await rpc.dispose();
+        rpcAlive = false;
+        const client = await bootRpc(sessionFile);
+        // The window can close while a start-up is in flight; a client that arrives after that is
+        // exactly the orphan this function must not create.
+        if (sessionDisposed) {
+          void client.dispose();
+          return;
+        }
+        await hydrate();
+        post({ type: "toast", text: "Session reloaded", kind: "success" });
+      } catch (e) {
+        post({
+          type: "error",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        reloadInFlight = null;
+      }
+    })();
+    return reloadInFlight;
   }
 
   async function dispatchMessage(msg: { type: string; [k: string]: unknown }) {

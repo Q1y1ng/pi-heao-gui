@@ -4,6 +4,14 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 文档
+
+- README（中/英）在 1.3.0 段补一条勘误：那一版的源码包 `pi-heao-gui-1.3.0-source.zip` 实际是改了后缀的 tar
+  （Git Bash 的 GNU tar 忽略 `-a`），Windows 自带解压器打不开；看 1.3.0 源码请 `git clone` 后切到 `v1.3.0`，
+  或用 1.3.1 的源码包。两个安装包不受影响；1.3.1 起已改用 Windows 自带 bsdtar 打包。
+
 ## 1.3.1 — 2026-09-21
 
 安全与稳定性一批：**权限门从“空转”变成真拦**、文件面板不再能碰 `~/.pi`，以及一批会让进程/回合卡住的缺陷。

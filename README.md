@@ -50,6 +50,12 @@ A security/stability/process audit, fixed. Two things a user will notice:
 
 Released 2026-09-19 · [release notes](docs/release-notes-1.3.0.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.0)
 
+> ⚠️ Erratum (that release's **source archive** only): the `pi-heao-gui-1.3.0-source.zip` asset is really a
+> tar file renamed to `.zip` — Git Bash's GNU tar ignores `-a` (see [docs/RELEASING.md](docs/RELEASING.md)) —
+> so Windows' built-in extractor refuses it. For 1.3.0 sources, clone the repository and check out `v1.3.0`, or
+> use the 1.3.1 archive instead. **Neither installer is affected**, and 1.3.1 onward is packed with Windows'
+> own bsdtar; the release checklist now verifies the archive's magic bytes.
+
 - **A window board.** With several windows open, "which one is running, which one is waiting on me,
   which one is idle" could only be pieced together from the tray menu and the title bar. There is now
   a grid icon in the title bar: a read-only list (waiting first, then running, then idle, freshest

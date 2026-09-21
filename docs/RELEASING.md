@@ -99,24 +99,33 @@ node -e 'const fs=require("fs");
 ## 5. Source tarball for the release
 
 A fresh clone cannot show a UI until `npm run build:renderer` runs (the 5.4 MB
-bundle is gitignored), so attach a tarball that already contains it. List the
+bundle is gitignored), so attach an archive that already contains it. List the
 tracked files, then add that one bundle:
 
 ```bash
 git ls-files > /tmp/srcfiles.txt
 echo "studio/pi-chat/dist/index.html" >> /tmp/srcfiles.txt
-tar -a -cf dist-electron/pi-heao-gui-<version>-source.zip -T /tmp/srcfiles.txt
+/c/Windows/System32/tar.exe -a -cf dist-electron/pi-heao-gui-<version>-source.zip -T "$(cygpath -w /tmp/srcfiles.txt)"
+```
+
+**Use `tar.exe` explicitly — which one you get decides whether this works.**
+Windows' own `tar` (bsdtar) writes a real zip for a `.zip` name; the GNU tar that
+ships in Git Bash (and any `tar` first on `PATH`) **ignores `-a`** and writes an
+uncompressed **tar** with a `.zip` extension — 9.8 MB instead of ~4.7 MB, and
+Windows' extractor refuses it. That is what the 1.3.0 source archive was, so check
+the file rather than the log:
+
+```bash
+node -e 'const b=require("fs").readFileSync(process.argv[1]);
+  console.log(b.subarray(0,4).toString("hex"), "(zip expects 504b0304)", b.length)' \
+  dist-electron/pi-heao-gui-<version>-source.zip
+ls -la dist-electron/pi-heao-gui-<version>-source.zip   # expect ~5 MB, ~200 entries
 ```
 
 Two approaches that do **not** work here, and why: `git archive` alone omits the
 ignored bundle, and PowerShell's `Compress-Archive` silently produced a 0.44 MB
 archive from the same tree (once it swallowed `node_modules`-style content and
-reached 1.1 GB). Check the result — expect roughly 7 MB and 140 entries:
-
-```bash
-ls -la dist-electron/pi-heao-gui-<version>-source.zip
-tar -tf dist-electron/pi-heao-gui-<version>-source.zip | wc -l
-```
+reached 1.1 GB).
 
 ## 6. Publish
 

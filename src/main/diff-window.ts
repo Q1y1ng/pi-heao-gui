@@ -66,7 +66,10 @@ export function safeSnapshotSegment(value: unknown): string {
 export const MAX_DIFF_BYTES = 8 * 1024 * 1024;
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 
-async function readIfExists(path: string | null, maxBytes = MAX_DIFF_BYTES): Promise<string | null> {
+async function readIfExists(
+  path: string | null,
+  maxBytes = MAX_DIFF_BYTES,
+): Promise<string | null> {
   if (!path) return null;
   try {
     const info = await stat(path);

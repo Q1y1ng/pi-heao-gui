@@ -232,7 +232,10 @@ const TEXT_SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/\b(xox[baprs]-)[A-Za-z0-9-]{10,}/g, `$1${MASK}`],
   // Headers and query parameters.
   [/(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, `$1${MASK}`],
-  [/((?:api[-_]?key|access[-_]?token|auth[-_]?token|refresh[-_]?token|client[-_]?secret|password|token|secret)["']?\s*[:=]\s*["']?)([^"'\s,;}{)]{8,})/gi, `$1${MASK}`],
+  [
+    /((?:api[-_]?key|access[-_]?token|auth[-_]?token|refresh[-_]?token|client[-_]?secret|password|token|secret)["']?\s*[:=]\s*["']?)([^"'\s,;}{)]{8,})/gi,
+    `$1${MASK}`,
+  ],
   // A bare base64 blob long enough to be a key rather than a fragment of code.
   [/(?<![A-Za-z0-9+/=])([A-Za-z0-9+/]{40,}={0,2})(?![A-Za-z0-9+/=])/g, MASK],
 ];

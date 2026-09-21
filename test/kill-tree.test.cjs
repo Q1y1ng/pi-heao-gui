@@ -39,61 +39,59 @@ async function waitForGone(pid, ms) {
   }
 }
 
-test(
-  "runPiCli: a timed-out install takes its npm grandchild with it",
-  { skip: process.platform !== "win32" ? "the taskkill path is Windows-only" : false },
-  async () => {
-    const log = path.join(os.tmpdir(), `pi-grandchild-${process.pid}-${Date.now()}.log`);
-    const previous = {
-      hang: process.env.PI_FAKE_HANG_MS,
-      log: process.env.PI_FAKE_GRANDCHILD_LOG,
-      fail: process.env.PI_FAKE_FAIL_TIMES,
-    };
-    // The fake reads these from the environment it inherits: runPiCli spawns with process.env.
-    process.env.PI_FAKE_HANG_MS = "60000";
-    process.env.PI_FAKE_GRANDCHILD_LOG = log;
-    delete process.env.PI_FAKE_FAIL_TIMES;
+test("runPiCli: a timed-out install takes its npm grandchild with it", {
+  skip: process.platform !== "win32" ? "the taskkill path is Windows-only" : false,
+}, async () => {
+  const log = path.join(os.tmpdir(), `pi-grandchild-${process.pid}-${Date.now()}.log`);
+  const previous = {
+    hang: process.env.PI_FAKE_HANG_MS,
+    log: process.env.PI_FAKE_GRANDCHILD_LOG,
+    fail: process.env.PI_FAKE_FAIL_TIMES,
+  };
+  // The fake reads these from the environment it inherits: runPiCli spawns with process.env.
+  process.env.PI_FAKE_HANG_MS = "60000";
+  process.env.PI_FAKE_GRANDCHILD_LOG = log;
+  delete process.env.PI_FAKE_FAIL_TIMES;
 
-    let grandchildPid = 0;
-    try {
-      const result = await runPiCli(FAKE_PI, ["install", "npm:some-package"], {
-        timeoutMs: 1500,
-      });
-      assert.equal(result.timedOut, true, "the run was killed by the timeout");
+  let grandchildPid = 0;
+  try {
+    const result = await runPiCli(FAKE_PI, ["install", "npm:some-package"], {
+      timeoutMs: 1500,
+    });
+    assert.equal(result.timedOut, true, "the run was killed by the timeout");
 
-      // The fake writes the pid before it hangs; give it a moment to land.
-      for (let i = 0; i < 40 && !grandchildPid; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-        grandchildPid = Number((fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "").trim());
-      }
-      assert.ok(grandchildPid > 0, "the fake started a grandchild to be killed");
-      assert.equal(
-        await waitForGone(grandchildPid, 5000),
-        true,
-        `grandchild ${grandchildPid} outlived the timeout kill`,
-      );
-    } finally {
-      // A failing assertion must not leave a 60-second process behind.
-      if (grandchildPid > 0 && isAlive(grandchildPid)) {
-        try {
-          process.kill(grandchildPid);
-        } catch {
-          /* already gone */
-        }
-      }
-      for (const [key, value] of [
-        ["PI_FAKE_HANG_MS", previous.hang],
-        ["PI_FAKE_GRANDCHILD_LOG", previous.log],
-        ["PI_FAKE_FAIL_TIMES", previous.fail],
-      ]) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
+    // The fake writes the pid before it hangs; give it a moment to land.
+    for (let i = 0; i < 40 && !grandchildPid; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      grandchildPid = Number((fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "").trim());
+    }
+    assert.ok(grandchildPid > 0, "the fake started a grandchild to be killed");
+    assert.equal(
+      await waitForGone(grandchildPid, 5000),
+      true,
+      `grandchild ${grandchildPid} outlived the timeout kill`,
+    );
+  } finally {
+    // A failing assertion must not leave a 60-second process behind.
+    if (grandchildPid > 0 && isAlive(grandchildPid)) {
       try {
-        fs.rmSync(log, { force: true });
+        process.kill(grandchildPid);
       } catch {
-        /* best effort */
+        /* already gone */
       }
     }
-  },
-);
+    for (const [key, value] of [
+      ["PI_FAKE_HANG_MS", previous.hang],
+      ["PI_FAKE_GRANDCHILD_LOG", previous.log],
+      ["PI_FAKE_FAIL_TIMES", previous.fail],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    try {
+      fs.rmSync(log, { force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+});

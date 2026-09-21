@@ -64,7 +64,10 @@ test("bash: a matching command asks, a clean one does not", async () => {
   assert.match(dangerous.title, /rm -rf build/, "the person sees the command");
   assert.match(dangerous.title, /rm\\s\+-rf/, "and which rule matched");
 
-  assert.equal(decide({ toolName: "bash", input: { command: "npm test" } }, { patterns }).kind, "allow");
+  assert.equal(
+    decide({ toolName: "bash", input: { command: "npm test" } }, { patterns }).kind,
+    "allow",
+  );
   assert.equal(decide({ toolName: "bash", input: {} }, { patterns }).kind, "allow");
   // No patterns at all = the shipped-list-missing case. It still allows, but the
   // /permission status line is what says so out loud (see the extension).
@@ -74,15 +77,15 @@ test("bash: a matching command asks, a clean one does not", async () => {
 test("FullAccess allows everything, both shapes", async () => {
   await load();
   assert.equal(
-    decide({ toolName: "bash", input: { command: "rm -rf /" } }, { mode: "FullAccess", patterns: ["rm"] })
-      .kind,
+    decide(
+      { toolName: "bash", input: { command: "rm -rf /" } },
+      { mode: "FullAccess", patterns: ["rm"] },
+    ).kind,
     "allow",
   );
   assert.equal(
-    decide(
-      { toolName: "write", input: { path: "C:/elsewhere/file.txt" } },
-      { mode: "FullAccess" },
-    ).kind,
+    decide({ toolName: "write", input: { path: "C:/elsewhere/file.txt" } }, { mode: "FullAccess" })
+      .kind,
     "allow",
   );
 });
@@ -99,7 +102,10 @@ test("write/edit inside the working directory stays automatic", async () => {
     assert.equal(decide({ toolName, input: { path: "." } }, { cwd }).kind, "allow");
   }
   // Another tool's path argument is not this rule's business.
-  assert.equal(decide({ toolName: "read", input: { path: "C:/Windows/win.ini" } }, { cwd }).kind, "allow");
+  assert.equal(
+    decide({ toolName: "read", input: { path: "C:/Windows/win.ini" } }, { cwd }).kind,
+    "allow",
+  );
 });
 
 test("write/edit outside the working directory asks, with the resolved path", async () => {
@@ -112,16 +118,25 @@ test("write/edit outside the working directory asks, with the resolved path", as
 
   // `..` is resolved, not string-matched: a path that reads as "inside" and is not
   // is the whole reason this rule exists.
-  assert.equal(decide({ toolName: "edit", input: { path: "../sibling/file.ts" } }, { cwd }).kind, "ask");
+  assert.equal(
+    decide({ toolName: "edit", input: { path: "../sibling/file.ts" } }, { cwd }).kind,
+    "ask",
+  );
   assert.equal(
     decide({ toolName: "edit", input: { path: "sub/../../outside.ts" } }, { cwd }).kind,
     "ask",
   );
-  assert.equal(decide({ toolName: "edit", input: { path: "~/.pi/agent/settings.json" } }, { cwd }).kind, "allow");
+  assert.equal(
+    decide({ toolName: "edit", input: { path: "~/.pi/agent/settings.json" } }, { cwd }).kind,
+    "allow",
+  );
   // `~` is not expanded here, and must not be: pi hands these tools a real path, so a
   // literal "~" is a directory named "~" inside the workspace, not the home directory.
   // A path argument under another name is still the target.
-  assert.equal(decide({ toolName: "write", input: { file_path: "C:/temp/x" } }, { cwd }).kind, "ask");
+  assert.equal(
+    decide({ toolName: "write", input: { file_path: "C:/temp/x" } }, { cwd }).kind,
+    "ask",
+  );
 });
 
 test("a junction inside the workspace is not 'inside' once real paths are compared", async () => {
@@ -146,7 +161,10 @@ test("a junction inside the workspace is not 'inside' once real paths are compar
 
   // …and without a realpath to check, the textual answer is the one it gives: this rule
   // is a prompt, not the last line of defence (the host's fs guard is that).
-  assert.equal(decide({ toolName: "write", input: { path: "link/settings.json" } }, { cwd }).kind, "allow");
+  assert.equal(
+    decide({ toolName: "write", input: { path: "link/settings.json" } }, { cwd }).kind,
+    "allow",
+  );
 });
 
 test("isInsideWorkspace: siblings and prefixes are not containment", async () => {

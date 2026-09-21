@@ -81,7 +81,11 @@ export interface CommitPromptInput {
 }
 
 /** Build the system + user prompt exactly as upstream does. */
-export interface CommitPrompt { system: string; user: string; /** What the diff was allowed to use. */ diffBudget: number }
+export interface CommitPrompt {
+  system: string;
+  user: string /** What the diff was allowed to use. */;
+  diffBudget: number;
+}
 
 /**
  * Build the system + user prompt exactly as upstream does — except for the size of the diff, which

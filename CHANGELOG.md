@@ -11,6 +11,8 @@
 - README（中/英）在 1.3.0 段补一条勘误：那一版的源码包 `pi-heao-gui-1.3.0-source.zip` 实际是改了后缀的 tar
   （Git Bash 的 GNU tar 忽略 `-a`），Windows 自带解压器打不开；看 1.3.0 源码请 `git clone` 后切到 `v1.3.0`，
   或用 1.3.1 的源码包。两个安装包不受影响；1.3.1 起已改用 Windows 自带 bsdtar 打包。
+- 同一条勘误进入了 v1.3.0 的**发布页正文**（`gh release edit`，只加正文，五个附件的大小与 sha256 未变）
+  与 `docs/release-notes-1.3.0.md`，使发布页与仓库内文档保持一致；源码包本身不动。
 
 ## 1.3.1 — 2026-09-21
 

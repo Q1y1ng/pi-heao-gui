@@ -106,7 +106,7 @@
 - `npm run build`：`tsc` → `dist/`，再由 `scripts/copy-assets.mjs` 复制 renderer 占位页与 15 个 UMD 库；
 - `studio/pi-chat/dist/index.html` 是**构建产物且不入库**：新克隆先 `npm run build:renderer`（需要网络）；
 - `npm run dist`：electron-builder 产出 portable + NSIS 到 `dist-electron/`；
-- asar 内容由 `package.json` 的 `files` 白名单决定，`scripts/check-package.cjs` 在 CI 里断言 13 条运行时路径
+- asar 内容由 `package.json` 的 `files` 白名单决定，`scripts/check-package.cjs` 在 CI 里断言 14 条运行时路径
   一条不少、且不含 `src/`。
 
 ## 一路上真正值钱的坑

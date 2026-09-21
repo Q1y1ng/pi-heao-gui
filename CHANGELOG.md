@@ -4,7 +4,9 @@
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## 1.3.1 — 2026-09-21
+
+安全与稳定性一批：**权限门从“空转”变成真拦**、文件面板不再能碰 `~/.pi`，以及一批会让进程/回合卡住的缺陷。
 
 ### Added
 

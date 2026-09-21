@@ -8,7 +8,17 @@
  *   - pi lists sessions one directory deep, so moving a file into
  *     `sessions/_archived/<cwd-slug>/` hides it from the CLI as well.
  */
-import { appendFile, mkdir, readFile, rename, stat, unlink, readdir, open, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  readdir,
+  open,
+  writeFile,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";

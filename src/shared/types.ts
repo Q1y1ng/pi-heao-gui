@@ -131,7 +131,7 @@ export const DEFAULT_DANGEROUS_PATTERNS: readonly string[] = [
   "\\bfind\\b.*\\s+-(?:delete|exec|execdir|fprint|fprintf|fls|ok|okdir)\\b",
   "\\brg\\b.*\\s+--(?:pre|hostname-bin)\\b",
   "\\bsed\\b.*\\s+-(?:[a-zA-Z]*[ef][a-zA-Z]*|expression|file)\\b",
-  "\\bsed\\b(?:\\s+-[a-zA-Z]+)*\\s+[\"']s\\/[^/\"]*\\/[^/\"]*\\/[a-zA-Z]*[ew]",
+  '\\bsed\\b(?:\\s+-[a-zA-Z]+)*\\s+["\']s\\/[^/"]*\\/[^/"]*\\/[a-zA-Z]*[ew]',
   "\\bsed\\b(?:\\s+-[a-zA-Z]+)*\\s+[\"'][^\"']*;W",
   "\\bsort\\b.*\\s+-(?:o|S)\\b",
   "\\btree\\b.*\\s+-o\\b",

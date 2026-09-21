@@ -6,6 +6,46 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4)
 
+## 1.3.1 — the permission gate actually gates, and the leaks are closed
+
+Released 2026-09-21 · [release notes](docs/release-notes-1.3.1.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.1)
+
+A security/stability/process audit, fixed. Two things a user will notice:
+
+- **"Dangerous commands need confirmation" now confirms.** The mode defaulted to `AskForApproval` while the
+  pattern list defaulted to **empty** — and an empty list in the gate means "nothing matches", so every bash
+  command ran, with no screen that could have changed it. The app now ships **39 default rules** (upstream
+  pi-agent-studio's list, byte for byte, pinned by a test), editable and restorable from Settings → 权限, and
+  `/permission` reports the mode and how many rules are live.
+- **The gate covers more than one tool and more than one process.** A `write`/`edit` whose path resolves
+  **outside the session's working directory** is asked about (that is how "it only touched the repo" rewrites
+  `~/.pi/agent/settings.json`), and a `subagent` — a second `pi` — now mounts the same gate, so delegating a
+  dangerous command can no longer skip every prompt.
+- **The file panel is no longer "all of your home directory".** Its default root *is* the home directory, so
+  the chat window (the one that renders model output and is documented as unable to touch agent config) could
+  read `~/.pi/agent/auth.json` and overwrite `~/.pi/standalone/config.json`. `~/.pi`, `~/.ssh`, `~/.aws`,
+  `~/.gnupg`, `~/.docker`, `~/.config`, `~/.npmrc`, `~/.git-credentials`, `~/.gitconfig` and `%APPDATA%` are
+  refused now; a project's own `.pi/` is untouched.
+- **No more pi processes you can neither see nor kill.** Two messages sent after pi died started two pi
+  processes, the second overwriting the reference and the first **never exiting** (not even on quit), both
+  writing the same session file; a subagent had exactly one way out (the caller's abort), so one wedged child
+  ended the conversation forever. Reload is now serialised, subagents have a 15-minute watchdog
+  (`PI_SUBAGENT_TIMEOUT_MS`), and timeout/abort kill the **whole** tree — as does a timed-out `pi install`,
+  which used to leave npm installing into the agent prefix.
+- **Opening a repository no longer executes its `.pi/mcp.json`.** That file is a list of commands, started with
+  your privileges whenever a session opens there; pi's own project-trust gate covers settings/extensions/
+  skills/prompts/themes but **not** `mcp.json`. It asks once now (naming the servers and the directory),
+  remembers per directory and file hash, and re-asks when the file changes. MCP calls also gained a timeout.
+- **Also fixed**: commit-message generation failing on any large diff (the prompt rides in argv, and Windows
+  caps a command line at 32 767 characters — the old diff budget alone was 64 KB); the diff window and session
+  import reading files of any size (the "cap" was checked *after* writing); an orphan terminal left behind when
+  a window closed while the terminal waited for the start-up queue; portable builds being offered the installer
+  as an update; secrets reaching the diagnostics bundle; and `studio/pi-chat/package-lock.json` being ignored,
+  which let two builds of the same tag differ.
+- **CI now loads the terminal stack**: a blocking `npm run check:pty` spawns a ConPTY under Electron and
+  requires an echo back. Nothing in CI used to `require("node-pty")` — a broken native module shipped as "the
+  dock is blank", with every check green.
+
 ## 1.3.0 — every window at a glance, and the directories you come back to
 
 Released 2026-09-19 · [release notes](docs/release-notes-1.3.0.md) · [download](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.0)
@@ -301,18 +341,19 @@ Why the shell had to be rewritten rather than reused as-is, and the traps hit wh
 ## Scripts
 
 ```bash
-npm test              # unit tests (235, none skipped)
+npm test              # unit tests (257, none skipped)
 npm run lint          # biome
 npm run typecheck     # tsc --noEmit
 npm run verify        # 38 DOM assertions against a real window
 npm run smoke         # 22 end-to-end checks
 npm run test:daily    # 25 checks driving a real model end-to-end
-npm run check:package # asserts the packaged asar contains all 13 runtime paths
+npm run check:pty     # the terminal stack: a PTY spawns and echoes under Electron (blocking in CI)
+npm run check:package # asserts the packaged asar contains all 14 runtime paths
 npm run shots         # regenerates the README screenshots in a throwaway sandbox
 ```
 
-`.github/workflows/ci.yml` runs `lint + typecheck + test` and `package` (the packaged build contains every
-runtime dependency) as **blocking** jobs, with `smoke` advisory.
+`.github/workflows/ci.yml` runs `lint + typecheck + test + check:pty` and `package` (the packaged build
+contains every runtime dependency) as **blocking** jobs, with `smoke` advisory.
 
 ## Troubleshooting
 
@@ -324,12 +365,23 @@ runtime dependency) as **blocking** jobs, with `smoke` advisory.
 - **Font size not resizing chat text** — fixed in 1.2.3. The vendored chat writes an inline `--chat-fs` on
   `<html>` at boot, and an inline custom property beats every stylesheet; the shell now re-points that copy
   at the master token. Measurements and the trail: [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
+- **A confirmation prompt for a command you run all the time** — that is the shipped rule list doing its job;
+  edit it in Settings → 权限, press *restore defaults*, or switch the mode to *full access*. An empty list
+  means "block nothing", and says so.
+- **A confirmation prompt for a write outside the working directory** — also intended: the agent is leaving the
+  directory you opened. The prompt names the resolved path and the working directory it is measured against.
+- **Portable build says it cannot update itself** — correct: the portable build shares the installer's release
+  channel, so the app tells you to download the new `Portable.exe` instead of quietly installing a second copy.
 
 ## Security model
 
 - Every renderer runs with `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`.
 - The preload exposes a narrow typed API only; there is no generic `ipcRenderer` passthrough.
-- File operations are confined to the workspace via realpath-checked paths, and fail closed.
+- File operations are confined to the workspace via realpath-checked paths, and fail closed — and the
+  credential/agent-state locations (`~/.pi`, `~/.ssh`, `%APPDATA%`, …) are refused wherever the workspace
+  points, so "the workspace is my home directory" is no longer the same as "everything is readable".
+- The permission gate ships a default rule list, mounts on subagents, and asks about writes that leave the
+  working directory; a project's `.pi/mcp.json` needs a per-directory trust decision before its servers run.
 - `openPath`/`showItemInFolder` go through a blocklist (executables and script extensions), so a crafted
   filename cannot turn a "reveal in folder" into a launch.
 - The renderer CSP still allows `script-src 'unsafe-inline'` because the shipped UI is a single-file HTML

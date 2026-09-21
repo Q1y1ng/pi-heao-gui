@@ -7,6 +7,38 @@
 [![Release](https://img.shields.io/github/v/release/Q1y1ng/pi-heao-gui)](https://github.com/Q1y1ng/pi-heao-gui/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 
+## 1.3.1 更新报告
+
+发布于 2026-09-21 · [完整发布说明](docs/release-notes-1.3.1.md) · [下载 1.3.1](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.1)
+
+一次审计（安全 / 稳定性 / 工程流程）之后的修复版：用户能感知的变化集中在两件事上 ——
+**「危险命令需确认」真的会拦了**，以及一批会让 pi 进程、回合或窗口卡住的缺陷被修掉。
+
+- **权限门从“空转”变成真拦。** 设置里默认就是 `AskForApproval`，但规则表默认是**空的**，
+  而空表在权限门里等于“一条都不匹配” —— 每条 bash 命令都放行；设置界面里又根本没有编辑规则的地方，
+  这个默认值无从改起。现在应用**自带 39 条默认规则**（与上游 pi-agent-studio 那套逐字一致，有单测钉住），
+  设置 → 权限 里可编辑、一键「恢复默认」，`/permission` 会报出当前模式与生效条数。
+- **门不再只管 bash，也不再只管主会话。** `write` / `edit` 的目标路径解析后落在**会话工作目录之外**时要确认
+  （这正是“它只改了仓库”实际是改写 `~/.pi/agent/settings.json` 的那条路）；`subagent` 派生的第二个 pi
+  此前**没挂门**，等于把危险命令交给子代理就绕过了全部确认 —— 现在它挂同一个门。
+- **文件面板不再等于“整个用户目录可读写”。** 文件面板默认根就是家目录，于是聊天窗口（那个专门渲染模型输出、
+  被定义为不能碰 agent 配置的窗口）能读 `~/.pi/agent/auth.json`、改写 `~/.pi/standalone/config.json`。
+  现在一律拒绝 `~/.pi`、`~/.ssh`、`~/.aws`、`~/.gnupg`、`~/.docker`、`~/.config`、`~/.npmrc`、
+  `~/.git-credentials`、`~/.gitconfig` 与 `%APPDATA%`；仓库自己的 `.pi/` 不受影响。
+- **不会再有改不掉也看不见的 pi 进程。** pi 退出后连发两条消息会各起一个 pi，后者覆盖引用而前者**永不退出**
+  （连应用退出都扫不到它），两个进程还往同一个会话文件里写；子代理此前只有一个出口（调用方 abort），
+  子 pi 一卡住整个回合就永远不结束 —— 现在重载互斥，子代理有 15 分钟看门狗（`PI_SUBAGENT_TIMEOUT_MS` 可改），
+  超时/中止都杀**整棵**进程树（超时的 `pi install` 同样不再把 npm 子进程留在后台）。
+- **打开一个仓库不再等于自动执行它的 `.pi/mcp.json`。** 那个文件本质是一串命令，会话开在该目录就会以你的权限
+  启动它们；pi 自己的项目信任门覆盖 settings/extensions/skills/prompts/themes，**偏偏不含 mcp.json**。
+  现在会先问一次（列出 server 名字与目录），按目录 + 文件哈希记住，文件被改过会重问；MCP 调用还补上了超时。
+- **本版还修了**：改动很大时“生成提交信息”必然因 Windows 命令行长度上限失败；diff 窗口与导入会话可以整读
+  任意大小的文件（那个“上限”是在写盘之后才判的）；等终端排队时关窗口留下孤儿终端进程；便携版被推着下载
+  “安装包版”的自动更新；诊断包里可能夹带明文密钥；`studio/pi-chat/package-lock.json` 没入库导致同一 tag
+  两次构建可以不一致。
+- **CI 里现在真的会加载一次终端栈**：新增阻塞步骤 `npm run check:pty`（Electron 下起一个 ConPTY 并要求回显）。
+  此前 CI 没有任何一步 `require("node-pty")` —— 原生模块坏掉可以一路绿灯发出去，表现为“终端面板一片空白”。
+
 ## 1.3.0 更新报告
 
 发布于 2026-09-19 · [完整发布说明](docs/release-notes-1.3.0.md) · [下载 1.3.0](https://github.com/Q1y1ng/pi-heao-gui/releases/tag/v1.3.0)
@@ -309,6 +341,7 @@ npm run dist             # 打包：便携版 + NSIS 安装包（输出到 dist-
 | `theme` / `accent` / `chatFontSize` | 外观 |
 | `uiLanguage` | `auto` / `zh-cn` / `en` |
 | `permissionMode` | `AskForApproval` / `FullAccess` |
+| `dangerousPatterns` | 需确认的命令规则（正则数组）；**缺这个键 = 用自带的 39 条默认规则**，显式写成 `[]` 才是主动关掉。可在设置 → 权限 里编辑 / 恢复默认 |
 | `mcpEnabled` / `mcpIdleTimeout` | MCP 扩展开关与空闲超时 |
 | `disabledTools` | 禁用的工具列表 |
 | `autoCheckUpdates` | 是否在后台检查更新（默认开） |
@@ -359,6 +392,7 @@ npm run verify          # 真机 UI 功能断言（面板 / 命令面板 / 侧�
 npm run test:daily      # 日常流程端到端：真窗口 + 真模型，让 agent 建文件、写测试、跑测试（需 provider）
 npm run measure-load    # 会话切换耗时归因（pi 解析 vs 渲染）
 npm run check:package   # 断言打包产物（asar）含全部运行时依赖（需先 npm run dist）
+npm run check:pty       # 终端栈自检：Electron 下起一个 ConPTY 并要求回显（CI 里是阻断步骤）
 npm run shot            # 截图（拍本机现状，仅供人工核对，**不入库**）
 npm run shots           # 生成 README 配图：隔离沙箱 + 合成会话，输出到 docs/images/
 npm run typecheck       # tsc --noEmit
@@ -373,16 +407,20 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 **测试与 CI**
 
 - `npm test` 覆盖配置校验、密钥掩码往返、`shell.openPath` 扩展名黑名单（含尾随点/空格
-  归一化）、**工作区路径逃逸（符号链接 / junction）**、Windows shim 解析（含 `&` 注入回归）、
-  会话列表缓存、生成 HTML 的 CSP 与注入转义、注入脚本能否解析、生成页面的**重复 id 审计**、
-  preload 通道覆盖、i18n 完整性、更新状态机。
+  归一化）、**工作区路径逃逸（符号链接 / junction）**、**权限门的判定（默认规则表与空表、工作目录
+  内外的写入、junction 逃逸、无效正则）**、**超时杀进程树（真 spawn 一个孙进程再验证它没了）**、
+  Windows shim 解析（含 `&` 注入回归）、会话列表缓存、生成 HTML 的 CSP 与注入转义、注入脚本能否解析、
+  生成页面的**重复 id 审计**、preload 通道覆盖、i18n 完整性、更新状态机（含便携版不自动更新）、
+  诊断日志脱敏。
 - `npm run e2e` / `npm run e2e:isolated` 打开**每个窗口与面板**并断言点击后的真实变化
   （不是元素存在），**任何渲染进程报错都判定失败**；隔离模式把 HOME/APPDATA 指向临时目录，
   破坏性操作用的是沙箱内的副本。
-- `.github/workflows/ci.yml`：`lint + typecheck + test` 与 `package`（打包产物含全部运行时依赖）
+- `.github/workflows/ci.yml`：`lint + typecheck + test + check:pty` 与 `package`（打包产物含全部运行时依赖）
   为**阻断**作业，`smoke` 为咨询作业；依赖审计为咨询步骤，另有 Dependabot 分组跟进依赖。
-- `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 13 条运行时
-  路径（自带聊天 UI、bridge 扩展、node-pty 原生模块等）都在包里。
+  `check:pty` 是唯一会 `require("node-pty")` 的一步 —— 原生模块在 Electron ABI 下装不起来时，
+  它能当场变红，而不是等用户看到“终端面板一片空白”。
+- `npm run check:package` 是“装得上且装得全”的守卫：读 `app.asar` 头部断言 14 条运行时
+  路径（自带聊天 UI、bridge 扩展含权限门的判定模块、node-pty 原生模块等）都在包里。
 - `npm run test:daily` 是唯一能证明“**这个应用真能把一件事做完**”的门禁：它开真窗口、
   用真模型（你指定的 provider），让 agent 建文件、写测试、跑测试，并且**以磁盘上的产物**
   作为完成判据（不是看界面文字猜结束）。其余检查只能证明控件在、桥在、数据在流动，
@@ -397,6 +435,10 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 | 提示找不到 `pi` | 按应用内指引安装，或在 设置 → 常规 里指定 `piPath` |
 | 终端面板起不来 | 需要绝对可执行路径；若 `piPath` 指向 shim（`.cmd`）请留空让应用自行解析。面板的 meta 行会显示实际使用的 shell |
 | **改了字号，聊天文字大小不变** | **1.2.3 已修**：真凶是内置聊天 UI 启动时写在 `<html>` 上的**内联 `--chat-fs`**（内联赢过所有样式表），应用侧 shim 现在把它重新指向主控；证据见 [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md) |
+| 常用命令也弹确认 | 那就是自带的规则表在工作：在 设置 → 权限 里改规则、点「恢复默认」，或把模式改成「完全访问」。规则表**清空 = 什么都不拦**，界面会这么说 |
+| 写工作目录之外的文件弹确认 | 同样是有意的：agent 要离开你打开的那个目录。确认框里写清了它解析后的真实路径与用来比较的工作目录 |
+| 便携版说它不能自更新 | 对：便携版与安装版共用 release 通道，所以应用让你从 Releases 下载新的 `Portable.exe`，而不是静静装出第二份副本 |
+| 想确认终端原生模块没坏 | `npm run check:pty`（CI 里的阻断步骤，Electron 下起 ConPTY 并要求回显） |
 | 会话很多时启动慢 | 会话元数据是异步 + 缓存的；首次仍会较慢（要读一遍 session 文件） |
 | 想彻底卸载 | 卸载程序只删程序本体。会话在 `~/.pi/agent/sessions/`，应用数据在 `%APPDATA%\pi-heao-gui`，配置在 `~/.pi/standalone/config.json` |
 
@@ -418,6 +460,20 @@ npm run build:mcp       # 重建自带的 MCP 扩展 bundle
 - **工作区约束**：文件面板只接受相对路径，且**解析真实路径后**（跟随 symlink/junction）
   必须仍在工作区内 —— 否则返回“路径无效”。无法验证时**拒绝**而不是放行。
   代价是：工作区里指向外部的软链不会在文件树里显示。
+- **受保护位置**：无论工作区指向哪里，`pi:fs-tree/read/media/write` 都拒绝 `~/.pi`（会话、快照、
+  settings/auth、应用配置、pi 装的扩展包）、`~/.ssh`、`~/.aws`、`~/.gnupg`、`~/.docker`、`~/.config`、
+  `~/.npmrc`、`~/.git-credentials`、`~/.gitconfig`（git 的 `core.sshCommand` 就是一个命令执行入口）
+  与 `%APPDATA%`（`userData/bridge-extracted/*.ts` 是每个 pi 都拿 `-e` 执行的）。
+  判断用的是 `isWithin()`：**文本命中或真实路径命中任一即算命中** —— 工作区里指向 `~/.pi` 的 junction
+  必须被拦下。仓库自己的 `.pi/` 不在名单里（那是你的仓库，不是 agent 状态）；
+  想在 `~/.pi` 里改东西，走**设置窗口**或 pi CLI，那条路没有被封。
+- **权限门**：`AskForApproval`（默认）下，命令命中规则表、或 `write`/`edit` 写到工作目录之外时弹确认；
+  规则表自带 39 条默认值（设置 → 权限 可改/恢复/清空）。子代理（`subagent` 工具启的第二个 pi）挂同一道门，
+  所以把危险命令“外包”给子代理不能绕过确认。**它是一道提问防线，不是沙箱**：形状写法的绕过（`r\m -rf`、
+  base64 管道）它拦不住 —— 它拦的是“你确定的那些形状”，而不是“所有可能”。
+- **项目级 MCP**：打开一个目录时，它自己的 `.pi/mcp.json` 里的 server 会先询问（列出名字与目录），
+  选“信任并记住”后按**目录 + 文件哈希**记住；文件被改会重问。pi 自己的项目信任门不覆盖 `mcp.json`，
+  所以这道确认由应用补上。
 - **`shell.openPath` 黑名单**：先做路径归一化（去掉 Windows 会静默吃掉的尾随点/空格，
   否则 `evil.exe.` 能绕过 `extname` 检查），再拒绝
   `.exe/.bat/.cmd/.ps1/.vbs/.lnk/.js/…` 等可执行类型与 UNC/设备路径。

@@ -33,7 +33,12 @@ import {
 } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { type StandaloneConfig, DEFAULT_CONFIG, DEFAULT_DANGEROUS_PATTERNS, IPC } from "../shared/types";
+import {
+  type StandaloneConfig,
+  DEFAULT_CONFIG,
+  DEFAULT_DANGEROUS_PATTERNS,
+  IPC,
+} from "../shared/types";
 import { buildChatHtml } from "./chat-adapter";
 import { isWithin, safeWorkspacePath } from "./fs-path";
 import {
@@ -2825,7 +2830,7 @@ function setupChineseMenu(): void {
             const opts = {
               type: "info" as const,
               title: "关于",
-              message: "Pi Heao GUI V1.3.0",
+              message: "Pi Heao GUI V1.3.1",
               detail,
               buttons: ["好"],
             };

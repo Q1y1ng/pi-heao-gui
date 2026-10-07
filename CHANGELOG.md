@@ -6,6 +6,16 @@
 
 ## [未发布]
 
+### Added
+
+- **记忆面板（上下文文件可见性，ROADMAP #11）**：dock 新增第 4 个 tab「记忆」，按 **pi 自己的加载规则**
+  列出这次会话会拼进系统提示的上下文文件——全局 `~/.pi/agent/AGENTS.md` + 从工作目录向上每层取一份
+  （每目录候选序 `AGENTS.override.md > AGENTS.md > AGENTS.MD > CLAUDE.md > CLAUDE.MD` 取首个存在的文件，
+  linked worktree 遮蔽主仓同名文件）。发现规则逐字对齐 pi resource-loader，落在可注入 fs 的纯函数
+  `src/main/context-files.ts`；点击行经 `pi:context-open` 用系统默认应用打开——路径**必须在发现清单内**
+  才放行（protectedPaths 的精确豁免，renderer 无法借此打开 `~/.pi` 其他文件）。单测 14 条 + e2e 4 条
+  （全局列出 / override 生效 / 打开走系统应用 / 非清单文件被拒）。
+
 ### 文档
 
 - README（中/英）在 1.3.0 段补一条勘误：那一版的源码包 `pi-heao-gui-1.3.0-source.zip` 实际是改了后缀的 tar

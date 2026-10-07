@@ -17,6 +17,7 @@ export const DOCK_HTML = `
       <button class="pi-dock-tab active" data-dock="term" type="button">终端</button>
       <button class="pi-dock-tab" data-dock="files" type="button">文件</button>
       <button class="pi-dock-tab" data-dock="changes" type="button">变更</button>
+      <button class="pi-dock-tab" data-dock="memory" type="button">记忆</button>
     </div>
     <span class="pi-dock-meta" id="pi-dock-meta"></span>
     <div class="pi-dock-actions">
@@ -75,6 +76,15 @@ export const DOCK_HTML = `
         </div>
         <textarea id="pi-commit-msg" spellcheck="false" placeholder="生成后会显示在这里，可以直接编辑…"></textarea>
       </div>
+    </div>
+    <div class="pi-dock-pane" id="pi-pane-memory">
+      <div class="pi-files-head">
+        <span id="pi-memory-cwd"></span>
+        <span class="pi-files-spacer"></span>
+        <button class="pi-dock-btn" id="pi-memory-refresh" type="button" title="刷新">刷新</button>
+      </div>
+      <div id="pi-memory-list"></div>
+      <div class="pi-git-hint" id="pi-memory-hint">pi 的记忆 = 全局 AGENTS.md + 从工作目录向上每层取一份（AGENTS.override.md 优先于 AGENTS.md 与 CLAUDE.md）。点一行用系统默认应用打开。</div>
     </div>
   </div>
 </div>`;
@@ -203,6 +213,13 @@ overflow: auto; background: var(--pi-bg); padding: 8px;
 .pi-git-file .pi-git-del { color: var(--pi-danger); font-family: var(--pi-font-mono); font-size: var(--pi-fs-xs); }
 .pi-git-file .pi-git-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-git-sec-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pi-text-faint); padding: 6px 6px 2px; }
+/* ── Memory pane (context files) ─────────────────────────────────────── */
+.pi-memory-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--pi-border); cursor: pointer; min-width: 0; }
+.pi-memory-row:hover { background: var(--pi-raised); }
+.pi-memory-badge { flex: none; font-size: 10px; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--pi-border); color: var(--pi-text-dim); }
+.pi-memory-badge.global { color: var(--pi-accent); border-color: var(--pi-accent); }
+.pi-memory-name { flex: none; font-family: var(--pi-font-mono); font-size: var(--pi-fs-sm); color: var(--pi-text); }
+.pi-memory-dir { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text-faint); font-size: var(--pi-fs-xs); direction: rtl; unicode-bidi: plaintext; text-align: left; }
   .CodeMirror { height: 100% !important; background: var(--pi-bg) !important; color: var(--pi-text) !important; font-family: var(--pi-font-mono) !important; font-size: var(--pi-fs-sm) !important; }
   /* CodeMirror ships a palette chosen for a white background, and on our two themes half of it is
      unreadable: the accessibility gate measured a gutter number at 2.85:1 in the light theme and a
@@ -241,6 +258,7 @@ export const DOCK_SCRIPT = `
     if (tab === 'term') { ensureTerm(); setTimeout(fitTerm, 30); }
     if (tab === 'files') { loadTree(treePath); }
     if (tab === 'changes') { refreshGit(); }
+    if (tab === 'memory') { refreshMemory(); }
   }
   function hide() {
     dock.hidden = true;
@@ -573,6 +591,41 @@ export const DOCK_SCRIPT = `
       refreshWorktrees();
     });
     refreshWorktrees();
+  }
+
+  // Memory pane: pi loads its context files silently and RPC never says which — this lists the
+  // exact set pi's own discovery rule would load (main re-runs the rule, the pane only draws).
+  async function refreshMemory() {
+    var res = await window.pi.invoke('pi:context-files');
+    var list = document.getElementById('pi-memory-list');
+    if (!list) return;
+    if (!res || !res.ok) {
+      list.innerHTML = '<div class="pi-git-hint">读不到上下文清单。</div>';
+      return;
+    }
+    document.getElementById('pi-memory-cwd').textContent = res.cwd || '';
+    var files = res.files || [];
+    if (!files.length) {
+      list.innerHTML = '<div class="pi-git-hint">没有任何上下文文件 —— pi 这次是「无记忆」启动的。</div>';
+      return;
+    }
+    list.innerHTML = files.map(function (f) {
+      return '<div class="pi-memory-row" data-path="' + esc(f.path) + '" title="' + esc(f.path) + '（点击用系统默认应用打开）">'
+        + '<span class="pi-memory-badge' + (f.level === 'global' ? ' global' : '') + '">'
+        + (f.level === 'global' ? '全局' : '工作区') + '</span>'
+        + '<span class="pi-memory-name">' + esc(f.name) + '</span>'
+        + '<span class="pi-memory-dir">' + esc(f.dir) + '</span></div>';
+    }).join('');
+  }
+  var memoryList = document.getElementById('pi-memory-list');
+  if (memoryList) {
+    memoryList.addEventListener('click', function (e) {
+      var row = e.target.closest('.pi-memory-row');
+      if (row) window.pi.invoke('pi:context-open', row.getAttribute('data-path'));
+    });
+    var memoryRefresh = document.getElementById('pi-memory-refresh');
+    if (memoryRefresh) memoryRefresh.addEventListener('click', refreshMemory);
+    refreshMemory();
   }
 
   // A new working copy, and a session of its own in it. The button is always available (the dropdown

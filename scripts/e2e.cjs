@@ -133,6 +133,23 @@ if (ISOLATED) {
 
 const electron = require("electron");
 if (!electron.app || typeof electron.app.on !== "function") {
+  console.error("electron did not load as the main process");
+  process.exit(1);
+}
+
+// The memory-pane check asserts that "open" reaches the system-default-app call, without
+// actually launching an app mid-run. While stubbed, shell.openPath records and reports
+// success; every other section keeps the real behaviour.
+const openPathCalls = [];
+let openPathStubbed = false;
+const realOpenPath = electron.shell.openPath.bind(electron.shell);
+electron.shell.openPath = (p) => {
+  if (!openPathStubbed) return realOpenPath(p);
+  openPathCalls.push(String(p));
+  return Promise.resolve("");
+};
+
+if (process.env.ELECTRON_RUN_AS_NODE) {
   console.error("ELECTRON_RUN_AS_NODE is set - unset it first (electron must run as Electron).");
   process.exit(2);
 }
@@ -615,12 +632,13 @@ app.whenReady().then(async () => {
         dockNow.hidden === false && dockNow.bodyOpen === true,
         JSON.stringify({ opened, dockNow }),
       );
-      check("dock exposes its three tabs", dockNow.tabs === 3, JSON.stringify(dockNow));
+      check("dock exposes its four tabs", dockNow.tabs === 4, JSON.stringify(dockNow));
 
       for (const [tab, pane] of [
         ["term", "pi-pane-term"],
         ["files", "pi-pane-files"],
         ["changes", "pi-pane-changes"],
+        ["memory", "pi-pane-memory"],
       ]) {
         const active = await js(
           win,
@@ -990,6 +1008,88 @@ app.whenReady().then(async () => {
         JSON.stringify(git),
       );
     });
+
+    // ══ 6a. Memory pane (context files) ═════════════════════════════
+    // Isolated only: it writes a global AGENTS.md into the sandboxed home and both AGENTS.md and
+    // AGENTS.override.md into the repository root (removed again below — the repo must be left as
+    // it was found, and the user's real ~/.pi is never touched because it is not the sandbox).
+    if (ISOLATED) {
+      await section("Dock: memory pane lists exactly what pi would load", async () => {
+        const agentDir = path.join(SANDBOX, ".pi", "agent");
+        fs.mkdirSync(agentDir, { recursive: true });
+        fs.writeFileSync(path.join(agentDir, "AGENTS.md"), "# e2e global memory\n", "utf8");
+        const plain = path.join(REPO_ROOT, "AGENTS.md");
+        const override = path.join(REPO_ROOT, "AGENTS.override.md");
+        fs.writeFileSync(plain, "# e2e workspace memory (plain)\n", "utf8");
+        fs.writeFileSync(override, "# e2e workspace memory (override)\n", "utf8");
+        // The pane's own discovery runs in the main process per refresh; files written while the
+        // app is running must show up after clicking refresh, not after restarting the app.
+        try {
+          await js(
+            win,
+            `(() => { const b = document.querySelector('.pi-dock-tab[data-dock="memory"]'); if (b) b.click(); return true; })()`,
+          );
+          await sleep(500);
+          await js(win, "(() => { const b = document.getElementById('pi-memory-refresh'); if (b) b.click(); return true; })()");
+          await sleep(600);
+          const rows = await js(
+            win,
+            `(() => Array.from(document.querySelectorAll('.pi-memory-row')).map((r) => ({
+              path: r.getAttribute('data-path'),
+              badge: (r.querySelector('.pi-memory-badge') || {}).textContent || '',
+              name: (r.querySelector('.pi-memory-name') || {}).textContent || '',
+            })))()`,
+          );
+          const norm = (p) => String(p).replace(/\\/g, "/").toLowerCase();
+          const paths = (rows || []).map((r) => norm(r.path));
+          check(
+            "the pane lists the global memory file from the sandboxed home",
+            paths.includes(norm(path.join(agentDir, "AGENTS.md"))),
+            JSON.stringify(rows),
+          );
+          check(
+            "the override replaces the plain file at the same level",
+            paths.includes(norm(override)) && !paths.includes(norm(plain)),
+            JSON.stringify(rows),
+          );
+
+          // "Open" is main-process-mediated: the path must be on the discovery list, and the open
+          // itself is the system default app (stubbed above, so nothing really launches).
+          openPathCalls.length = 0;
+          openPathStubbed = true;
+          try {
+            const opened = await js(
+              win,
+              `window.pi.invoke('pi:context-open', ${JSON.stringify(override)})`,
+            );
+            check(
+              "opening a listed context file resolves ok with the exact path",
+              !!opened && opened.ok === true && norm(opened.path) === norm(override),
+              JSON.stringify(opened),
+            );
+            const rejected = await js(
+              win,
+              `window.pi.invoke('pi:context-open', ${JSON.stringify(path.join(SANDBOX, ".pi", "agent", "auth.json"))})`,
+            );
+            check(
+              "opening a non-context file under ~/.pi is refused",
+              !!rejected && rejected.ok === false,
+              JSON.stringify(rejected),
+            );
+            check(
+              "the system-app open was called exactly with the override path",
+              openPathCalls.map(norm).includes(norm(override)),
+              JSON.stringify(openPathCalls),
+            );
+          } finally {
+            openPathStubbed = false;
+          }
+        } finally {
+          try { fs.rmSync(plain, { force: true }); } catch {}
+          try { fs.rmSync(override, { force: true }); } catch {}
+        }
+      });
+    }
 
     // ══ 6b. Worktrees ════════════════════════════════════════════════
     // Isolated only: this creates a real second working copy of the repository and switches the app

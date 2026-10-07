@@ -276,6 +276,17 @@ export const CHAT_STRINGS: Record<string, string> = {
   关闭: "Close",
   刷新: "Refresh",
 
+  // ── dock: memory pane (context files — what pi would load, per its own discovery rule)
+  记忆: "Memory",
+  "pi 的记忆 = 全局 AGENTS.md + 从工作目录向上每层取一份（AGENTS.override.md 优先于 AGENTS.md 与 CLAUDE.md）。点一行用系统默认应用打开。":
+    "The memory of pi = the global AGENTS.md plus one file per directory from the workspace up (AGENTS.override.md beats AGENTS.md and CLAUDE.md). Click a row to open it with the system app.",
+  "读不到上下文清单。": "Could not read the context-file list.",
+  "没有任何上下文文件 —— pi 这次是「无记忆」启动的。":
+    "No context files at all — pi started without any memory.",
+  "（点击用系统默认应用打开）": " (click to open with the system app)",
+  全局: "Global",
+  工作区: "Workspace",
+
   // ── remaining sidebar / dock / palette / telemetry strings
   搜索会话: "Search sessions",
   "显示/隐藏已归档会话": "Show / hide archived sessions",

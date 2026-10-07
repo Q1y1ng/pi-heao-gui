@@ -61,6 +61,11 @@ const INVOKE_ALLOWED = new Set<string>([
   "pi:worktree-list",
   "pi:worktree-use",
   "pi:worktree-create",
+  // Context (memory) files: read-only listing of what pi would load + opening one of exactly
+  // those files. Main re-derives the list per call, so the open action cannot be pointed at
+  // an arbitrary path (protectedPaths() keeps the rest of ~/.pi closed).
+  "pi:context-files",
+  "pi:context-open",
   "pi:append-input",
   "pi:rewind-diff",
   "pi:open-settings",

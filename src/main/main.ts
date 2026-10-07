@@ -57,6 +57,7 @@ import {
   worktreePathFor,
 } from "./git";
 import { readPiChangelog } from "./changelog";
+import { canonicalPath, discoverContextFiles, type GitShape } from "./context-files";
 import { resolveUiLang } from "./i18n";
 import {
   isSessionFile as isSessionFilePath,
@@ -2084,6 +2085,55 @@ ipcMain.handle("pi:fs-write", async (_e, msg: { path?: string; content?: string 
 });
 
 // ─── IPC: git (branch, diff, commit message) ─────────────────────────
+
+/**
+ * The git numbers the context-file shadow rule needs. A linked worktree's `--git-common-dir`
+ * points back into the main repo's `.git`; when the cwd is the main checkout itself the two
+ * rev-parses still answer, and the prefix test in `shadowedContextPath` simply fails.
+ */
+async function worktreeGitShape(cwd: string): Promise<GitShape | null> {
+  const top = await git(["rev-parse", "--show-toplevel"], cwd, 5000);
+  if (!top.ok) return null;
+  const common = await git(["rev-parse", "--git-common-dir"], cwd, 5000);
+  if (!common.ok) return null;
+  const repoDir = top.stdout.trim();
+  const commonDir = common.stdout.trim();
+  if (!repoDir || !commonDir) return null;
+  return {
+    repoDir,
+    // git prints a relative path (".git") when cwd is the main checkout itself.
+    commonGitDir: resolve(repoDir, commonDir),
+  };
+}
+
+// Context (memory) files: pi loads them silently and RPC never says which — the panel only
+// shows the truth, computed with pi's own discovery rule (see context-files.ts).
+ipcMain.handle("pi:context-files", async () => {
+  const cwd = workspaceRootDir();
+  const gitInfo = await worktreeGitShape(cwd);
+  const files = discoverContextFiles({ cwd, agentDir: PI_AGENT_DIR, gitInfo });
+  return { ok: true, cwd, files };
+});
+
+// Open one of the discovered context files with the system default app. The path must be on
+// the discovery list: that is the carve-out past `protectedPaths()` (which deliberately
+// walls off `~/.pi`) — an attacker who can drive the renderer still cannot open an
+// arbitrary file under the home directory, only the handful of files pi itself loads.
+ipcMain.handle(
+  "pi:context-open",
+  async (e, rawPath: unknown): Promise<{ ok: boolean; path?: string; error?: string }> => {
+    const target = typeof rawPath === "string" ? rawPath : "";
+    const cwd = workspaceRootDir();
+    const gitInfo = await worktreeGitShape(cwd);
+    const files = discoverContextFiles({ cwd, agentDir: PI_AGENT_DIR, gitInfo });
+    const hit = files.find((f) => canonicalPath(f.path) === canonicalPath(target));
+    if (!hit) {
+      return { ok: false, error: "该文件不在 pi 会加载的上下文清单里，拒绝打开。" };
+    }
+    const err = await shell.openPath(hit.path);
+    return err ? { ok: false, error: err } : { ok: true, path: hit.path };
+  },
+);
 
 ipcMain.handle(
   "pi:worktree-list",
